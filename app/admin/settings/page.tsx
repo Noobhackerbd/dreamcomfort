@@ -1,4 +1,4 @@
-import { getShippingSettings, getStoreSettings, getSmsTemplates } from "@/lib/settings";
+import { getShippingSettings, getStoreSettings, getSmsTemplates, getCarryBeeSettings } from "@/lib/settings";
 import { SettingsForm } from "./SettingsForm";
 
 export const dynamic = "force-dynamic";
@@ -8,10 +8,11 @@ function envState(v?: string) {
 }
 
 export default async function AdminSettings() {
-  const [shipping, store, templates] = await Promise.all([
+  const [shipping, store, templates, carrybee] = await Promise.all([
     getShippingSettings(),
     getStoreSettings(),
     getSmsTemplates(),
+    getCarryBeeSettings(),
   ]);
 
   const meta = {
@@ -29,7 +30,7 @@ export default async function AdminSettings() {
     <div>
       <h1 className="text-2xl font-bold mb-6">সেটিংস</h1>
 
-      <SettingsForm shipping={shipping} store={store} templates={templates} />
+      <SettingsForm shipping={shipping} store={store} templates={templates} carrybee={carrybee} />
 
       {/* Read-only env-configured integrations */}
       <div className="mt-8 max-w-2xl grid md:grid-cols-2 gap-4">

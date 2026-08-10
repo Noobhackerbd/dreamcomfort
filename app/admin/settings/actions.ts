@@ -38,3 +38,27 @@ export async function saveSmsTemplates(templates: {
   revalidatePath("/admin/settings");
   return { ok: true };
 }
+
+export async function saveCarryBeeSettings(cb: {
+  env: string;
+  clientId: string;
+  clientSecret: string;
+  clientContext: string;
+  storeId: string;
+}) {
+  await requireAdmin();
+  try {
+    await saveSetting("carrybee", {
+      env: cb.env === "sandbox" ? "sandbox" : "production",
+      clientId: (cb.clientId || "").trim(),
+      clientSecret: (cb.clientSecret || "").trim(),
+      clientContext: (cb.clientContext || "").trim(),
+      storeId: (cb.storeId || "").trim(),
+    });
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? "সেভ ব্যর্থ। settings টেবিল আছে কিনা দেখুন (supabase-migration-2.sql)।" };
+  }
+  revalidatePath("/admin/settings");
+  revalidatePath("/admin/orders");
+  return { ok: true };
+}

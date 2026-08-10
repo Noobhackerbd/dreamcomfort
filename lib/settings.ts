@@ -19,6 +19,14 @@ export interface StoreSettings {
   address: string;
 }
 
+export interface CarryBeeSettings {
+  env: string; // "production" | "sandbox"
+  clientId: string;
+  clientSecret: string;
+  clientContext: string;
+  storeId: string;
+}
+
 async function readSetting<T>(key: string, fallback: T): Promise<T> {
   try {
     const supabase = getServerSupabase();
@@ -49,6 +57,21 @@ export function getStoreSettings(): Promise<StoreSettings> {
 
 export function getSmsTemplates(): Promise<SmsTemplates> {
   return readSetting<SmsTemplates>("sms_templates", DEFAULT_SMS_TEMPLATES);
+}
+
+/**
+ * CarryBee courier credentials. Stored in the `settings` table (key "carrybee")
+ * and editable from the admin Settings page. Falls back to CARRYBEE_* env vars
+ * for any field the admin hasn't set, so an .env-only setup keeps working too.
+ */
+export function getCarryBeeSettings(): Promise<CarryBeeSettings> {
+  return readSetting<CarryBeeSettings>("carrybee", {
+    env: process.env.CARRYBEE_ENV || "production",
+    clientId: process.env.CARRYBEE_CLIENT_ID || "",
+    clientSecret: process.env.CARRYBEE_CLIENT_SECRET || "",
+    clientContext: process.env.CARRYBEE_CLIENT_CONTEXT || "",
+    storeId: process.env.CARRYBEE_STORE_ID || "",
+  });
 }
 
 export async function resolveShippingFee(area: DeliveryArea): Promise<number> {

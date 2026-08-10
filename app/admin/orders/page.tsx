@@ -1,6 +1,8 @@
 import { getServerSupabase } from "@/lib/supabase/server";
-import { taka } from "@/lib/format";
+import { taka, bdDateTime } from "@/lib/format";
 import { StatusSelect } from "./StatusSelect";
+import { CarryBeeActions } from "./CarryBeeActions";
+import { carrybeeConfigured } from "@/lib/carrybee";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +26,7 @@ export default async function AdminOrders({
   let query = supabase
     .from("orders")
     .select(
-      "id, order_number, customer_name, customer_phone, address_line, total, status, created_at, order_items(product_name, quantity)"
+      "id, order_number, customer_name, customer_phone, address_line, area, city, district, courier, tracking_id, total, status, created_at, order_items(product_name, quantity)"
     )
     .order("created_at", { ascending: false })
     .limit(200);
@@ -37,6 +39,7 @@ export default async function AdminOrders({
 
   const { data: orders } = await query;
   const active = searchParams.status ?? "";
+  const cbReady = await carrybeeConfigured();
 
   return (
     <div>
@@ -72,9 +75,12 @@ export default async function AdminOrders({
           <div key={o.id} className="rounded-xl border bg-white p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <a href={`/admin/orders/${o.id}`} className="font-bold text-brand hover:underline">
-                  {o.order_number}
-                </a>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <a href={`/admin/orders/${o.id}`} className="font-bold text-brand hover:underline">
+                    {o.order_number}
+                  </a>
+                  <span className="text-xs text-gray-400">🕒 {bdDateTime(o.created_at)}</span>
+                </div>
                 <p className="text-sm mt-1">
                   {o.customer_name} · {o.customer_phone}
                 </p>
@@ -93,6 +99,27 @@ export default async function AdminOrders({
                 <a href={`/admin/orders/${o.id}`} className="text-xs text-brand hover:underline">
                   বিস্তারিত →
                 </a>
+              </div>
+            </div>
+
+            <div className="mt-3 pt-3 border-t flex justify-end">
+              <div className="w-48">
+                <CarryBeeActions
+                  configured={cbReady}
+                  compact
+                  order={{
+                    id: o.id,
+                    orderNumber: o.order_number,
+                    name: o.customer_name,
+                    phone: o.customer_phone,
+                    address: [o.address_line, o.area, o.city, o.district].filter(Boolean).join(", "),
+                    total: Number(o.total),
+                    quantity: (o.order_items ?? []).reduce((n: number, it: any) => n + Number(it.quantity || 0), 0) || 1,
+                    description: (o.order_items ?? []).map((it: any) => `${it.product_name} x${it.quantity}`).join(", "),
+                    courier: o.courier ?? "",
+                    trackingId: o.tracking_id ?? "",
+                  }}
+                />
               </div>
             </div>
           </div>
