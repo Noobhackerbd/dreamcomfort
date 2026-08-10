@@ -1,4 +1,5 @@
 // Thank-you / order confirmation page (server component).
+import Image from "next/image";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import { taka } from "@/lib/format";
@@ -63,8 +64,7 @@ export default async function OrderPage({
 
       {/* logo */}
       <div className="flex justify-center pt-2 pb-4">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={landing.logoUrl || "/logo.png"} alt="Dream Comfort" className="h-20 w-auto object-contain" />
+        <Image src={landing.logoUrl || "/logo.png"} alt="Dream Comfort" width={220} height={80} priority sizes="220px" className="h-20 w-auto object-contain" />
       </div>
 
       <div className="rounded-[2rem] overflow-hidden bg-white shadow-soft ring-1 ring-brand/10">

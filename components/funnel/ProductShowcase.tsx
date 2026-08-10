@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { taka } from "@/lib/format";
 import { playSelect } from "@/lib/sound";
 import { Reveal } from "@/components/Reveal";
@@ -34,10 +35,9 @@ export function ProductShowcase({ products }: { products: Product[] }) {
                 onClick={() => pick(p.id)}
                 className="group block w-full text-left rounded-[1.25rem] bg-white overflow-hidden shadow-sm ring-1 ring-brand/5 hover:shadow-soft hover:-translate-y-0.5 transition"
               >
-                <div className="aspect-square bg-cream-deep/40 overflow-hidden">
+                <div className="relative aspect-square bg-cream-deep/40 overflow-hidden">
                   {img ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={img} alt={nm} loading="lazy" decoding="async" className="h-full w-full object-cover group-hover:scale-105 transition" />
+                    <Image src={img} alt={nm} fill sizes="(max-width: 768px) 50vw, 200px" className="object-cover group-hover:scale-105 transition" />
                   ) : (
                     <span className="flex h-full w-full items-center justify-center text-gray-400 text-xs px-2 text-center">{nm}</span>
                   )}

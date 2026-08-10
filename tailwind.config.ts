@@ -21,7 +21,8 @@ const config: Config = {
         },
       },
       fontFamily: {
-        display: ['"Fredoka"', '"Baloo 2"', "system-ui", "sans-serif"],
+        display: ["var(--font-fredoka)", "var(--font-bengali)", "system-ui", "sans-serif"],
+        sans: ["var(--font-bengali)", "var(--font-fredoka)", "system-ui", "sans-serif"],
       },
       boxShadow: {
         soft: "0 10px 40px -12px rgba(95,180,228,0.35)",

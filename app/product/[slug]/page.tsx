@@ -1,5 +1,6 @@
 // app/product/[slug]/page.tsx — Product detail (server component).
 import type { Metadata } from "next";
+import Image from "next/image";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { Product } from "@/lib/types";
 import { notFound } from "next/navigation";
@@ -151,13 +152,14 @@ export default async function ProductPage({
                   href={`/product/${r.slug}`}
                   className="group rounded-xl border bg-white overflow-hidden hover:shadow-md transition-shadow"
                 >
-                  <div className="aspect-square bg-gray-100 flex items-center justify-center overflow-hidden">
+                  <div className="relative aspect-square bg-gray-100 flex items-center justify-center overflow-hidden">
                     {img ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
+                      <Image
                         src={img}
                         alt={rn}
-                        className="h-full w-full object-cover group-hover:scale-105 transition-transform"
+                        fill
+                        sizes="(max-width: 768px) 50vw, 200px"
+                        className="object-cover group-hover:scale-105 transition-transform"
                       />
                     ) : (
                       <span className="text-gray-400 text-xs px-2 text-center">{rn}</span>

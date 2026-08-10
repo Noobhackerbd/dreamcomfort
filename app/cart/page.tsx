@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useCart } from "@/lib/cart/store";
 import { taka } from "@/lib/format";
 import { DELIVERY_CHARGE } from "@/lib/config";
@@ -41,10 +42,9 @@ export default function CartPage() {
             key={i.id}
             className="flex items-center gap-4 rounded-xl border bg-white p-3"
           >
-            <div className="h-16 w-16 rounded-lg bg-gray-100 overflow-hidden flex items-center justify-center shrink-0">
+            <div className="relative h-16 w-16 rounded-lg bg-gray-100 overflow-hidden flex items-center justify-center shrink-0">
               {i.image ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={i.image} alt={i.name} className="h-full w-full object-cover" />
+                <Image src={i.image} alt={i.name} fill sizes="64px" className="object-cover" />
               ) : (
                 <span className="text-[10px] text-gray-400 text-center px-1">{i.name}</span>
               )}

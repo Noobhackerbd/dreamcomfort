@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { playPop } from "@/lib/sound";
 
@@ -44,17 +45,21 @@ export function HeroSlider({ images, alt }: { images: string[]; alt: string }) {
       >
         {has ? (
           images.map((src, idx) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <div
               key={src + idx}
-              src={src}
-              alt={alt}
-              draggable={false}
-              loading={idx === 0 ? "eager" : "lazy"}
-              decoding="async"
-              className="absolute inset-0 h-full w-full object-cover transition-opacity duration-[900ms]"
+              className="absolute inset-0 transition-opacity duration-[900ms]"
               style={{ opacity: idx === i ? 1 : 0 }}
-            />
+            >
+              <Image
+                src={src}
+                alt={alt}
+                fill
+                priority={idx === 0}
+                sizes="(max-width: 768px) 100vw, 560px"
+                draggable={false}
+                className="object-cover"
+              />
+            </div>
           ))
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-brand-soft to-accent-soft text-gray-400 font-display text-lg">

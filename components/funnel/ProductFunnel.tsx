@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { HeroSlider } from "@/components/funnel/HeroSlider";
 import { OrderForm } from "@/components/funnel/OrderForm";
@@ -164,8 +165,7 @@ function ProductChip({ p, on, onSelect }: { p: FunnelProduct; on: boolean; onSel
       }
     >
       {p.images[0] ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={p.images[0]} alt={p.name} className="h-11 w-11 rounded-xl object-cover" />
+        <Image src={p.images[0]} alt={p.name} width={44} height={44} sizes="44px" className="h-11 w-11 rounded-xl object-cover" />
       ) : (
         <span className="h-11 w-11 rounded-xl bg-gradient-to-br from-brand-light to-accent-light" />
       )}

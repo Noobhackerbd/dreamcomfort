@@ -1,6 +1,22 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+import Image from "next/image";
+import { Fredoka, Noto_Sans_Bengali } from "next/font/google";
 import "./globals.css";
 import { MetaPixel } from "@/components/MetaPixel";
+
+// Self-hosted via next/font — no render-blocking Google Fonts request, auto-preloaded.
+const fredoka = Fredoka({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-fredoka",
+  display: "swap",
+});
+const notoBengali = Noto_Sans_Bengali({
+  subsets: ["bengali"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-bengali",
+  display: "swap",
+});
 import { Header } from "@/components/Header";
 import { STORE, STORE_NAME } from "@/lib/config";
 import { getLandingConfig } from "@/lib/landing";
@@ -18,17 +34,19 @@ export const metadata: Metadata = {
   openGraph: { siteName: STORE_NAME, locale: "bn_BD", type: "website" },
 };
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  themeColor: "#FBF3EA",
+};
+
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const landing = await getLandingConfig();
   return (
-    <html lang="bn">
+    <html lang="bn" className={`${fredoka.variable} ${notoBengali.variable}`}>
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Noto+Sans+Bengali:wght@400;500;600;700&display=swap"
-          rel="stylesheet"
-        />
+        <link rel="preconnect" href="https://zsmcmofuiteovgvjaeds.supabase.co" crossOrigin="" />
       </head>
       <body className="min-h-screen antialiased flex flex-col">
         <Header logoUrl={landing.logoUrl || "/logo.png"} />
@@ -38,8 +56,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <footer className="mt-16 border-t border-black/5 bg-white/60">
           <div className="mx-auto max-w-6xl px-4 py-10 grid gap-8 md:grid-cols-4 text-sm">
             <div>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={landing.logoUrl || "/logo.png"} alt={STORE_NAME} className="h-16 w-auto object-contain" />
+              <Image src={landing.logoUrl || "/logo.png"} alt={STORE_NAME} width={180} height={64} sizes="180px" className="h-16 w-auto object-contain" />
               <p className="mt-3 text-gray-500">{STORE.tagline}</p>
             </div>
             <div>

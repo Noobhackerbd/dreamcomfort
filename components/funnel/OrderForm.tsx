@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { placeOrder } from "@/app/checkout/actions";
@@ -223,8 +224,7 @@ export function OrderForm({
                 className="shrink-0 relative group"
                 title="ছবি বড় করে দেখুন"
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={thumb} alt={productName} className="h-11 w-11 rounded-lg object-cover ring-1 ring-black/10 group-hover:ring-accent transition" />
+                <Image src={thumb} alt={productName} width={44} height={44} sizes="44px" className="h-11 w-11 rounded-lg object-cover ring-1 ring-black/10 group-hover:ring-accent transition" />
                 <span className="absolute -bottom-1 -right-1 h-4 w-4 rounded-full bg-white text-[9px] flex items-center justify-center shadow ring-1 ring-black/5">🔍</span>
               </button>
             )}

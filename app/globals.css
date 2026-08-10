@@ -9,16 +9,28 @@
 
 html {
   scroll-behavior: smooth;
+  overflow-x: hidden;
+  width: 100%;
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: "Noto Sans Bengali", "Fredoka", system-ui, -apple-system, sans-serif;
+  font-family: var(--font-bengali), var(--font-fredoka), system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
   overflow-x: hidden;
+  width: 100%;
+  max-width: 100%;
+}
+
+/* Safety net: never let media or absolutely-sized children force a sideways scroll on phones */
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
 }
 
 /* Native-app feel: no blue tap flash on mobile */
@@ -75,7 +87,7 @@ img {
 }
 
 .font-display {
-  font-family: "Fredoka", "Baloo 2", "Noto Sans Bengali", system-ui, sans-serif;
+  font-family: var(--font-fredoka), var(--font-bengali), system-ui, sans-serif;
   letter-spacing: 0.01em;
 }
 

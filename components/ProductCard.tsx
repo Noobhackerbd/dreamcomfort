@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { taka } from "@/lib/format";
 import type { Product } from "@/lib/types";
 
@@ -17,11 +18,12 @@ export function ProductCard({ p }: { p: Product }) {
           </span>
         )}
         {img ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <Image
             src={img}
             alt={name}
-            className="h-full w-full object-cover group-hover:scale-105 transition-transform"
+            fill
+            sizes="(max-width: 768px) 50vw, 300px"
+            className="object-cover group-hover:scale-105 transition-transform"
           />
         ) : (
           <span className="text-gray-400 text-sm px-2 text-center">{name}</span>

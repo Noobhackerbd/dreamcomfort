@@ -1,4 +1,5 @@
 // app/page.tsx — premium multi-product funnel homepage (Dream Comfort).
+import Image from "next/image";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { Product } from "@/lib/types";
 import { getLandingConfig } from "@/lib/landing";
@@ -65,8 +66,15 @@ export default async function HomePage() {
 
   const Logo = (
     <div className="flex flex-col items-center pt-8 pb-2">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={landing.logoUrl || "/logo.png"} alt={STORE.name} className="dc-float h-40 md:h-52 w-auto object-contain drop-shadow-sm" />
+      <Image
+        src={landing.logoUrl || "/logo.png"}
+        alt={STORE.name}
+        width={663}
+        height={252}
+        priority
+        sizes="(max-width: 768px) 320px, 420px"
+        className="dc-float h-40 md:h-52 w-auto object-contain drop-shadow-sm"
+      />
     </div>
   );
 
@@ -216,8 +224,7 @@ export default async function HomePage() {
                   <div className="rounded-[1.5rem] bg-white p-5 h-full shadow-sm ring-1 ring-accent/10">
                     <div className="flex items-center gap-3">
                       {r.image ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={r.image} alt={r.name} loading="lazy" decoding="async" className="h-11 w-11 rounded-full object-cover" />
+                        <Image src={r.image} alt={r.name} width={44} height={44} sizes="44px" className="h-11 w-11 rounded-full object-cover" />
                       ) : (
                         <span className="h-11 w-11 rounded-full bg-gradient-to-br from-brand-light to-accent-light text-white flex items-center justify-center font-bold">
                           {r.name.charAt(0)}
