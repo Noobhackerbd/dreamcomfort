@@ -298,6 +298,18 @@ export async function deleteOrder(orderId: string) {
   return { ok: true };
 }
 
+/** Permanently delete many orders at once (items cascade). */
+export async function bulkDeleteOrders(orderIds: string[]) {
+  await requireAdmin();
+  const ids = (orderIds || []).filter(Boolean);
+  if (ids.length === 0) return { ok: false, error: "কোনো অর্ডার নির্বাচন করা হয়নি।" };
+  const supabase = getServerSupabase();
+  const { error } = await supabase.from("orders").delete().in("id", ids);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/admin/orders");
+  return { ok: true, deleted: ids.length };
+}
+
 /** Manually (re)send an SMS for an order from the order detail view. */
 export async function sendManualOrderSms(orderId: string, message: string) {
   await requireAdmin();

@@ -72,18 +72,29 @@ export function MetaPixel() {
   useEffect(() => {
     if (!PIXEL_ID || window.__dcPixelLoaded) return;
 
-    const events: (keyof WindowEventMap)[] = ["pointerdown", "touchstart", "scroll", "keydown", "mousemove"];
+    // Interaction signals — real visitors almost always fire one of these fast.
+    const events: string[] = ["pointerdown", "touchstart", "scroll", "keydown", "mousemove"];
+    // Leave signals — catch quick bouncers who never interact, so their PageView still counts.
+    const leaveEvents: string[] = ["visibilitychange", "pagehide"];
+
     const trigger = () => {
+      // For visibilitychange, only load when the tab is actually being hidden.
       cleanup();
       loadPixel();
     };
+    const onLeave = () => {
+      if (document.visibilityState === "hidden") { cleanup(); loadPixel(); }
+    };
     function cleanup() {
       events.forEach((ev) => window.removeEventListener(ev, trigger));
+      leaveEvents.forEach((ev) => document.removeEventListener(ev, onLeave));
       clearTimeout(timer);
     }
     events.forEach((ev) => window.addEventListener(ev, trigger, { once: true, passive: true }));
-    // Fallback: if the visitor never interacts, still fire PageView shortly after paint.
-    const timer = setTimeout(trigger, 2500);
+    leaveEvents.forEach((ev) => document.addEventListener(ev, onLeave));
+    // Long safety fallback (kept well past the initial-load window so it never
+    // weighs on TBT/LCP): fire PageView even for a totally idle open tab.
+    const timer = setTimeout(trigger, 8000);
 
     return cleanup;
   }, []);

@@ -1,8 +1,6 @@
 import { getServerSupabase } from "@/lib/supabase/server";
-import { taka, bdDateTime } from "@/lib/format";
-import { StatusSelect } from "./StatusSelect";
-import { CarryBeeActions } from "./CarryBeeActions";
 import { carrybeeConfigured } from "@/lib/carrybee";
+import { OrdersList, type OrderRow } from "./OrdersList";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +39,23 @@ export default async function AdminOrders({
   const active = searchParams.status ?? "";
   const cbReady = await carrybeeConfigured();
 
+  const rows: OrderRow[] = (orders ?? []).map((o: any) => ({
+    id: o.id,
+    order_number: o.order_number,
+    customer_name: o.customer_name ?? "",
+    customer_phone: o.customer_phone ?? "",
+    address_line: o.address_line ?? "",
+    area: o.area ?? "",
+    city: o.city ?? "",
+    district: o.district ?? "",
+    courier: o.courier ?? "",
+    tracking_id: o.tracking_id ?? "",
+    total: Number(o.total ?? 0),
+    status: o.status,
+    created_at: o.created_at,
+    items: (o.order_items ?? []).map((it: any) => ({ product_name: it.product_name, quantity: Number(it.quantity || 0) })),
+  }));
+
   return (
     <div>
       <h1 className="text-2xl font-bold mb-6">অর্ডার</h1>
@@ -70,64 +85,7 @@ export default async function AdminOrders({
         ))}
       </div>
 
-      <div className="space-y-3">
-        {(orders ?? []).map((o: any) => (
-          <div key={o.id} className="rounded-xl border bg-white p-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <a href={`/admin/orders/${o.id}`} className="font-bold text-brand hover:underline">
-                    {o.order_number}
-                  </a>
-                  <span className="text-xs text-gray-400">🕒 {bdDateTime(o.created_at)}</span>
-                </div>
-                <p className="text-sm mt-1">
-                  {o.customer_name} · {o.customer_phone}
-                </p>
-                <p className="text-sm text-gray-500">{o.address_line}</p>
-                <p className="text-xs text-gray-400 mt-1">
-                  {(o.order_items ?? [])
-                    .map((it: any) => `${it.product_name} ×${it.quantity}`)
-                    .join("، ")}
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="font-bold text-lg">{taka(Number(o.total))}</p>
-                <div className="mt-2">
-                  <StatusSelect id={o.id} value={o.status} />
-                </div>
-                <a href={`/admin/orders/${o.id}`} className="text-xs text-brand hover:underline">
-                  বিস্তারিত →
-                </a>
-              </div>
-            </div>
-
-            <div className="mt-3 pt-3 border-t flex justify-end">
-              <div className="w-48">
-                <CarryBeeActions
-                  configured={cbReady}
-                  compact
-                  order={{
-                    id: o.id,
-                    orderNumber: o.order_number,
-                    name: o.customer_name,
-                    phone: o.customer_phone,
-                    address: [o.address_line, o.area, o.city, o.district].filter(Boolean).join(", "),
-                    total: Number(o.total),
-                    quantity: (o.order_items ?? []).reduce((n: number, it: any) => n + Number(it.quantity || 0), 0) || 1,
-                    description: (o.order_items ?? []).map((it: any) => `${it.product_name} x${it.quantity}`).join(", "),
-                    courier: o.courier ?? "",
-                    trackingId: o.tracking_id ?? "",
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-        ))}
-        {(!orders || orders.length === 0) && (
-          <p className="text-center text-gray-400 py-10">কোনো অর্ডার নেই।</p>
-        )}
-      </div>
+      <OrdersList orders={rows} cbReady={cbReady} />
     </div>
   );
 }

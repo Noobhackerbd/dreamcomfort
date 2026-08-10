@@ -7,7 +7,7 @@ import { MetaPixel } from "@/components/MetaPixel";
 // Self-hosted via next/font — no render-blocking Google Fonts request, auto-preloaded.
 const fredoka = Fredoka({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["500", "600", "700"], // display/headings only — drop 400 to trim the font payload
   variable: "--font-fredoka",
   display: "swap",
 });
@@ -45,9 +45,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const landing = await getLandingConfig();
   return (
     <html lang="bn" className={`${fredoka.variable} ${notoBengali.variable}`}>
-      <head>
-        <link rel="preconnect" href="https://zsmcmofuiteovgvjaeds.supabase.co" crossOrigin="" />
-      </head>
       <body className="min-h-screen antialiased flex flex-col">
         <Header logoUrl={landing.logoUrl || "/logo.png"} />
 
