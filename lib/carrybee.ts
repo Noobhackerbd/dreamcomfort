@@ -258,22 +258,26 @@ export async function listAreas(cityId: number, zoneId: number): Promise<{ ok: b
   }
 }
 
-/** Fetch the print label / POD (PDF or HTML) for one or more consignments. */
+/**
+ * Fetch the print-POD data for one or more consignments.
+ * CarryBee returns JSON label data ({ data: { business, stores, orders[] } });
+ * the caller renders the printable shipping label from it.
+ */
 export async function fetchPrintPod(
   consignmentIds: string
-): Promise<{ ok: boolean; contentType?: string; body?: ArrayBuffer; error?: string }> {
+): Promise<{ ok: boolean; business?: any; orders?: any[]; error?: string }> {
   const cfg = await getConfig();
   if (!cfg.configured) return { ok: false, error: "CarryBee কনফিগার করা হয়নি।" };
   try {
     const url = cfg.baseUrl + "api/v2/order-print-pod?consignment_ids=" + encodeURIComponent(consignmentIds);
     const res = await fetch(url, { headers: headers(cfg), cache: "no-store" });
-    const contentType = res.headers.get("content-type") || "application/octet-stream";
+    const data = await res.json().catch(() => null);
     if (res.status !== 200 && res.status !== 201) {
-      const t = await res.text().catch(() => "");
-      return { ok: false, error: t.slice(0, 200) || "লেবেল আনতে ব্যর্থ।" };
+      return { ok: false, error: extractError(data, "লেবেল আনতে ব্যর্থ।") };
     }
-    const body = await res.arrayBuffer();
-    return { ok: true, contentType, body };
+    const payload = data?.data ?? {};
+    const orders = Array.isArray(payload.orders) ? payload.orders : [];
+    return { ok: true, business: payload.business ?? {}, orders };
   } catch (e: any) {
     return { ok: false, error: e?.message ?? "নেটওয়ার্ক সমস্যা।" };
   }

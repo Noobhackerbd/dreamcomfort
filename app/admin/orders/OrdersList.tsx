@@ -30,6 +30,7 @@ export function OrdersList({ orders, cbReady }: { orders: OrderRow[]; cbReady: b
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [code, setCode] = useState("");
 
   const allSelected = orders.length > 0 && selected.size === orders.length;
   const someSelected = selected.size > 0;
@@ -46,13 +47,21 @@ export function OrdersList({ orders, cbReady }: { orders: OrderRow[]; cbReady: b
   }
 
   async function doBulkDelete() {
+    if (!code.trim()) return setErr("ডিলিট কোড দিন।");
     setBusy(true); setErr(null);
-    const res = await bulkDeleteOrders(Array.from(selected));
+    const res = await bulkDeleteOrders(Array.from(selected), code.trim());
     setBusy(false);
     if (!res.ok) return setErr(res.error ?? "ডিলিট ব্যর্থ।");
     setConfirm(false);
+    setCode("");
     setSelected(new Set());
     router.refresh();
+  }
+
+  function openConfirm() {
+    setErr(null);
+    setCode("");
+    setConfirm(true);
   }
 
   const selectedCount = selected.size;
@@ -76,7 +85,7 @@ export function OrdersList({ orders, cbReady }: { orders: OrderRow[]; cbReady: b
         </label>
         {someSelected && (
           <button
-            onClick={() => { setErr(null); setConfirm(true); }}
+            onClick={openConfirm}
             className="rounded-lg bg-red-600 text-white px-4 py-1.5 text-sm font-medium hover:bg-red-700"
           >
             🗑️ নির্বাচিত {selectedCount}টি ডিলিট করুন
@@ -158,7 +167,7 @@ export function OrdersList({ orders, cbReady }: { orders: OrderRow[]; cbReady: b
           <span className="text-sm">{selectedCount}টি অর্ডার · {taka(selectedTotal)}</span>
           <div className="flex items-center gap-2">
             <button onClick={() => setSelected(new Set())} className="rounded-lg bg-white/15 px-3 py-1.5 text-sm">বাতিল</button>
-            <button onClick={() => { setErr(null); setConfirm(true); }} className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium">🗑️ ডিলিট</button>
+            <button onClick={openConfirm} className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium">🗑️ ডিলিট</button>
           </div>
         </div>
       )}
@@ -168,13 +177,23 @@ export function OrdersList({ orders, cbReady }: { orders: OrderRow[]; cbReady: b
         <div className="fixed inset-0 z-[90] bg-black/50 flex items-center justify-center p-4" onClick={() => !busy && setConfirm(false)}>
           <div className="bg-white rounded-2xl w-full max-w-sm p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <h3 className="font-bold text-lg mb-1">{selectedCount}টি অর্ডার ডিলিট করবেন?</h3>
-            <p className="text-sm text-gray-500 mb-4">
-              নির্বাচিত অর্ডারগুলো স্থায়ীভাবে মুছে যাবে। এটি ফেরানো যাবে না।
+            <p className="text-sm text-gray-500 mb-3">
+              নির্বাচিত অর্ডারগুলো স্থায়ীভাবে মুছে যাবে। এটি ফেরানো যাবে না। নিশ্চিত করতে সিকিউরিটি কোড দিন।
             </p>
+            <label className="block text-xs font-medium mb-1">সিকিউরিটি কোড</label>
+            <input
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+              onKeyDown={(e) => { if (e.key === "Enter" && !busy) doBulkDelete(); }}
+              inputMode="numeric"
+              autoFocus
+              placeholder="কোড লিখুন"
+              className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-red-400 tracking-widest mb-3"
+            />
             {err && <p className="text-sm text-red-600 mb-3">{err}</p>}
             <div className="flex justify-end gap-2">
               <button onClick={() => setConfirm(false)} disabled={busy} className="rounded-lg border px-4 py-2 text-sm">বাতিল</button>
-              <button onClick={doBulkDelete} disabled={busy} className="rounded-lg bg-red-600 text-white px-4 py-2 text-sm disabled:opacity-60">
+              <button onClick={doBulkDelete} disabled={busy || !code.trim()} className="rounded-lg bg-red-600 text-white px-4 py-2 text-sm disabled:opacity-60">
                 {busy ? "ডিলিট হচ্ছে..." : `হ্যাঁ, ${selectedCount}টি ডিলিট করুন`}
               </button>
             </div>

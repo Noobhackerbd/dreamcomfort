@@ -298,9 +298,13 @@ export async function deleteOrder(orderId: string) {
   return { ok: true };
 }
 
-/** Permanently delete many orders at once (items cascade). */
-export async function bulkDeleteOrders(orderIds: string[]) {
+/** Permanently delete many orders at once (items cascade). Requires the delete code. */
+export async function bulkDeleteOrders(orderIds: string[], code: string) {
   await requireAdmin();
+  const expected = process.env.ADMIN_DELETE_CODE || "103020";
+  if (String(code || "").trim() !== expected) {
+    return { ok: false, error: "ভুল কোড। ডিলিট করতে সঠিক কোড দিন।" };
+  }
   const ids = (orderIds || []).filter(Boolean);
   if (ids.length === 0) return { ok: false, error: "কোনো অর্ডার নির্বাচন করা হয়নি।" };
   const supabase = getServerSupabase();
