@@ -28,80 +28,62 @@ function truncateToLines(text: string, maxLines: number, charsPerLine = 50): str
   return result;
 }
 
+// Native 48mm x 75mm thermal label. Black borders (no gray fills) so it prints
+// crisp on monochrome thermal printers, and fonts sized to fill the label.
 const POD_STYLES = `
 * { box-sizing: border-box; margin: 0; padding: 0; }
-@page { size: 3in 4in; margin: 3mm; }
-body { font-family: "Noto Sans Bengali", Arial, Helvetica, sans-serif; font-size: 10pt; color: #333; margin: 0; padding: 8px; }
-.pod-label { width: 68mm; margin: 0 auto 6mm; display: flex; flex-direction: column; line-height: 1.15; page-break-after: always; }
+@page { size: 48mm 75mm; margin: 0; }
+html, body { width: 48mm; }
+body { font-family: "Noto Sans Bengali", Arial, Helvetica, sans-serif; color: #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.pod-label { width: 48mm; height: 74.5mm; padding: 1.2mm 1.5mm; display: flex; flex-direction: column; line-height: 1.08; page-break-after: always; overflow: hidden; }
 .pod-label:last-child { page-break-after: auto; }
-.pod-header { display: flex; justify-content: space-between; align-items: center; }
-.pod-logo { font-size: 14pt; font-weight: 700; color: #000; flex: 0 0 auto; }
-.pod-logo .pod-logo-accent { color: #f6b800; }
-.pod-trust { font-size: 8pt; font-weight: 700; color: #000; text-align: right; line-height: 1.2; white-space: nowrap; }
-.pod-barcode-section { text-align: center; }
-svg.pod-barcode { display: block; width: 100%; height: 23pt; margin: 0 auto; }
-.pod-sender-box { display: flex; align-items: center; border: 1.5pt solid #eaeaea; border-radius: 12pt; padding: 3pt 6pt; margin-bottom: 3pt; }
-.pod-sender-logo { width: 28pt; height: 28pt; flex: 0 0 28pt; border-radius: 50%; border: 1pt solid #000; display: flex; align-items: center; justify-content: center; margin-right: 6pt; font-size: 12pt; font-weight: 700; color: #000; }
-.pod-sender-name { font-size: 12pt; font-weight: 700; margin-bottom: 1pt; }
-.pod-sender-label { font-size: 8pt; color: #757575; margin-bottom: 1pt; }
-.pod-sender-category { font-size: 8pt; color: #757575; }
-.pod-hub-section { display: flex; justify-content: space-between; border: 1pt solid #f2f2f2; border-radius: 8pt; padding: 2pt 6pt; margin-bottom: 3pt; }
+.pod-barcode-section { text-align: center; margin-bottom: 0.8mm; }
+svg.pod-barcode { display: block; width: 100%; height: 9mm; margin: 0 auto; }
+.pod-sender-box { display: flex; align-items: center; border: 1pt solid #000; border-radius: 6pt; padding: 0.8mm 1.2mm; margin-bottom: 0.8mm; }
+.pod-sender-logo { width: 7mm; height: 7mm; flex: 0 0 7mm; border-radius: 50%; border: 1.2pt solid #000; display: flex; align-items: center; justify-content: center; margin-right: 1.2mm; font-size: 12pt; font-weight: 700; }
+.pod-sender-name { font-size: 11.5pt; font-weight: 700; line-height: 1.05; }
+.pod-sender-category { font-size: 7.5pt; line-height: 1.1; margin-top: 0.2mm; }
+.pod-hub-section { display: flex; justify-content: space-between; gap: 1.5mm; border-top: 1pt solid #000; border-bottom: 1pt solid #000; padding: 0.8mm 0; margin-bottom: 0.8mm; }
+.pod-hub-label { font-size: 7pt; font-weight: 700; }
+.pod-hub-name { font-size: 9pt; font-weight: 700; line-height: 1.05; }
 .pod-hub-right { text-align: right; }
-.pod-hub-name { font-size: 9.5pt; font-weight: 700; }
-.pod-details-row { display: flex; gap: 4pt; margin-bottom: 4pt; }
-.pod-detail-box { flex: 1; background: #f8f8f8; border-radius: 5pt; padding: 3pt; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-.pod-detail-title { font-size: 9pt; font-weight: 700; color: #333; margin-bottom: 1pt; }
-.pod-detail-value { font-size: 13.5pt; font-weight: 700; white-space: nowrap; }
-.pod-id-box { flex: 1.3; background: #f8f8f8; border-radius: 5pt; padding: 3pt 5pt; display: flex; flex-direction: column; justify-content: center; }
-.pod-id-title { font-size: 7pt; color: #777; margin-bottom: 1pt; white-space: nowrap; }
-.pod-id-value { font-size: 10pt; font-weight: 700; margin-bottom: 2pt; }
-.pod-id-value:last-child { margin-bottom: 0; }
-.pod-recipient-section { margin-bottom: 2pt; }
-.pod-section-title { font-size: 9.5pt; font-weight: 700; color: #000; margin-bottom: 1pt; }
-.pod-recipient-name { font-size: 12pt; font-weight: 700; margin-bottom: 1pt; }
-.pod-recipient-phone { font-size: 11pt; font-weight: 700; margin-bottom: 1pt; }
-.pod-recipient-address { font-size: 9.5pt; line-height: 1.25; }
-.pod-special-section { border-top: 1pt solid #000; padding-top: 3pt; margin-top: 3pt; }
-.pod-special-text { font-size: 9.5pt; line-height: 1.2; color: #000; }
-.pod-footer { display: flex; justify-content: space-between; padding-top: 2pt; margin-top: auto; }
-.pod-footer-text { font-size: 9pt; color: #555; }
-@media print {
-  body { padding: 2.5mm; }
-  .pod-label { width: 100%; height: 88mm; margin: 0; overflow: hidden; }
-}`;
+.pod-details-row { display: flex; gap: 1mm; margin-bottom: 0.8mm; }
+.pod-detail-box { flex: 1; border: 1pt solid #000; border-radius: 4pt; padding: 0.6mm 0.5mm; text-align: center; }
+.pod-detail-title { font-size: 7.5pt; font-weight: 700; }
+.pod-detail-value { font-size: 14pt; font-weight: 700; white-space: nowrap; line-height: 1.02; }
+.pod-detail-value .u { font-size: 8pt; font-weight: 700; }
+.pod-id-box { border: 1pt solid #000; border-radius: 4pt; padding: 0.8mm 1.2mm; margin-bottom: 0.8mm; }
+.pod-id-title { font-size: 6.5pt; }
+.pod-id-value { font-size: 10pt; font-weight: 700; letter-spacing: 0.2pt; }
+.pod-recipient-section { border: 1.5pt solid #000; border-radius: 4pt; padding: 1mm 1.2mm; margin-top: 0.4mm; }
+.pod-section-title { font-size: 7.5pt; font-weight: 700; }
+.pod-recipient-name { font-size: 14pt; font-weight: 700; line-height: 1.08; word-break: break-word; }
+.pod-recipient-phone { font-size: 14pt; font-weight: 700; line-height: 1.12; }
+.pod-recipient-address { font-size: 9.5pt; line-height: 1.18; margin-top: 0.3mm; }`;
 
 function buildLabel(business: any, order: any): string {
-  const created = order.created_at ? new Date(order.created_at) : new Date();
-  const formattedDate = !isNaN(created.getTime())
-    ? created.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit", hour12: true })
-    : "";
   const businessInitial = (business?.name || "B").charAt(0).toUpperCase();
   const amount = order.collectable_amount === 0 || order.collectable_amount ? order.collectable_amount : 0;
 
   return (
     '<div class="pod-label">' +
-      '<div class="pod-header">' +
-        '<div class="pod-logo">Carry<span class="pod-logo-accent">Bee</span></div>' +
-        '<div class="pod-trust">Trusted by merchant across<br>Bangladesh</div>' +
-      "</div>" +
       '<div class="pod-barcode-section">' +
         '<svg class="pod-barcode" data-code="' + esc(order.consignment_id || "") + '"></svg>' +
       "</div>" +
       '<div class="pod-sender-box">' +
         '<div class="pod-sender-logo">' + esc(businessInitial) + "</div>" +
-        '<div style="flex:1;">' +
+        '<div style="flex:1; min-width:0;">' +
           '<div class="pod-sender-name">' + esc(business?.name || "N/A") + "</div>" +
-          '<div class="pod-sender-label">' + esc(order.store_name || "") + "</div>" +
-          (order.product_description ? '<div class="pod-sender-category">' + esc(order.product_description) + "</div>" : "") +
+          (order.product_description ? '<div class="pod-sender-category">' + esc(truncateToLines(order.product_description, 1, 32)) + "</div>" : "") +
         "</div>" +
       "</div>" +
       '<div class="pod-hub-section">' +
         "<div>" +
-          '<div class="pod-hub-name">PickUp Hub</div>' +
+          '<div class="pod-hub-label">PickUp Hub</div>' +
           '<div class="pod-hub-name">' + esc(order.pickup_hub_name || "N/A") + "</div>" +
         "</div>" +
         '<div class="pod-hub-right">' +
-          '<div class="pod-hub-name">Delivery Hub</div>' +
+          '<div class="pod-hub-label">Delivery Hub</div>' +
           '<div class="pod-hub-name">' + esc(order.delivery_hub_name || "N/A") + "</div>" +
         "</div>" +
       "</div>" +
@@ -112,30 +94,19 @@ function buildLabel(business: any, order: any): string {
         "</div>" +
         '<div class="pod-detail-box">' +
           '<div class="pod-detail-title">Weight</div>' +
-          '<div class="pod-detail-value">' + esc(String(order.weight_in_kilo || 0)) + " kg</div>" +
+          '<div class="pod-detail-value">' + esc(String(order.weight_in_kilo || 0)) + '<span class="u"> kg</span></div>' +
         "</div>" +
-        '<div class="pod-id-box">' +
-          '<div class="pod-id-title">Consignment ID</div>' +
-          '<div class="pod-id-value">' + esc(order.consignment_id || "") + "</div>" +
-          (order.merchant_order_id ? '<div class="pod-id-title">Merchant Order ID</div><div class="pod-id-value">' + esc(String(order.merchant_order_id)) + "</div>" : "") +
-        "</div>" +
+      "</div>" +
+      '<div class="pod-id-box">' +
+        '<div class="pod-id-title">Consignment ID</div>' +
+        '<div class="pod-id-value">' + esc(order.consignment_id || "") + "</div>" +
+        (order.merchant_order_id ? '<div class="pod-id-title" style="margin-top:0.6mm;">Merchant Order ID</div><div class="pod-id-value">' + esc(String(order.merchant_order_id)) + "</div>" : "") +
       "</div>" +
       '<div class="pod-recipient-section">' +
         '<div class="pod-section-title">Recipient Details</div>' +
         '<div class="pod-recipient-name">' + esc(order.recipient_name || "") + "</div>" +
         '<div class="pod-recipient-phone">' + esc(order.recipient_phone || "") + "</div>" +
-        '<div class="pod-section-title">Recipient Address</div>' +
-        '<div class="pod-recipient-address">' + esc(truncateToLines(order.recipient_address || "Address not provided", 1, 45)) + "</div>" +
-      "</div>" +
-      (order.special_instruction
-        ? '<div class="pod-special-section">' +
-            '<div class="pod-section-title">Special Description</div>' +
-            '<div class="pod-special-text">' + esc(truncateToLines(order.special_instruction, 3)) + "</div>" +
-          "</div>"
-        : "") +
-      '<div class="pod-footer">' +
-        '<div class="pod-footer-text">' + esc(formattedDate) + "</div>" +
-        '<div class="pod-footer-text">www.carrybee.com</div>' +
+        '<div class="pod-recipient-address">' + esc(truncateToLines(order.recipient_address || "Address not provided", 2, 40)) + "</div>" +
       "</div>" +
     "</div>"
   );
