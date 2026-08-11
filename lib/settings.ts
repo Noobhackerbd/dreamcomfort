@@ -27,6 +27,17 @@ export interface CarryBeeSettings {
   storeId: string;
 }
 
+export interface AiSettings {
+  apiKey: string;
+  model: string;
+}
+
+export interface MetaSettings {
+  pixelId: string;
+  capiToken: string;
+  testEventCode: string;
+}
+
 async function readSetting<T>(key: string, fallback: T): Promise<T> {
   try {
     const supabase = getServerSupabase();
@@ -71,6 +82,23 @@ export function getCarryBeeSettings(): Promise<CarryBeeSettings> {
     clientSecret: process.env.CARRYBEE_CLIENT_SECRET || "",
     clientContext: process.env.CARRYBEE_CLIENT_CONTEXT || "",
     storeId: process.env.CARRYBEE_STORE_ID || "",
+  });
+}
+
+/** Meta Pixel + Conversions API settings (editable from admin, env fallback). */
+export function getMetaSettings(): Promise<MetaSettings> {
+  return readSetting<MetaSettings>("meta", {
+    pixelId: process.env.NEXT_PUBLIC_META_PIXEL_ID || "",
+    capiToken: process.env.META_CAPI_ACCESS_TOKEN || "",
+    testEventCode: process.env.META_TEST_EVENT_CODE || "",
+  });
+}
+
+/** Anthropic API settings for the AI order-screenshot reader. */
+export function getAiSettings(): Promise<AiSettings> {
+  return readSetting<AiSettings>("ai", {
+    apiKey: process.env.ANTHROPIC_API_KEY || "",
+    model: process.env.AI_MODEL || "claude-sonnet-5",
   });
 }
 

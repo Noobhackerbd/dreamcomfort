@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { taka, bdDateTime } from "@/lib/format";
@@ -21,7 +23,9 @@ export interface OrderRow {
   total: number;
   status: string;
   created_at: string;
-  items: { product_name: string; quantity: number }[];
+  is_booked?: boolean;
+  booked_date?: string | null;
+  items: { product_name: string; quantity: number; image?: string | null }[];
 }
 
 export function OrdersList({ orders, cbReady }: { orders: OrderRow[]; cbReady: boolean }) {
@@ -106,36 +110,50 @@ export function OrdersList({ orders, cbReady }: { orders: OrderRow[]; cbReady: b
                   className="mt-1 h-4 w-4 accent-brand shrink-0"
                   aria-label={`নির্বাচন ${o.order_number}`}
                 />
+                <OrderThumb items={o.items} />
                 <div className="flex-1 min-w-0">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <a href={`/admin/orders/${o.id}`} className="font-bold text-brand hover:underline">
+                        <Link href={`/admin/orders/${o.id}`} prefetch={false} className="font-bold text-brand hover:underline">
                           {o.order_number}
-                        </a>
+                        </Link>
                         <span className="text-xs text-gray-400">🕒 {bdDateTime(o.created_at)}</span>
+                        {o.is_booked && (
+                          <span className="rounded-full bg-amber-100 text-amber-700 text-[11px] px-2 py-0.5 font-medium">
+                            📅 বুকড{o.booked_date ? ` · ${o.booked_date}` : ""}
+                          </span>
+                        )}
                       </div>
-                      <p className="text-sm mt-1">
+                      <p className="text-sm mt-1 truncate">
                         {o.customer_name} · {o.customer_phone}
                       </p>
                       <p className="text-sm text-gray-500 truncate">{o.address_line}</p>
-                      <p className="text-xs text-gray-400 mt-1">
+                      <p className="text-xs text-gray-400 mt-1 truncate">
                         {(o.items ?? []).map((it) => `${it.product_name} ×${it.quantity}`).join("، ")}
                       </p>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="font-bold text-lg">{taka(Number(o.total))}</p>
+                      <p className="font-bold text-base sm:text-lg whitespace-nowrap">{taka(Number(o.total))}</p>
                       <div className="mt-2">
                         <StatusSelect id={o.id} value={o.status} />
                       </div>
-                      <a href={`/admin/orders/${o.id}`} className="text-xs text-brand hover:underline">
+                      <Link href={`/admin/orders/${o.id}`} prefetch={false} className="text-xs text-brand hover:underline">
                         বিস্তারিত →
-                      </a>
+                      </Link>
                     </div>
                   </div>
 
-                  <div className="mt-3 pt-3 border-t flex justify-end">
-                    <div className="w-48">
+                  <div className="mt-3 pt-3 border-t flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      {o.customer_phone && (
+                        <a href={telLink(o.customer_phone)} className="flex-1 sm:flex-none text-center rounded-lg bg-brand text-white px-3 py-1.5 text-xs font-medium">📞 কল</a>
+                      )}
+                      {o.customer_phone && (
+                        <a href={waLink(o.customer_phone)} target="_blank" rel="noopener" className="flex-1 sm:flex-none text-center rounded-lg bg-green-600 text-white px-3 py-1.5 text-xs font-medium">💬 WhatsApp</a>
+                      )}
+                    </div>
+                    <div className="w-full sm:w-48">
                       <CarryBeeActions
                         configured={cbReady}
                         compact
@@ -199,6 +217,46 @@ export function OrdersList({ orders, cbReady }: { orders: OrderRow[]; cbReady: b
             </div>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+/** Normalize a stored BD phone to international digits (8801XXXXXXXXX). */
+function bdIntl(phone: string): string {
+  let n = (phone || "").replace(/\D/g, "");
+  if (n.startsWith("00")) n = n.slice(2);
+  if (n.startsWith("0")) n = "88" + n;
+  else if (n.startsWith("1")) n = "880" + n;
+  else if (!n.startsWith("880")) n = "880" + n;
+  return n;
+}
+function telLink(phone: string): string {
+  return "tel:+" + bdIntl(phone);
+}
+function waLink(phone: string): string {
+  return "https://wa.me/" + bdIntl(phone);
+}
+
+/** Small product thumbnail for an order row — first item's image + a "+N" badge for extra items. */
+function OrderThumb({ items }: { items: OrderRow["items"] }) {
+  const first = items?.[0];
+  const img = first?.image || null;
+  const extra = Math.max(0, (items?.length || 0) - 1);
+
+  return (
+    <div className="relative h-14 w-14 shrink-0 rounded-lg overflow-hidden bg-gray-100 ring-1 ring-black/5">
+      {img ? (
+        <Image src={img} alt={first?.product_name || ""} fill sizes="56px" className="object-cover" />
+      ) : (
+        <span className="flex h-full w-full items-center justify-center text-[10px] text-gray-400 text-center px-1">
+          {first?.product_name?.slice(0, 12) || "—"}
+        </span>
+      )}
+      {extra > 0 && (
+        <span className="absolute bottom-0 right-0 rounded-tl-md bg-black/65 text-white text-[10px] px-1 leading-4">
+          +{extra}
+        </span>
       )}
     </div>
   );

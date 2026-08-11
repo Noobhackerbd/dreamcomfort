@@ -1,18 +1,21 @@
 "use server";
 
 import { getServerSupabase } from "@/lib/supabase/server";
-import { getServerMatchSignals } from "@/lib/meta/fb-cookies";
+import { getServerMatchSignals, getExternalId } from "@/lib/meta/fb-cookies";
+import { headers } from "next/headers";
 import { newEventId } from "@/lib/meta/event-id";
 import { sendServerEvent } from "@/lib/meta/capi";
 import { logEvent } from "@/lib/meta/log";
-import { resolveShippingFee, getSmsTemplates } from "@/lib/settings";
+import { resolveShippingFee, getSmsTemplates, getMetaSettings } from "@/lib/settings";
 import { sendSmsAsync } from "@/lib/sms";
 import { fillTemplate } from "@/lib/sms/templates";
+import { markLeadConverted } from "./lead-actions";
 import type { DeliveryArea } from "@/lib/config";
 
 export interface PlaceOrderInput {
   name: string;
   phone: string;
+  email?: string;
   address: string;
   area?: string;
   city?: string;
@@ -20,6 +23,7 @@ export interface PlaceOrderInput {
   notes?: string;
   items: { id: string; qty: number; variantId?: string }[];
   fbclid?: string;
+  leadId?: string; // abandoned-cart lead to mark converted
 }
 
 export interface PlaceOrderResult {
@@ -106,6 +110,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
         status: "pending",
         customer_name: name,
         customer_phone: phone,
+        customer_email: input.email?.trim() || null,
         address_line: address,
         area: input.area?.trim() || null,
         city: input.city?.trim() || (deliveryArea === "inside" ? "Dhaka" : null),
@@ -122,7 +127,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
         client_ip: signals.client_ip_address ?? null,
         client_user_agent: signals.client_user_agent ?? null,
       })
-      .select("id, order_number, total")
+      .select("id, order_number, total, created_at")
       .single();
 
     if (oErr || !order) return { ok: false, error: oErr?.message ?? "অর্ডার তৈরি ব্যর্থ।" };
@@ -132,6 +137,11 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
       .from("order_items")
       .insert(lineItems.map((li) => ({ ...li, order_id: order.id })));
     if (iErr) return { ok: false, error: iErr.message };
+
+    // Mark the abandoned-cart lead (if any) as converted. Best-effort.
+    if (input.leadId) {
+      void markLeadConverted(input.leadId, order.id, order.order_number);
+    }
 
     // Upsert the customer (best-effort; never blocks the order).
     try {
@@ -175,20 +185,29 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
     }
 
     // Fire server-side Purchase ONLY if Meta is configured (safe no-op otherwise).
-    if (process.env.META_CAPI_ACCESS_TOKEN && process.env.NEXT_PUBLIC_META_PIXEL_ID) {
+    const metaCfg = await getMetaSettings();
+    if (metaCfg.capiToken && metaCfg.pixelId) {
       try {
         const { first, last } = splitName(name);
+        // Robust absolute origin (never "undefined/order/…"): env → request host.
+        const host = headers().get("host");
+        const origin = process.env.NEXT_PUBLIC_SITE_URL || (host ? `https://${host}` : "");
         const res = await sendServerEvent({
           eventName: "Purchase",
           eventId,
-          eventSourceUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/order/${order.order_number}`,
+          // Use the order's creation time as the event time (the moment the purchase happened).
+          eventTime: Math.floor(new Date(order.created_at).getTime() / 1000) || undefined,
+          eventSourceUrl: `${origin}/order/${order.order_number}`,
           user: {
+            email: input.email,
             phone: input.phone,
             firstName: first,
             lastName: last,
             city: input.city || (deliveryArea === "inside" ? "dhaka" : undefined),
-            state: input.city || undefined,
-            externalId: phone,
+            // Only send a real division as state; sending city as state can lower match quality.
+            state: undefined,
+            // Stable, PLAIN external id, identical to the browser value → links the journey.
+            externalId: getExternalId() || undefined,
           },
           signals,
           customData: {

@@ -25,17 +25,18 @@ export default function CheckoutPage() {
 
   const shippingFee = deliveryArea === "outside" ? SHIPPING.outsideDhaka : SHIPPING.insideDhaka;
 
-  // Fire InitiateCheckout (browser + server) once when the checkout loads with items.
+  // Fire InitiateCheckout (browser + server) once per session when checkout loads.
   useEffect(() => {
-    if (mounted && items.length > 0) {
-      fireEvent("InitiateCheckout", {
-        currency: "BDT",
-        value: subtotal() + shippingFee,
-        num_items: items.length,
-        content_ids: items.map((i) => i.id),
-        content_type: "product",
-      });
-    }
+    if (!mounted || items.length === 0) return;
+    try { if (sessionStorage.getItem("dc_ic_fired")) return; } catch {}
+    try { sessionStorage.setItem("dc_ic_fired", "1"); } catch {}
+    fireEvent("InitiateCheckout", {
+      currency: "BDT",
+      value: subtotal() + shippingFee,
+      num_items: items.length,
+      content_ids: items.map((i) => i.id),
+      content_type: "product",
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mounted]);
 

@@ -1,22 +1,37 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { trackBrowser } from "@/components/MetaPixel";
+import { trackBrowser, setAdvancedMatching } from "@/components/MetaPixel";
 import { playSuccess } from "@/lib/sound";
 
 export function PurchasePixel({
   eventId,
   value,
   contentIds,
+  customer,
 }: {
   eventId: string | null;
   value: number;
   contentIds: string[];
+  customer?: { name?: string; phone?: string; city?: string; email?: string };
 }) {
   const fired = useRef(false);
   useEffect(() => {
     if (!eventId || fired.current) return;
     fired.current = true;
+
+    // Manual advanced matching — attach the real customer info to the browser
+    // Purchase so its match quality is high.
+    if (customer) {
+      const parts = (customer.name || "").trim().split(/\s+/);
+      setAdvancedMatching({
+        phone: customer.phone,
+        firstName: parts[0],
+        lastName: parts.length > 1 ? parts.slice(1).join(" ") : undefined,
+        city: customer.city,
+        email: customer.email,
+      });
+    }
 
     // Celebratory success chime.
     try { playSuccess(); } catch {}

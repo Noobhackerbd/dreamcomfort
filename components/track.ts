@@ -24,6 +24,8 @@ export function fireEvent(
 ): string {
   const eventId = newBrowserEventId();
   const url = typeof window !== "undefined" ? window.location.href : "";
+  // Stamp the event time ONCE on the client so the browser + server copies share it.
+  const eventTime = Math.floor(Date.now() / 1000);
 
   // 1) Browser Pixel (with explicit eventID for dedup).
   trackBrowser(eventName, customData as Record<string, unknown> | undefined, eventId);
@@ -40,7 +42,7 @@ export function fireEvent(
   fetch("/api/capi", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ eventName, eventId, url, fbclid: currentFbclid(), user, customData }),
+    body: JSON.stringify({ eventName, eventId, eventTime, url, fbclid: currentFbclid(), user, customData }),
     keepalive: true,
   }).catch(() => {});
 

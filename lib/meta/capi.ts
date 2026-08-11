@@ -4,11 +4,9 @@
 // deduplicates the browser + server copies into one event.
 
 import { buildHashedUserData, RawUserData } from "./hash";
+import { getMetaSettings } from "@/lib/settings";
 
-const GRAPH_VERSION = "v20.0"; // bump to the current Graph API version when you build
-const PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID!;
-const ACCESS_TOKEN = process.env.META_CAPI_ACCESS_TOKEN!;
-const TEST_EVENT_CODE = process.env.META_TEST_EVENT_CODE; // set only while testing
+const GRAPH_VERSION = "v23.0"; // bump to the current Graph API version on each release
 
 export type MetaEventName =
   | "PageView"
@@ -69,6 +67,11 @@ export async function sendServerEvent(input: SendServerEventInput): Promise<Capi
     actionSource = "website",
   } = input;
 
+  const { pixelId: PIXEL_ID, capiToken: ACCESS_TOKEN, testEventCode: TEST_EVENT_CODE } = await getMetaSettings();
+  if (!PIXEL_ID || !ACCESS_TOKEN) {
+    return { ok: false, error: "Meta CAPI কনফিগার করা হয়নি।" };
+  }
+
   const user_data = {
     ...buildHashedUserData(user),
     ...(signals.fbp ? { fbp: signals.fbp } : {}),
@@ -119,9 +122,13 @@ export async function sendServerEvent(input: SendServerEventInput): Promise<Capi
   }
 
   try {
-    return await attempt();
+    const first = await attempt();
+    // Retry once on transient server errors (5xx) as well as network failures.
+    if (!first.ok && (first.status ?? 0) >= 500) {
+      try { return await attempt(); } catch { return first; }
+    }
+    return first;
   } catch {
-    // one retry on network failure
     try {
       return await attempt();
     } catch (e: any) {

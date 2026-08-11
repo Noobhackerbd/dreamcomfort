@@ -39,6 +39,36 @@ export async function saveSmsTemplates(templates: {
   return { ok: true };
 }
 
+export async function saveMetaSettings(meta: { pixelId: string; capiToken: string; testEventCode: string }) {
+  await requireAdmin();
+  try {
+    await saveSetting("meta", {
+      pixelId: (meta.pixelId || "").trim(),
+      capiToken: (meta.capiToken || "").trim(),
+      testEventCode: (meta.testEventCode || "").trim(),
+    });
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? "সেভ ব্যর্থ। settings টেবিল আছে কিনা দেখুন (supabase-migration-2.sql)।" };
+  }
+  revalidatePath("/admin/settings");
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+export async function saveAiSettings(ai: { apiKey: string; model: string }) {
+  await requireAdmin();
+  try {
+    await saveSetting("ai", {
+      apiKey: (ai.apiKey || "").trim(),
+      model: (ai.model || "").trim() || "claude-3-5-sonnet-20241022",
+    });
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? "সেভ ব্যর্থ। settings টেবিল আছে কিনা দেখুন (supabase-migration-2.sql)।" };
+  }
+  revalidatePath("/admin/settings");
+  return { ok: true };
+}
+
 export async function saveCarryBeeSettings(cb: {
   env: string;
   clientId: string;

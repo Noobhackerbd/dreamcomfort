@@ -11,6 +11,7 @@ import {
   deleteOrder,
   updateOrderCourier,
   sendManualOrderSms,
+  saveBooking,
 } from "../actions";
 
 export interface PanelItem {
@@ -40,6 +41,8 @@ export interface PanelOrder {
   payment_method: string;
   shipping_fee: number;
   discount: number;
+  is_booked: boolean;
+  booked_date: string | null;
   items: PanelItem[];
 }
 
@@ -149,6 +152,20 @@ export function OrderPanel({ order, cbConfigured }: { order: PanelOrder; cbConfi
     if (!res.ok) return setItemsErr(res.error ?? "সেভ ব্যর্থ।");
     setItemsMsg("পণ্য ও হিসাব সেভ হয়েছে ✓");
     router.refresh();
+  }
+
+  // ---- Booking (scheduled delivery) ----
+  const [booked, setBooked] = useState(order.is_booked);
+  const [bookedDate, setBookedDate] = useState(order.booked_date || "");
+  const [bookBusy, setBookBusy] = useState(false);
+  const [bookMsg, setBookMsg] = useState<string | null>(null);
+  async function saveBook() {
+    if (booked && !bookedDate) { setBookMsg("তারিখ দিন।"); return; }
+    setBookBusy(true); setBookMsg(null);
+    const res = await saveBooking(order.id, booked, booked ? bookedDate : null);
+    setBookBusy(false);
+    setBookMsg(res.ok ? "সেভ হয়েছে ✓" : res.error ?? "ব্যর্থ।");
+    if (res.ok) router.refresh();
   }
 
   // ---- Courier (quick manual) ----
@@ -374,6 +391,30 @@ export function OrderPanel({ order, cbConfigured }: { order: PanelOrder; cbConfi
             <p className="text-[11px] text-gray-400 mt-2">
               কনফার্মড / শিপড / ডেলিভার্ড করলে গ্রাহককে স্বয়ংক্রিয় এসএমএস যাবে।
             </p>
+          </section>
+
+          <section className="rounded-xl border bg-white p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <span>📅</span>
+              <h2 className="font-semibold">বুকিং (পরে ডেলিভারি)</h2>
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={booked} onChange={(e) => setBooked(e.target.checked)} className="h-4 w-4 accent-amber-500" />
+              বুকড অর্ডার
+            </label>
+            {booked && (
+              <div className="mt-2">
+                <label className="block text-xs text-gray-500 mb-1">ডেলিভারি তারিখ</label>
+                <input type="date" value={bookedDate} onChange={(e) => setBookedDate(e.target.value)} className={inputCls} />
+                <p className="mt-1 text-[11px] text-amber-700">তারিখের ৩ দিন আগে থেকে ড্যাশবোর্ডে রিমাইন্ডার দেখাবে।</p>
+              </div>
+            )}
+            <div className="mt-3 flex items-center gap-3">
+              <button onClick={saveBook} disabled={bookBusy} className="rounded-lg bg-amber-500 text-white px-4 py-1.5 text-sm disabled:opacity-60">
+                {bookBusy ? "সেভ হচ্ছে..." : "বুকিং সেভ করুন"}
+              </button>
+              {bookMsg && <span className="text-sm text-green-600">{bookMsg}</span>}
+            </div>
           </section>
 
           <section className="rounded-xl border bg-white p-4">

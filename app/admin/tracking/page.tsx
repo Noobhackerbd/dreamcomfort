@@ -2,6 +2,7 @@
 // Reads events_log and pairs browser + server copies by event_id so you can
 // confirm each event was received once from each side (deduplicated).
 import { getServerSupabase } from "@/lib/supabase/server";
+import { getMetaSettings } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
 
@@ -53,8 +54,8 @@ export default async function TrackingHealth() {
     .slice(0, 100);
   const deduped = grouped.filter((g) => g.browser && g.server).length;
 
-  const metaConfigured =
-    !!process.env.NEXT_PUBLIC_META_PIXEL_ID && !!process.env.META_CAPI_ACCESS_TOKEN;
+  const metaCfg = await getMetaSettings();
+  const metaConfigured = !!metaCfg.pixelId && !!metaCfg.capiToken;
 
   return (
     <div>
@@ -66,8 +67,7 @@ export default async function TrackingHealth() {
 
       {!metaConfigured && (
         <p className="mb-4 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 px-4 py-2 text-sm">
-          Meta কনফিগার করা হয়নি — <code>NEXT_PUBLIC_META_PIXEL_ID</code> ও{" "}
-          <code>META_CAPI_ACCESS_TOKEN</code> যোগ করুন। ইভেন্ট লগ তবুও রেকর্ড হবে।
+          Meta কনফিগার করা হয়নি — Settings → Meta Pixel + Conversions API-তে Pixel ID ও Access Token দিন। ইভেন্ট লগ তবুও রেকর্ড হবে।
         </p>
       )}
 

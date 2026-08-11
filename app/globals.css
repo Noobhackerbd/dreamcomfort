@@ -91,6 +91,30 @@ img {
   letter-spacing: 0.01em;
 }
 
+/* Premium order-loading animation (no logo) */
+@keyframes dc-spin { to { transform: rotate(360deg); } }
+@keyframes dc-spin-rev { to { transform: rotate(-360deg); } }
+@keyframes dc-core {
+  0%, 100% { transform: scale(0.65); opacity: 0.65; }
+  50% { transform: scale(1.15); opacity: 1; }
+}
+@keyframes dc-orbit {
+  from { transform: rotate(0deg) translateX(46px) rotate(0deg); }
+  to   { transform: rotate(360deg) translateX(46px) rotate(-360deg); }
+}
+@keyframes dc-ring-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.35; }
+  50% { transform: scale(1.12); opacity: 0; }
+}
+.dc-loader-ring {
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 8px), #000 0);
+  mask: radial-gradient(farthest-side, transparent calc(100% - 8px), #000 0);
+}
+.dc-loader-ring--inner {
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 0);
+  mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 0);
+}
+
 /* Print: show only the invoice / printable content. */
 @media print {
   header,

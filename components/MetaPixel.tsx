@@ -13,7 +13,9 @@
 
 import { useEffect } from "react";
 
-const PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID;
+// Pixel id is provided at runtime by the server (from admin settings) via the
+// <MetaPixel pixelId=... /> prop, and cached module-side so trackBrowser() works too.
+let PIXEL_ID: string | undefined = process.env.NEXT_PUBLIC_META_PIXEL_ID || undefined;
 
 declare global {
   interface Window {
@@ -40,9 +42,99 @@ export function trackBrowser(
   window.fbq("track", eventName, params ?? {}, eventId ? { eventID: eventId } : undefined);
 }
 
+function getCookie(name: string): string | undefined {
+  if (typeof document === "undefined") return undefined;
+  const m = document.cookie.match(new RegExp("(?:^|; )" + name + "=([^;]*)"));
+  return m ? decodeURIComponent(m[1]) : undefined;
+}
+function setCookie(name: string, value: string, days: number) {
+  if (typeof document === "undefined") return;
+  const exp = new Date(Date.now() + days * 864e5).toUTCString();
+  document.cookie = `${name}=${encodeURIComponent(value)}; expires=${exp}; path=/; SameSite=Lax`;
+}
+
+/**
+ * Ensure our matching cookies exist BEFORE any event fires (even early server
+ * events): a stable external id (dc_xid, ~2 years) and an _fbp if the Pixel
+ * hasn't set one yet. Both dramatically raise Event Match Quality.
+ */
+export function ensureMatchCookies(): string | undefined {
+  let xid = getCookie("dc_xid");
+  if (!xid) {
+    xid = (crypto as any)?.randomUUID ? crypto.randomUUID() : "xid-" + Date.now().toString(36) + Math.random().toString(36).slice(2);
+    setCookie("dc_xid", xid, 730);
+  }
+  if (!getCookie("_fbp")) {
+    const fbp = `fb.1.${Date.now()}.${Math.floor(1e9 + Math.random() * 9e9)}`;
+    setCookie("_fbp", fbp, 90);
+  }
+  // Persist _fbc ONCE from an ad click (fbclid), so click attribution is stable
+  // across every browser + server event for this session.
+  if (typeof location !== "undefined" && !getCookie("_fbc")) {
+    const fbclid = new URLSearchParams(location.search).get("fbclid");
+    if (fbclid) setCookie("_fbc", `fb.1.${Date.now()}.${fbclid}`, 90);
+  }
+  return xid;
+}
+
+// ---- Manual Advanced Matching -------------------------------------------
+// Customer info passed to the browser Pixel (the pixel normalizes + hashes it
+// client-side). We accumulate it and re-init the pixel so later browser events
+// (InitiateCheckout, Purchase) carry ph/fn/ln/ct/external_id.
+let advancedMatching: Record<string, string> = {};
+
+function normBdPhone(raw?: string): string | undefined {
+  if (!raw) return undefined;
+  let d = raw.replace(/\D/g, "");
+  if (d.startsWith("00")) d = d.slice(2);
+  if (d.startsWith("0")) d = "88" + d;
+  else if (d.startsWith("1")) d = "880" + d;
+  else if (!d.startsWith("880")) d = "880" + d;
+  return d.length >= 12 ? d : undefined;
+}
+
+export interface AdvancedMatchInput {
+  email?: string;
+  phone?: string;
+  firstName?: string;
+  lastName?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+}
+
+/** Set/merge manual advanced matching, then (re)initialize the Pixel with it. */
+export function setAdvancedMatching(u: AdvancedMatchInput) {
+  if (typeof window === "undefined" || !PIXEL_ID) return;
+  const add: Record<string, string> = {};
+  if (u.email) add.em = u.email.trim().toLowerCase();
+  const ph = normBdPhone(u.phone);
+  if (ph) add.ph = ph;
+  if (u.firstName) add.fn = u.firstName.trim().toLowerCase();
+  if (u.lastName) add.ln = u.lastName.trim().toLowerCase();
+  if (u.city) add.ct = u.city.trim().toLowerCase().replace(/\s+/g, "");
+  if (u.state) add.st = u.state.trim().toLowerCase().replace(/\s+/g, "");
+  if (u.zip) add.zp = u.zip.trim();
+
+  const xid = ensureMatchCookies();
+  advancedMatching = { ...advancedMatching, ...add, ...(xid ? { external_id: xid } : {}) };
+
+  if (window.__dcPixelLoaded && window.fbq) {
+    window.fbq("init", PIXEL_ID, advancedMatching); // update matching in place
+  } else {
+    loadPixel(); // first load will init with advancedMatching merged
+  }
+}
+
+/** Current advanced matching (external id + any set customer fields). */
+function currentMatching(xid?: string): Record<string, string> {
+  return { ...(xid ? { external_id: xid } : {}), ...advancedMatching };
+}
+
 function loadPixel() {
   if (typeof window === "undefined" || window.__dcPixelLoaded || !PIXEL_ID) return;
   window.__dcPixelLoaded = true;
+  const xid = ensureMatchCookies();
 
   /* eslint-disable */
   (function (f: any, b: any, e: any, v: any, n?: any, t?: any, s?: any) {
@@ -64,13 +156,22 @@ function loadPixel() {
   })(window, document, "script", "https://connect.facebook.net/en_US/fbevents.js");
   /* eslint-enable */
 
-  window.fbq!("init", PIXEL_ID);
+  // Advanced matching: send the stable external id (+ any customer info set via
+  // setAdvancedMatching) with every browser event.
+  const am = currentMatching(xid);
+  window.fbq!("init", PIXEL_ID, Object.keys(am).length ? am : undefined);
   window.fbq!("track", "PageView");
 }
 
-export function MetaPixel() {
+export function MetaPixel({ pixelId }: { pixelId?: string }) {
+  if (pixelId) PIXEL_ID = pixelId; // make it available to loadPixel/trackBrowser
+
   useEffect(() => {
     if (!PIXEL_ID || window.__dcPixelLoaded) return;
+
+    // Set matching cookies immediately (before the deferred pixel loads) so even
+    // early server-side events (ViewContent etc.) carry external_id + _fbp.
+    ensureMatchCookies();
 
     // Interaction signals — real visitors almost always fire one of these fast.
     const events: string[] = ["pointerdown", "touchstart", "scroll", "keydown", "mousemove"];

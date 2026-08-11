@@ -6,6 +6,7 @@ import { getSmsTemplates } from "@/lib/settings";
 import { sendSmsAsync } from "@/lib/sms";
 import { fillTemplate, STATUS_SMS_MAP } from "@/lib/sms/templates";
 import { createParcel, getParcelStatus, carrybeeConfigured, listCities, listZones, listAreas } from "@/lib/carrybee";
+import { extractOrderFromImage } from "@/lib/ai";
 import { revalidatePath } from "next/cache";
 
 const STATUSES = [
@@ -312,6 +313,163 @@ export async function bulkDeleteOrders(orderIds: string[], code: string) {
   if (error) return { ok: false, error: error.message };
   revalidatePath("/admin/orders");
   return { ok: true, deleted: ids.length };
+}
+
+/** Normalize a BD phone to 8801XXXXXXXXX for storage. */
+function normalizeBdPhone(raw: string): string {
+  let d = (raw || "").replace(/\D/g, "");
+  if (d.startsWith("00")) d = d.slice(2);
+  if (d.startsWith("0")) d = "88" + d;
+  else if (d.startsWith("1")) d = "880" + d;
+  else if (!d.startsWith("880")) d = "880" + d;
+  return d;
+}
+
+export interface ManualOrderInput {
+  name: string;
+  phone: string;
+  address: string;
+  area?: string;
+  city?: string;
+  notes?: string;
+  items: { productId: string; qty: number }[];
+  customAmount?: number; // overrides computed total when > 0
+  shippingFee?: number;
+  status?: string; // default "confirmed"
+  sendSms?: boolean; // default true
+  isBooked?: boolean;
+  bookedDate?: string | null; // YYYY-MM-DD
+}
+
+/** Create an order manually from the admin (e.g. a Messenger/WhatsApp order). */
+export async function createManualOrder(input: ManualOrderInput) {
+  await requireAdmin();
+  const name = (input.name || "").trim();
+  const address = (input.address || "").trim();
+  const phoneDigits = (input.phone || "").replace(/\D/g, "");
+
+  if (!name) return { ok: false, error: "গ্রাহকের নাম দিন।" };
+  if (!/^01\d{9}$/.test(phoneDigits.startsWith("880") ? "0" + phoneDigits.slice(3) : phoneDigits)) {
+    return { ok: false, error: "সঠিক মোবাইল নম্বর দিন (০১XXXXXXXXX)।" };
+  }
+  if (!address || address.length < 4) return { ok: false, error: "সম্পূর্ণ ঠিকানা দিন।" };
+  const items = (input.items || []).filter((i) => i.productId && Number(i.qty) > 0);
+  if (items.length === 0) return { ok: false, error: "কমপক্ষে একটি পণ্য নির্বাচন করুন।" };
+
+  const supabase = getServerSupabase();
+  const ids = items.map((i) => i.productId);
+  const { data: products, error: pErr } = await supabase
+    .from("products")
+    .select("id, name_bn, name_en, price")
+    .in("id", ids);
+  if (pErr) return { ok: false, error: pErr.message };
+  const priceMap = new Map((products ?? []).map((p: any) => [p.id, p]));
+
+  let subtotal = 0;
+  const lineItems = items
+    .map((i) => {
+      const p: any = priceMap.get(i.productId);
+      if (!p) return null;
+      const qty = Math.max(1, Math.floor(i.qty));
+      const unitPrice = Number(p.price);
+      const line = unitPrice * qty;
+      subtotal += line;
+      return { product_id: p.id, product_name: p.name_bn || p.name_en, unit_price: unitPrice, quantity: qty, line_total: line };
+    })
+    .filter(Boolean) as any[];
+  if (lineItems.length === 0) return { ok: false, error: "পণ্য খুঁজে পাওয়া যায়নি।" };
+
+  const shippingFee = Math.max(0, Number(input.shippingFee) || 0);
+  const custom = Number(input.customAmount) || 0;
+  const total = custom > 0 ? custom : subtotal + shippingFee;
+  const phone = normalizeBdPhone(input.phone);
+  const status = input.status || "confirmed";
+
+  const { data: order, error: oErr } = await supabase
+    .from("orders")
+    .insert({
+      status,
+      customer_name: name,
+      customer_phone: phone,
+      address_line: address,
+      area: input.area?.trim() || null,
+      city: input.city?.trim() || null,
+      district: input.city?.trim() || null,
+      payment_method: "cod",
+      subtotal,
+      shipping_fee: shippingFee,
+      discount: custom > 0 ? Math.max(0, subtotal + shippingFee - custom) : 0,
+      total,
+      notes: input.notes?.trim() || null,
+      is_booked: !!input.isBooked,
+      booked_date: input.isBooked && input.bookedDate ? input.bookedDate : null,
+    })
+    .select("id, order_number, total")
+    .single();
+  if (oErr || !order) return { ok: false, error: oErr?.message ?? "অর্ডার তৈরি ব্যর্থ।" };
+
+  const { error: iErr } = await supabase
+    .from("order_items")
+    .insert(lineItems.map((li) => ({ ...li, order_id: order.id })));
+  if (iErr) return { ok: false, error: iErr.message };
+
+  // Customer upsert (best-effort).
+  try {
+    const { data: existing } = await supabase
+      .from("customers")
+      .select("id, total_orders, total_spent")
+      .eq("phone", phone)
+      .maybeSingle();
+    if (existing) {
+      await supabase.from("customers").update({
+        name,
+        total_orders: (existing.total_orders ?? 0) + 1,
+        total_spent: Number(existing.total_spent ?? 0) + Number(order.total),
+      }).eq("id", existing.id);
+    } else {
+      await supabase.from("customers").insert({ phone, name, total_orders: 1, total_spent: Number(order.total) });
+    }
+  } catch {
+    /* ignore */
+  }
+
+  // Send confirmation SMS (default on).
+  if (input.sendSms !== false) {
+    try {
+      const templates = await getSmsTemplates();
+      const key = status === "confirmed" ? "confirmed" : "order_placed";
+      const tpl = (templates as any)[key] || templates.order_placed;
+      const msg = fillTemplate(tpl, { name, order: order.order_number, total: Number(order.total) });
+      void sendSmsAsync({ phone, message: msg, orderId: order.id });
+    } catch {
+      /* never block */
+    }
+  }
+
+  revalidatePath("/admin/orders");
+  return { ok: true, orderNumber: order.order_number, id: order.id };
+}
+
+/** Mark/unmark an order as booked (scheduled) and set its delivery date. */
+export async function saveBooking(orderId: string, isBooked: boolean, bookedDate: string | null) {
+  await requireAdmin();
+  const supabase = getServerSupabase();
+  const { error } = await supabase
+    .from("orders")
+    .update({ is_booked: !!isBooked, booked_date: isBooked && bookedDate ? bookedDate : null })
+    .eq("id", orderId);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath("/admin/orders");
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
+/** AI: read a Messenger/WhatsApp order screenshot and extract name/phone/address. */
+export async function parseOrderScreenshot(base64: string, mediaType: string) {
+  await requireAdmin();
+  if (!base64) return { ok: false, error: "ছবি পাওয়া যায়নি।" };
+  return extractOrderFromImage(base64, mediaType);
 }
 
 /** Manually (re)send an SMS for an order from the order detail view. */

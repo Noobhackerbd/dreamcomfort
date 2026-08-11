@@ -12,15 +12,17 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { sendServerEvent, MetaEventName, CustomData } from "@/lib/meta/capi";
-import { getServerMatchSignals } from "@/lib/meta/fb-cookies";
+import { getServerMatchSignals, getExternalId } from "@/lib/meta/fb-cookies";
 import { RawUserData } from "@/lib/meta/hash";
 import { logEvent } from "@/lib/meta/log";
+import { getMetaSettings } from "@/lib/settings";
 
 export const runtime = "nodejs"; // crypto hashing needs the Node runtime
 
 interface Body {
   eventName: MetaEventName;
   eventId: string;
+  eventTime?: number;
   url: string;
   fbclid?: string;
   user?: RawUserData;
@@ -35,17 +37,20 @@ export async function POST(req: NextRequest) {
     }
 
     // No-op safely if Meta isn't configured yet.
-    if (!process.env.META_CAPI_ACCESS_TOKEN || !process.env.NEXT_PUBLIC_META_PIXEL_ID) {
+    const metaCfg = await getMetaSettings();
+    if (!metaCfg.capiToken || !metaCfg.pixelId) {
       return NextResponse.json({ ok: false, error: "meta not configured", skipped: true });
     }
 
     const signals = getServerMatchSignals(body.fbclid);
+    const externalId = body.user?.externalId ?? getExternalId();
 
     const result = await sendServerEvent({
       eventName: body.eventName,
       eventId: body.eventId,
+      eventTime: body.eventTime, // use the client's stamp so both copies match
       eventSourceUrl: body.url,
-      user: body.user ?? {},
+      user: { ...(body.user ?? {}), externalId },
       signals,
       customData: body.customData,
     });

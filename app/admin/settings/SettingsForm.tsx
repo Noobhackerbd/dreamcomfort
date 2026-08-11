@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { saveShippingSettings, saveStoreSettings, saveSmsTemplates, saveCarryBeeSettings } from "./actions";
-import type { ShippingSettings, StoreSettings, CarryBeeSettings } from "@/lib/settings";
+import { saveShippingSettings, saveStoreSettings, saveSmsTemplates, saveCarryBeeSettings, saveAiSettings, saveMetaSettings } from "./actions";
+import type { ShippingSettings, StoreSettings, CarryBeeSettings, AiSettings, MetaSettings } from "@/lib/settings";
 import type { SmsTemplates } from "@/lib/sms/templates";
 
 const cls = "w-full rounded-lg border px-4 py-2.5 text-sm outline-none focus:border-brand";
@@ -17,11 +17,15 @@ export function SettingsForm({
   store,
   templates,
   carrybee,
+  ai,
+  meta,
 }: {
   shipping: ShippingSettings;
   store: StoreSettings;
   templates: SmsTemplates;
   carrybee: CarryBeeSettings;
+  ai: AiSettings;
+  meta: MetaSettings;
 }) {
   const router = useRouter();
 
@@ -39,6 +43,16 @@ export function SettingsForm({
   const [cbSaved, setCbSaved] = useState(false);
   const [cbErr, setCbErr] = useState<string | null>(null);
   const [cbBusy, setCbBusy] = useState(false);
+
+  const [aiCfg, setAiCfg] = useState(ai);
+  const [aiSaved, setAiSaved] = useState(false);
+  const [aiErr, setAiErr] = useState<string | null>(null);
+  const [aiBusy, setAiBusy] = useState(false);
+
+  const [mt, setMt] = useState(meta);
+  const [mtSaved, setMtSaved] = useState(false);
+  const [mtErr, setMtErr] = useState<string | null>(null);
+  const [mtBusy, setMtBusy] = useState(false);
 
   return (
     <div className="space-y-8 max-w-2xl">
@@ -197,6 +211,113 @@ export function SettingsForm({
           ) : (
             <span className="text-amber-600">✗ অসম্পূর্ণ</span>
           )}
+        </p>
+      </section>
+
+      {/* Meta Pixel + Conversions API */}
+      <section className="rounded-xl border bg-white p-5">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-blue-100 text-blue-700 text-xs">📊</span>
+          <h2 className="font-semibold">Meta Pixel + Conversions API</h2>
+        </div>
+        <p className="text-xs text-gray-400 mb-3">
+          Facebook/Meta পিক্সেল আইডি ও Conversions API টোকেন দিন — ব্রাউজার ও সার্ভার দুই দিক থেকেই ইভেন্ট ট্র্যাক হবে।
+        </p>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-sm mb-1">Pixel ID</label>
+            <input value={mt.pixelId} onChange={(e) => setMt({ ...mt, pixelId: e.target.value.replace(/\D/g, "") })} placeholder="1234567890123456" inputMode="numeric" className={cls} />
+          </div>
+          <div>
+            <label className="block text-sm mb-1">Conversions API Access Token</label>
+            <input type="password" value={mt.capiToken} onChange={(e) => setMt({ ...mt, capiToken: e.target.value })} placeholder="EAAB..." autoComplete="new-password" className={cls} />
+          </div>
+          <div>
+            <label className="block text-sm mb-1">Test Event Code (ঐচ্ছিক)</label>
+            <input value={mt.testEventCode} onChange={(e) => setMt({ ...mt, testEventCode: e.target.value })} placeholder="TEST12345" className={cls} />
+            <p className="mt-1 text-xs text-gray-400">শুধু Events Manager-এ টেস্ট করার সময় দিন। লাইভে খালি রাখুন।</p>
+          </div>
+        </div>
+        <div className="mt-3 flex items-center">
+          <button
+            onClick={async () => {
+              setMtErr(null); setMtSaved(false); setMtBusy(true);
+              const res = await saveMetaSettings(mt);
+              setMtBusy(false);
+              if (!res.ok) { setMtErr(res.error ?? "সেভ ব্যর্থ।"); return; }
+              setMtSaved(true);
+              router.refresh();
+            }}
+            disabled={mtBusy}
+            className="rounded-lg bg-brand text-white px-5 py-2 text-sm disabled:opacity-60"
+          >
+            {mtBusy ? "সেভ হচ্ছে..." : "সেভ করুন"}
+          </button>
+          <Saved show={mtSaved} />
+          {mtErr && <span className="text-sm text-red-600 ml-3">{mtErr}</span>}
+        </div>
+        <p className="mt-2 text-xs text-gray-400">
+          অবস্থা:{" "}
+          {mt.pixelId && mt.capiToken ? <span className="text-green-600">✓ কনফিগার করা আছে</span> : <span className="text-amber-600">✗ অসম্পূর্ণ</span>}
+        </p>
+      </section>
+
+      {/* AI (Anthropic) — order screenshot reader */}
+      <section className="rounded-xl border bg-white p-5">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-purple-100 text-purple-700 text-xs">🤖</span>
+          <h2 className="font-semibold">AI অর্ডার রিডার (Anthropic)</h2>
+        </div>
+        <p className="text-xs text-gray-400 mb-3">
+          Anthropic API key দিন — মেসেঞ্জার/হোয়াটসঅ্যাপ অর্ডারের স্ক্রিনশট থেকে নাম, ফোন ও ঠিকানা স্বয়ংক্রিয়ভাবে পূরণ হবে।
+        </p>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-sm mb-1">Anthropic API Key</label>
+            <input
+              type="password"
+              value={aiCfg.apiKey}
+              onChange={(e) => setAiCfg({ ...aiCfg, apiKey: e.target.value })}
+              placeholder="sk-ant-..."
+              autoComplete="new-password"
+              className={cls}
+            />
+          </div>
+          <div>
+            <label className="block text-sm mb-1">Model</label>
+            <input
+              value={aiCfg.model}
+              onChange={(e) => setAiCfg({ ...aiCfg, model: e.target.value })}
+              placeholder="claude-sonnet-5"
+              className={cls}
+            />
+            <p className="mt-1 text-xs text-gray-400">
+              বর্তমান মডেল ব্যবহার করুন: <b>claude-sonnet-5</b> (সুপারিশকৃত) · claude-haiku-4-5-20251001 (সস্তা/দ্রুত) · claude-opus-5।
+              পুরনো claude-3 মডেল আর কাজ করে না।
+            </p>
+          </div>
+        </div>
+        <div className="mt-3 flex items-center">
+          <button
+            onClick={async () => {
+              setAiErr(null); setAiSaved(false); setAiBusy(true);
+              const res = await saveAiSettings(aiCfg);
+              setAiBusy(false);
+              if (!res.ok) { setAiErr(res.error ?? "সেভ ব্যর্থ।"); return; }
+              setAiSaved(true);
+              router.refresh();
+            }}
+            disabled={aiBusy}
+            className="rounded-lg bg-brand text-white px-5 py-2 text-sm disabled:opacity-60"
+          >
+            {aiBusy ? "সেভ হচ্ছে..." : "সেভ করুন"}
+          </button>
+          <Saved show={aiSaved} />
+          {aiErr && <span className="text-sm text-red-600 ml-3">{aiErr}</span>}
+        </div>
+        <p className="mt-2 text-xs text-gray-400">
+          অবস্থা:{" "}
+          {aiCfg.apiKey ? <span className="text-green-600">✓ কনফিগার করা আছে</span> : <span className="text-amber-600">✗ সেট করা নেই</span>}
         </p>
       </section>
     </div>

@@ -1,10 +1,8 @@
 // Thank-you / order confirmation page (server component).
-import Image from "next/image";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import { taka } from "@/lib/format";
 import { getStoreSettings } from "@/lib/settings";
-import { getLandingConfig } from "@/lib/landing";
 import { PurchasePixel } from "./PurchasePixel";
 
 export const dynamic = "force-dynamic";
@@ -30,15 +28,24 @@ const STEPS = [
   { icon: "🚚", title: "ডেলিভারি ও পেমেন্ট", text: "পণ্য হাতে পেয়ে ক্যাশ অন ডেলিভারিতে টাকা দিন।" },
 ];
 
+/** Build a wa.me link (BD number → 8801…) with an optional prefilled message. */
+function waLink(phone: string, text?: string): string {
+  let n = (phone || "").replace(/\D/g, "");
+  if (n.startsWith("00")) n = n.slice(2);
+  if (n.startsWith("0")) n = "88" + n;
+  else if (n.startsWith("1")) n = "880" + n;
+  else if (!n.startsWith("880")) n = "880" + n;
+  return "https://wa.me/" + n + (text ? "?text=" + encodeURIComponent(text) : "");
+}
+
 export default async function OrderPage({
   params,
 }: {
   params: { order_number: string };
 }) {
-  const [data, store, landing] = await Promise.all([
+  const [data, store] = await Promise.all([
     getOrder(params.order_number),
     getStoreSettings(),
-    getLandingConfig(),
   ]);
   if (!data) notFound();
   const { order, items } = data;
@@ -62,10 +69,7 @@ export default async function OrderPage({
         ))}
       </div>
 
-      {/* logo */}
-      <div className="flex justify-center pt-2 pb-4">
-        <Image src={landing.logoUrl || "/logo.png"} alt="Dream Comfort" width={220} height={80} priority sizes="220px" className="h-20 w-auto object-contain" />
-      </div>
+      <div className="pt-2" />
 
       <div className="rounded-[2rem] overflow-hidden bg-white shadow-soft ring-1 ring-brand/10">
         {/* success header */}
@@ -134,8 +138,13 @@ export default async function OrderPage({
         <a href="/" className="rounded-2xl bg-brand text-white px-6 py-3 font-bold hover:bg-brand-dark transition">
           🏠 হোমে ফিরে যান
         </a>
-        <a href={`tel:${store.phone}`} className="rounded-2xl border-2 border-accent/40 text-accent-dark px-6 py-3 font-bold hover:bg-accent-soft transition">
-          📞 {store.phone}
+        <a
+          href={waLink(store.phone, `আসসালামু আলাইকুম, আমার অর্ডার নম্বর ${order.order_number} নিয়ে কথা বলতে চাই।`)}
+          target="_blank"
+          rel="noopener"
+          className="rounded-2xl bg-green-600 text-white px-6 py-3 font-bold hover:bg-green-700 transition inline-flex items-center gap-2"
+        >
+          💬 WhatsApp-এ যোগাযোগ
         </a>
       </div>
 
@@ -153,6 +162,12 @@ export default async function OrderPage({
         eventId={order.event_id ?? null}
         value={Number(order.total)}
         contentIds={items.map((it: any) => it.product_id).filter(Boolean)}
+        customer={{
+          name: order.customer_name,
+          phone: order.customer_phone,
+          city: order.city || order.district || undefined,
+          email: order.customer_email || undefined,
+        }}
       />
     </div>
   );

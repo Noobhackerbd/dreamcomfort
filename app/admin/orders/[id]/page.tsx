@@ -49,6 +49,8 @@ export default async function OrderDetail({ params }: { params: { id: string } }
         payment_method: order.payment_method ?? "cod",
         shipping_fee: Number(order.shipping_fee ?? 0),
         discount: Number(order.discount ?? 0),
+        is_booked: !!order.is_booked,
+        booked_date: order.booked_date ?? null,
         items,
       }}
     />

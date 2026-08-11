@@ -1,9 +1,11 @@
 "use client";
 
 import Image from "next/image";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { placeOrder } from "@/app/checkout/actions";
+import { saveAbandonedLead } from "@/app/checkout/lead-actions";
+import { setAdvancedMatching } from "@/components/MetaPixel";
 import { fireEvent } from "@/components/track";
 import { taka } from "@/lib/format";
 import { playTick, playPop, playConfirm, playError } from "@/lib/sound";
@@ -48,6 +50,7 @@ export function OrderForm({
   const [shakeKey, setShakeKey] = useState(0);
   const [zoomIdx, setZoomIdx] = useState<number | null>(null);
   const initiated = useRef(false);
+  const leadIdRef = useRef<string>("");
 
   const gallery = images.length ? images : baseImage ? [baseImage] : [];
   const thumb = gallery[0];
@@ -60,16 +63,69 @@ export function OrderForm({
   const total = subtotal + shippingFee;
   const freeDelivery = shipping.inside === 0 && shipping.outside === 0;
 
+  // Stable per-visitor lead id (persisted so repeat visits update one row).
+  useEffect(() => {
+    try {
+      let id = localStorage.getItem("dc_lead_id");
+      if (!id) {
+        id = (crypto as any)?.randomUUID ? crypto.randomUUID() : "lead-" + Date.now().toString(36) + Math.random().toString(36).slice(2);
+        localStorage.setItem("dc_lead_id", id);
+      }
+      leadIdRef.current = id;
+    } catch {
+      leadIdRef.current = "";
+    }
+  }, []);
+
+  // Debounced abandoned-cart capture as the visitor fills the form.
+  useEffect(() => {
+    const id = leadIdRef.current;
+    if (!id) return;
+    const phoneDigits = phone.replace(/\D/g, "");
+    const meaningful = phoneDigits.length >= 6 || (name.trim().length >= 2 && address.trim().length >= 4);
+    if (!meaningful) return;
+    const t = setTimeout(() => {
+      // Manual advanced matching: feed the customer's info to the Pixel as they type.
+      if (/^01\d{9}$/.test(phoneDigits) || name.trim().length >= 2) {
+        const parts = name.trim().split(/\s+/);
+        setAdvancedMatching({
+          phone: /^01\d{9}$/.test(phoneDigits) ? phoneDigits : undefined,
+          firstName: parts[0] || undefined,
+          lastName: parts.length > 1 ? parts.slice(1).join(" ") : undefined,
+        });
+      }
+      // Fire InitiateCheckout once the phone is a valid number.
+      markInitiated();
+      void saveAbandonedLead({
+        leadId: id,
+        name,
+        phone,
+        address,
+        productId,
+        productName,
+        quantity: qty,
+        value: unitPrice * qty,
+      });
+    }, 1200);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [name, phone, address, qty, productId, productName, unitPrice]);
+
+  // InitiateCheckout — fire ONCE per session, only when the phone is valid, and
+  // attach the phone so the server copy carries `ph` (higher match quality).
   function markInitiated() {
     if (initiated.current) return;
+    const phoneDigits = phone.replace(/\D/g, "");
+    if (!/^01\d{9}$/.test(phoneDigits)) return; // wait until we have a real number
+    try { if (sessionStorage.getItem("dc_ic_fired")) { initiated.current = true; return; } } catch {}
     initiated.current = true;
-    fireEvent("InitiateCheckout", {
-      currency: "BDT",
-      value: total,
-      num_items: qty,
-      content_ids: [productId],
-      content_type: "product",
-    });
+    try { sessionStorage.setItem("dc_ic_fired", "1"); } catch {}
+    const parts = name.trim().split(/\s+/);
+    fireEvent(
+      "InitiateCheckout",
+      { currency: "BDT", value: total, num_items: qty, content_ids: [productId], content_type: "product" },
+      { phone: phoneDigits, firstName: parts[0] || undefined, lastName: parts.length > 1 ? parts.slice(1).join(" ") : undefined }
+    );
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -110,11 +166,14 @@ export function OrderForm({
       deliveryArea,
       items: [{ id: productId, qty, variantId: variantId || undefined }],
       fbclid,
+      leadId: leadIdRef.current || undefined,
     });
     if (!res.ok) {
       setSubmitting(false);
       return setError(res.error ?? "অর্ডার ব্যর্থ হয়েছে।");
     }
+    // Order placed — this lead converted; start fresh for any future visit.
+    try { localStorage.removeItem("dc_lead_id"); } catch {}
     // keep the loading overlay visible while we navigate to the thank-you page
     router.push(`/order/${res.orderNumber}`);
   }
@@ -303,20 +362,42 @@ export function OrderForm({
           </div>
 
           <div className="relative rounded-[2rem] bg-white/85 backdrop-blur-xl shadow-soft ring-1 ring-brand/15 px-9 py-10 text-center">
-            {/* conic gradient ring spinner with logo in the middle */}
+            {/* Premium multi-ring loader (no logo) */}
             <div className="relative mx-auto h-28 w-28">
+              {/* soft pulsing halo */}
               <div
-                className="absolute inset-0 rounded-full animate-spin"
+                className="absolute inset-0 rounded-full bg-gradient-to-br from-brand/40 to-accent/40"
+                style={{ animation: "dc-ring-pulse 1.8s ease-in-out infinite" }}
+              />
+              {/* outer gradient ring */}
+              <div
+                className="absolute inset-0 rounded-full dc-loader-ring"
                 style={{
-                  background: "conic-gradient(from 0deg, #5FB4E4, #F0A0C0, #BFE3F5, #5FB4E4)",
-                  WebkitMask: "radial-gradient(farthest-side, transparent calc(100% - 9px), #000 calc(100% - 9px))",
-                  mask: "radial-gradient(farthest-side, transparent calc(100% - 9px), #000 calc(100% - 9px))",
-                  animationDuration: "1.1s",
+                  background: "conic-gradient(from 0deg, transparent 0deg, #5FB4E4 130deg, #F0A0C0 250deg, transparent 360deg)",
+                  animation: "dc-spin 1.1s linear infinite",
                 }}
               />
-              <div className="absolute inset-[11px] rounded-full bg-white flex items-center justify-center shadow-inner">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/logo.png" alt="" className="h-16 w-16 object-contain dc-float" />
+              {/* inner counter-rotating ring */}
+              <div
+                className="absolute inset-3 rounded-full dc-loader-ring--inner"
+                style={{
+                  background: "conic-gradient(from 200deg, transparent 0deg, #F0A0C0 120deg, #5FB4E4 260deg, transparent 360deg)",
+                  animation: "dc-spin-rev 0.9s linear infinite",
+                }}
+              />
+              {/* orbiting dot */}
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span
+                  className="block h-3 w-3 rounded-full bg-accent shadow"
+                  style={{ animation: "dc-orbit 1.4s linear infinite" }}
+                />
+              </div>
+              {/* pulsing core */}
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span
+                  className="block h-6 w-6 rounded-full bg-gradient-to-br from-brand to-accent"
+                  style={{ animation: "dc-core 1.2s ease-in-out infinite" }}
+                />
               </div>
             </div>
 

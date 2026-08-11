@@ -55,10 +55,11 @@ export interface RawUserData {
   externalId?: string | null; // e.g. customer id or phone
 }
 
-/** Build the hashed portion of Meta user_data from raw customer info. */
+/** Build the hashed portion of Meta user_data from raw customer info.
+ * NOTE: external_id is sent PLAIN (not hashed) so it exactly matches the value
+ * the browser Pixel sends via advanced matching — the Pixel does not hash
+ * external_id, so hashing it here would break browser↔server identity matching. */
 export function buildHashedUserData(u: RawUserData) {
-  const external =
-    u.externalId ?? normalizeBdPhone(u.phone) ?? undefined;
   return {
     em: hashField(u.email),
     ph: hashPhone(u.phone),
@@ -68,6 +69,6 @@ export function buildHashedUserData(u: RawUserData) {
     st: hashField(u.state),
     zp: hashField(u.zip),
     country: hashField("bd"),
-    external_id: external ? hashField(external) : undefined,
+    external_id: u.externalId || undefined, // plain, must equal the browser value
   };
 }

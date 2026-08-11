@@ -33,6 +33,11 @@ export function getClientUserAgent(): string | undefined {
   return headers().get("user-agent") ?? undefined;
 }
 
+/** Stable first-party external id (set client-side as dc_xid), used to match events. */
+export function getExternalId(): string | undefined {
+  return cookies().get("dc_xid")?.value || undefined;
+}
+
 /** Convenience: grab all four server-side matching signals at once. */
 export function getServerMatchSignals(fbclid?: string | null) {
   return {

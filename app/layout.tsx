@@ -3,6 +3,7 @@ import Image from "next/image";
 import { Fredoka, Noto_Sans_Bengali } from "next/font/google";
 import "./globals.css";
 import { MetaPixel } from "@/components/MetaPixel";
+import { getMetaSettings } from "@/lib/settings";
 
 // Self-hosted via next/font — no render-blocking Google Fonts request, auto-preloaded.
 const fredoka = Fredoka({
@@ -42,7 +43,7 @@ export const viewport: Viewport = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const landing = await getLandingConfig();
+  const [landing, meta] = await Promise.all([getLandingConfig(), getMetaSettings()]);
   return (
     <html lang="bn" className={`${fredoka.variable} ${notoBengali.variable}`}>
       <body className="min-h-screen antialiased flex flex-col">
@@ -91,7 +92,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           </div>
         </footer>
 
-        <MetaPixel />
+        <MetaPixel pixelId={meta.pixelId || undefined} />
       </body>
     </html>
   );
