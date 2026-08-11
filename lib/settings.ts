@@ -25,6 +25,7 @@ export interface CarryBeeSettings {
   clientSecret: string;
   clientContext: string;
   storeId: string;
+  autoOnConfirm: boolean; // auto-create consignment when an order is confirmed
 }
 
 export interface AiSettings {
@@ -82,6 +83,7 @@ export function getCarryBeeSettings(): Promise<CarryBeeSettings> {
     clientSecret: process.env.CARRYBEE_CLIENT_SECRET || "",
     clientContext: process.env.CARRYBEE_CLIENT_CONTEXT || "",
     storeId: process.env.CARRYBEE_STORE_ID || "",
+    autoOnConfirm: process.env.CARRYBEE_AUTO_CONFIRM === "1",
   });
 }
 

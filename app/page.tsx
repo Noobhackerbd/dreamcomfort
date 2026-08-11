@@ -9,7 +9,6 @@ import { taka } from "@/lib/format";
 import { ProductFunnel } from "@/components/funnel/ProductFunnel";
 import { Reveal } from "@/components/Reveal";
 import { HeartsBg } from "@/components/funnel/HeartsBg";
-import { SoundToggle } from "@/components/funnel/SoundToggle";
 import { LandingBodyClass } from "@/components/funnel/LandingBodyClass";
 import { StickyOrderButton } from "@/components/funnel/StickyOrderButton";
 import { ProductShowcase } from "@/components/funnel/ProductShowcase";
@@ -100,7 +99,6 @@ export default async function HomePage() {
     <div className="-mt-8 relative">
       <LandingBodyClass />
       <HeartsBg />
-      <SoundToggle />
 
       {/* soft animated background blobs */}
       <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden -z-10">

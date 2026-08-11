@@ -12,6 +12,10 @@ export function HeroSlider({ images, alt }: { images: string[]; alt: string }) {
   const touchX = useRef<number | null>(null);
   const pausedUntil = useRef<number>(0);
 
+  // Reset to the first slide whenever the product (images) changes — avoids a
+  // stale index and a remount flash when switching products.
+  useEffect(() => { setI(0); }, [images]);
+
   // Auto-advance (pauses briefly after a manual interaction).
   useEffect(() => {
     if (!many) return;
@@ -30,9 +34,9 @@ export function HeroSlider({ images, alt }: { images: string[]; alt: string }) {
   }
 
   return (
-    <div className="relative">
-      {/* soft glow behind */}
-      <div className="absolute -inset-4 rounded-[2.5rem] bg-gradient-to-br from-brand-light/50 to-accent-light/50 blur-2xl" />
+    <div className="relative w-full max-w-full">
+      {/* soft glow behind — inset-0 (not negative) so it never overflows the viewport */}
+      <div className="absolute inset-0 rounded-[2.5rem] bg-gradient-to-br from-brand-light/50 to-accent-light/50 blur-2xl" />
       <div
         className="relative aspect-square w-full overflow-hidden rounded-[2rem] bg-white shadow-soft ring-1 ring-white select-none"
         onTouchStart={(e) => (touchX.current = e.touches[0].clientX)}

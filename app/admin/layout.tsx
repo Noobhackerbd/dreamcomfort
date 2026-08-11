@@ -12,6 +12,7 @@ const NAV = [
   { href: "/admin/products", label: "পণ্য" },
   { href: "/admin/categories", label: "ক্যাটাগরি" },
   { href: "/admin/orders", label: "অর্ডার", badgeKey: "bookedDue" },
+  { href: "/admin/print-station", label: "🖨️ প্রিন্ট স্টেশন" },
   { href: "/admin/abandoned", label: "অসম্পূর্ণ অর্ডার", badgeKey: "abandoned" },
   { href: "/admin/customers", label: "গ্রাহক" },
   { href: "/admin/sms", label: "এসএমএস" },

@@ -2,7 +2,7 @@
 
 import { getServerSupabase } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/admin-auth";
-import { getSmsTemplates } from "@/lib/settings";
+import { getSmsTemplates, getCarryBeeSettings } from "@/lib/settings";
 import { sendSmsAsync } from "@/lib/sms";
 import { fillTemplate, STATUS_SMS_MAP } from "@/lib/sms/templates";
 import { createParcel, getParcelStatus, carrybeeConfigured, listCities, listZones, listAreas } from "@/lib/carrybee";
@@ -50,8 +50,47 @@ export async function updateOrderStatus(orderId: string, status: string) {
     }
   }
 
+  // Auto-send to CarryBee when an order is confirmed (from any device).
+  if (status === "confirmed") {
+    try {
+      const cb = await getCarryBeeSettings();
+      if (cb.autoOnConfirm && cb.clientId && cb.clientSecret && cb.clientContext) {
+        await sendToCarryBee(orderId); // best-effort; guards against double-send
+      }
+    } catch {
+      /* never block a status change on courier errors */
+    }
+  }
+
   revalidatePath("/admin/orders");
   revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath("/admin/print-station");
+  return { ok: true };
+}
+
+/** Print Station: confirmed CarryBee orders whose label hasn't been printed yet. */
+export async function getPrintQueue() {
+  await requireAdmin();
+  const supabase = getServerSupabase();
+  const { data, error } = await supabase
+    .from("orders")
+    .select("id, order_number, tracking_id, customer_name")
+    .eq("courier", "CarryBee")
+    .eq("label_printed", false)
+    .not("tracking_id", "is", null)
+    .in("status", ["confirmed", "processing", "shipped"])
+    .order("created_at", { ascending: true })
+    .limit(20);
+  if (error) return { ok: false, error: error.message, orders: [] as any[] };
+  return { ok: true, orders: data ?? [] };
+}
+
+/** Mark an order's label as printed so the Print Station doesn't re-print it. */
+export async function markLabelPrinted(orderId: string) {
+  await requireAdmin();
+  const supabase = getServerSupabase();
+  const { error } = await supabase.from("orders").update({ label_printed: true }).eq("id", orderId);
+  if (error) return { ok: false, error: error.message };
   return { ok: true };
 }
 

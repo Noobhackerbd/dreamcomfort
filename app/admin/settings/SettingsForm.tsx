@@ -185,6 +185,10 @@ export function SettingsForm({
             <label className="block text-sm mb-1">Store ID</label>
             <input value={cb.storeId} onChange={(e) => setCb({ ...cb, storeId: e.target.value })} placeholder="21917" inputMode="numeric" className={cls} />
           </div>
+          <label className="flex items-center gap-2 text-sm rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
+            <input type="checkbox" checked={!!cb.autoOnConfirm} onChange={(e) => setCb({ ...cb, autoOnConfirm: e.target.checked })} className="h-4 w-4 accent-amber-500" />
+            অর্ডার <b>কনফার্ম</b> করলে স্বয়ংক্রিয়ভাবে CarryBee-তে পাঠাও (যেকোনো ডিভাইস থেকে)। লেবেল প্রিন্ট হবে <a href="/admin/print-station" className="text-brand underline">প্রিন্ট স্টেশন</a> খোলা ল্যাপটপে।
+          </label>
         </div>
         <div className="mt-3 flex items-center">
           <button

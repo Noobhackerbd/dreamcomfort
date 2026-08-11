@@ -93,10 +93,10 @@ export function ProductFunnel({
   const off = hasDiscount ? Math.round((1 - p.price / (p.compare_at_price as number)) * 100) : 0;
 
   return (
-    <section className="grid lg:grid-cols-2 gap-8 py-8 lg:py-12 items-start">
-      <div className="lg:sticky lg:top-8">
-        <div className={switching ? "opacity-80 transition-opacity duration-200" : "transition-opacity duration-200"}>
-          <HeroSlider key={heroP.id} images={heroP.images} alt={heroP.name} />
+    <section className="grid lg:grid-cols-2 gap-8 py-8 lg:py-12 items-start max-w-full">
+      <div className="lg:sticky lg:top-8 min-w-0">
+        <div className={"w-full max-w-full " + (switching ? "opacity-80 transition-opacity duration-200" : "transition-opacity duration-200")}>
+          <HeroSlider images={heroP.images} alt={heroP.name} />
         </div>
 
         {/* Product picker — directly below the hero photo (all screens) */}
@@ -112,7 +112,7 @@ export function ProductFunnel({
         )}
       </div>
 
-      <div>
+      <div className="min-w-0">
         {urgencyText && (
           <span className="inline-block rounded-full bg-accent-soft text-accent-dark text-sm px-3 py-1 mb-3 dc-wiggle">
             {urgencyText}
@@ -167,17 +167,17 @@ function ProductChip({ p, on, onSelect }: { p: FunnelProduct; on: boolean; onSel
       type="button"
       onClick={onSelect}
       className={
-        "flex items-center gap-2 rounded-2xl border p-2 text-left transition " +
+        "flex w-full min-w-0 items-center gap-2 overflow-hidden rounded-2xl border p-2 text-left transition " +
         (on ? "border-accent ring-4 ring-accent/15 bg-accent-soft" : "border-brand/15 hover:border-brand/40 bg-white")
       }
     >
       {p.images[0] ? (
-        <Image src={p.images[0]} alt={p.name} width={44} height={44} sizes="44px" className="h-11 w-11 rounded-xl object-cover" />
+        <Image src={p.images[0]} alt={p.name} width={44} height={44} sizes="44px" className="h-11 w-11 shrink-0 rounded-xl object-cover" />
       ) : (
-        <span className="h-11 w-11 rounded-xl bg-gradient-to-br from-brand-light to-accent-light" />
+        <span className="h-11 w-11 shrink-0 rounded-xl bg-gradient-to-br from-brand-light to-accent-light" />
       )}
-      <span className="min-w-0">
-        <span className="block text-sm font-medium truncate">{p.name}</span>
+      <span className="flex-1 min-w-0">
+        <span className="block text-sm font-medium leading-tight line-clamp-2">{p.name}</span>
         <span className="block text-xs text-accent-dark font-bold">{taka(p.price)}</span>
       </span>
     </button>

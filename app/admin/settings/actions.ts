@@ -75,6 +75,7 @@ export async function saveCarryBeeSettings(cb: {
   clientSecret: string;
   clientContext: string;
   storeId: string;
+  autoOnConfirm?: boolean;
 }) {
   await requireAdmin();
   try {
@@ -84,6 +85,7 @@ export async function saveCarryBeeSettings(cb: {
       clientSecret: (cb.clientSecret || "").trim(),
       clientContext: (cb.clientContext || "").trim(),
       storeId: (cb.storeId || "").trim(),
+      autoOnConfirm: !!cb.autoOnConfirm,
     });
   } catch (e: any) {
     return { ok: false, error: e?.message ?? "সেভ ব্যর্থ। settings টেবিল আছে কিনা দেখুন (supabase-migration-2.sql)।" };
