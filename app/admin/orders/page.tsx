@@ -11,6 +11,7 @@ const PAGE_SIZE = 20;
 
 const STATUS_FILTERS = [
   { value: "", label: "সব" },
+  { value: "booked", label: "📅 বুকড" },
   { value: "pending", label: "পেন্ডিং" },
   { value: "confirmed", label: "কনফার্মড" },
   { value: "processing", label: "প্রসেসিং" },
@@ -39,7 +40,16 @@ export default async function AdminOrders({
     .order("created_at", { ascending: false })
     .range(from, to);
 
-  if (searchParams.status) query = query.eq("status", searchParams.status);
+  // "booked" = scheduled orders still pending; once confirmed they move to the
+  // Confirmed tab automatically. Pending tab excludes booked so they only show under বুকড.
+  const statusFilter = searchParams.status;
+  if (statusFilter === "booked") {
+    query = query.eq("is_booked", true).eq("status", "pending");
+  } else if (statusFilter === "pending") {
+    query = query.eq("status", "pending").eq("is_booked", false);
+  } else if (statusFilter) {
+    query = query.eq("status", statusFilter);
+  }
   if (searchParams.q) {
     const q = searchParams.q.trim();
     query = query.or(`order_number.ilike.%${q}%,customer_phone.ilike.%${q}%,customer_name.ilike.%${q}%`);

@@ -13,31 +13,72 @@ export interface PickProduct {
   image: string | null;
 }
 
-export function ManualOrderModal({ products, aiReady }: { products: PickProduct[]; aiReady: boolean }) {
+export interface ManualInitial {
+  name?: string;
+  phone?: string;
+  address?: string;
+  area?: string;
+  city?: string;
+  productId?: string;
+  amount?: number;
+}
+
+export function ManualOrderModal({
+  products,
+  aiReady,
+  initial,
+  leadId,
+  triggerLabel,
+  triggerClassName,
+}: {
+  products: PickProduct[];
+  aiReady: boolean;
+  initial?: ManualInitial;
+  leadId?: string;
+  triggerLabel?: string;
+  triggerClassName?: string;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button onClick={() => setOpen(true)} className="rounded-lg bg-brand text-white px-4 py-2.5 text-sm font-medium hover:bg-brand-dark">
-        ➕ নতুন অর্ডার
+      <button
+        onClick={() => setOpen(true)}
+        className={triggerClassName || "rounded-lg bg-brand text-white px-4 py-2.5 text-sm font-medium hover:bg-brand-dark"}
+      >
+        {triggerLabel || "➕ নতুন অর্ডার"}
       </button>
-      {open && <Modal products={products} aiReady={aiReady} onClose={() => setOpen(false)} />}
+      {open && <Modal products={products} aiReady={aiReady} initial={initial} leadId={leadId} onClose={() => setOpen(false)} />}
     </>
   );
 }
 
-function Modal({ products, aiReady, onClose }: { products: PickProduct[]; aiReady: boolean; onClose: () => void }) {
+function Modal({
+  products,
+  aiReady,
+  initial,
+  leadId,
+  onClose,
+}: {
+  products: PickProduct[];
+  aiReady: boolean;
+  initial?: ManualInitial;
+  leadId?: string;
+  onClose: () => void;
+}) {
   const router = useRouter();
 
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [address, setAddress] = useState("");
-  const [area, setArea] = useState("");
-  const [city, setCity] = useState("");
+  const [name, setName] = useState(initial?.name ?? "");
+  const [phone, setPhone] = useState(initial?.phone ?? "");
+  const [address, setAddress] = useState(initial?.address ?? "");
+  const [area, setArea] = useState(initial?.area ?? "");
+  const [city, setCity] = useState(initial?.city ?? "");
   const [notes, setNotes] = useState("");
 
-  const [productId, setProductId] = useState<string>(products[0]?.id ?? "");
+  const [productId, setProductId] = useState<string>(
+    (initial?.productId && products.some((p) => p.id === initial.productId) ? initial.productId : products[0]?.id) ?? ""
+  );
   const [qty, setQty] = useState("1");
-  const [customAmount, setCustomAmount] = useState("");
+  const [customAmount, setCustomAmount] = useState(initial?.amount ? String(initial.amount) : "");
   const [shipping, setShipping] = useState("0");
   const [sendSms, setSendSms] = useState(true);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -133,6 +174,7 @@ function Modal({ products, aiReady, onClose }: { products: PickProduct[]; aiRead
       sendSms,
       isBooked: booked,
       bookedDate: booked ? bookedDate : null,
+      leadId,
     });
     setBusy(false);
     if (!res.ok) return setErr(res.error ?? "ব্যর্থ।");

@@ -18,7 +18,7 @@ function currentFbclid(): string | undefined {
  * event_id. Returns the event_id (useful for tests/logging).
  */
 export function fireEvent(
-  eventName: "ViewContent" | "AddToCart" | "InitiateCheckout" | "Lead" | "Search",
+  eventName: "ViewContent" | "AddToCart" | "InitiateCheckout" | "Lead" | "Search" | "Scroll",
   customData?: CustomData,
   user?: RawUserData
 ): string {

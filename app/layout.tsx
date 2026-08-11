@@ -3,6 +3,8 @@ import Image from "next/image";
 import { Fredoka, Noto_Sans_Bengali } from "next/font/google";
 import "./globals.css";
 import { MetaPixel } from "@/components/MetaPixel";
+import { VisitTracker } from "@/components/VisitTracker";
+import { ScrollTracker } from "@/components/ScrollTracker";
 import { getMetaSettings } from "@/lib/settings";
 
 // Self-hosted via next/font — no render-blocking Google Fonts request, auto-preloaded.
@@ -93,6 +95,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         </footer>
 
         <MetaPixel pixelId={meta.pixelId || undefined} />
+        <VisitTracker />
+        <ScrollTracker />
       </body>
     </html>
   );

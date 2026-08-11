@@ -8,10 +8,15 @@ export default async function AdminLanding() {
   const supabase = getServerSupabase();
   const [config, { data: products }] = await Promise.all([
     getLandingConfig(),
-    supabase.from("products").select("slug, name_bn, name_en").order("created_at", { ascending: false }),
+    supabase.from("products").select("slug, name_bn, name_en, price, images").eq("is_active", true).order("created_at", { ascending: false }),
   ]);
 
-  const opts = (products ?? []).map((p: any) => ({ slug: p.slug, name: p.name_bn || p.name_en }));
+  const opts = (products ?? []).map((p: any) => ({
+    slug: p.slug,
+    name: p.name_bn || p.name_en,
+    price: Number(p.price ?? 0),
+    image: p.images?.[0] ?? null,
+  }));
 
   return (
     <div>

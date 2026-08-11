@@ -88,8 +88,6 @@ export async function extractOrderFromImage(
               { type: "text", text: EXTRACT_PROMPT },
             ],
           },
-          // Prefill the reply with "{" so the model is forced to output only JSON.
-          { role: "assistant", content: "{" },
         ],
       }),
     });
@@ -99,12 +97,11 @@ export async function extractOrderFromImage(
       return { ok: false, error: data?.error?.message || `AI অনুরোধ ব্যর্থ (${res.status})।` };
     }
 
-    // Concatenate every text block, and re-add the prefilled "{".
+    // Concatenate every text block and pull the JSON object out of it.
     const raw: string = Array.isArray(data?.content)
       ? data.content.filter((c: any) => c?.type === "text").map((c: any) => c.text).join("")
       : "";
-    const full = "{" + raw;
-    const match = full.match(/\{[\s\S]*\}/);
+    const match = raw.match(/\{[\s\S]*\}/);
     if (!match) return { ok: false, error: "স্ক্রিনশট থেকে তথ্য পড়া যায়নি। আবার চেষ্টা করুন।" };
 
     let p: any;

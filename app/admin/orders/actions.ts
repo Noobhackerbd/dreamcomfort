@@ -7,6 +7,7 @@ import { sendSmsAsync } from "@/lib/sms";
 import { fillTemplate, STATUS_SMS_MAP } from "@/lib/sms/templates";
 import { createParcel, getParcelStatus, carrybeeConfigured, listCities, listZones, listAreas } from "@/lib/carrybee";
 import { extractOrderFromImage } from "@/lib/ai";
+import { markLeadConverted } from "@/app/checkout/lead-actions";
 import { revalidatePath } from "next/cache";
 
 const STATUSES = [
@@ -339,6 +340,7 @@ export interface ManualOrderInput {
   sendSms?: boolean; // default true
   isBooked?: boolean;
   bookedDate?: string | null; // YYYY-MM-DD
+  leadId?: string; // abandoned-cart lead being converted to an order
 }
 
 /** Create an order manually from the admin (e.g. a Messenger/WhatsApp order). */
@@ -412,6 +414,11 @@ export async function createManualOrder(input: ManualOrderInput) {
     .from("order_items")
     .insert(lineItems.map((li) => ({ ...li, order_id: order.id })));
   if (iErr) return { ok: false, error: iErr.message };
+
+  // If this order was created from an abandoned-cart lead, mark it converted.
+  if (input.leadId) {
+    void markLeadConverted(input.leadId, order.id, order.order_number);
+  }
 
   // Customer upsert (best-effort).
   try {

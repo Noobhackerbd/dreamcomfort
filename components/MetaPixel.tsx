@@ -31,6 +31,14 @@ declare global {
  * If the Pixel hasn't loaded yet (user hasn't interacted), we load it on demand
  * so the event is not lost.
  */
+// Meta's standard events use fbq('track', …); anything else is a custom event
+// and must use fbq('trackCustom', …).
+const STANDARD_EVENTS = new Set([
+  "PageView", "ViewContent", "AddToCart", "InitiateCheckout", "Purchase", "Lead",
+  "Search", "CompleteRegistration", "Contact", "Subscribe", "AddToWishlist",
+  "AddPaymentInfo", "StartTrial", "SubmitApplication", "Schedule", "Donate",
+]);
+
 export function trackBrowser(
   eventName: string,
   params?: Record<string, unknown>,
@@ -39,7 +47,8 @@ export function trackBrowser(
   if (typeof window === "undefined") return;
   if (!window.fbq) loadPixel(); // ensure the pixel exists before we queue an event
   if (!window.fbq) return;
-  window.fbq("track", eventName, params ?? {}, eventId ? { eventID: eventId } : undefined);
+  const method = STANDARD_EVENTS.has(eventName) ? "track" : "trackCustom";
+  window.fbq(method, eventName, params ?? {}, eventId ? { eventID: eventId } : undefined);
 }
 
 function getCookie(name: string): string | undefined {

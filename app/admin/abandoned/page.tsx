@@ -1,7 +1,9 @@
 import Image from "next/image";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { taka, bdDateTime } from "@/lib/format";
+import { aiConfigured } from "@/lib/ai";
 import { AbandonedActions } from "./AbandonedActions";
+import { ManualOrderModal, type PickProduct } from "../orders/ManualOrderModal";
 
 export const dynamic = "force-dynamic";
 
@@ -34,8 +36,18 @@ export default async function AbandonedPage({ searchParams }: { searchParams: { 
     .limit(300);
   if (status) query = query.eq("status", status);
 
-  const { data: leads } = await query;
+  const [{ data: leads }, aiReady, productsRes] = await Promise.all([
+    query,
+    aiConfigured(),
+    supabase.from("products").select("id, name_bn, name_en, price, images").eq("is_active", true).order("created_at", { ascending: false }),
+  ]);
   const rows = leads ?? [];
+  const pickProducts: PickProduct[] = (productsRes.data ?? []).map((p: any) => ({
+    id: p.id,
+    name: p.name_bn || p.name_en,
+    price: Number(p.price),
+    image: p.images?.[0] ?? null,
+  }));
 
   return (
     <div>
@@ -103,12 +115,29 @@ export default async function AbandonedPage({ searchParams }: { searchParams: { 
                   </div>
 
                   <div className="mt-3 pt-3 border-t flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       {l.customer_phone && (
                         <a href={`tel:${l.customer_phone}`} className="rounded-lg bg-brand text-white px-3 py-1.5 text-xs">📞 কল</a>
                       )}
                       {wa && (
                         <a href={wa} target="_blank" rel="noopener" className="rounded-lg bg-green-600 text-white px-3 py-1.5 text-xs">💬 WhatsApp</a>
+                      )}
+                      {l.status !== "converted" && (
+                        <ManualOrderModal
+                          products={pickProducts}
+                          aiReady={aiReady}
+                          leadId={l.lead_id}
+                          triggerLabel="🛒 অর্ডার তৈরি করুন"
+                          triggerClassName="rounded-lg bg-accent-dark text-white px-3 py-1.5 text-xs font-medium hover:bg-accent"
+                          initial={{
+                            name: l.customer_name || "",
+                            phone: l.customer_phone || "",
+                            address: l.address_line || "",
+                            area: l.area || "",
+                            productId: l.product_id || undefined,
+                            amount: l.value ? Number(l.value) : undefined,
+                          }}
+                        />
                       )}
                     </div>
                     <AbandonedActions id={l.id} status={l.status} />

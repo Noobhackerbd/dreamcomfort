@@ -19,7 +19,7 @@ async function getStats() {
   const supabase = getServerSupabase();
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-  const [productsRes, ordersRes, pendingRes, allOrdersRes, recentRes, lowStockRes, itemsRes, abandonedRes, bookedRes] =
+  const [productsRes, ordersRes, pendingRes, allOrdersRes, recentRes, lowStockRes, itemsRes, abandonedRes, bookedRes, visitsRes] =
     await Promise.all([
       supabase.from("products").select("id", { count: "exact", head: true }),
       supabase.from("orders").select("id", { count: "exact", head: true }),
@@ -48,6 +48,8 @@ async function getStats() {
         .not("status", "in", "(delivered,cancelled,returned)")
         .order("booked_date", { ascending: true })
         .limit(60),
+      // Visitors (migration 6). Guarded — returns [] until the table exists.
+      supabase.from("page_visits").select("visitor_id, created_at").gte("created_at", since).limit(100000),
     ]);
 
   const allOrders = allOrdersRes.data ?? [];
@@ -93,6 +95,20 @@ async function getStats() {
   const confirmRate = total30 ? Math.round((confirmed30 / total30) * 100) : 0;
   const cancelRate = total30 ? Math.round((cancelled30 / total30) * 100) : 0;
 
+  // Daily unique visitors (by visitor_id) over the 30-day window.
+  const visitDays = new Map<string, Set<string>>();
+  for (const v of (visitsRes.data ?? []) as any[]) {
+    const key = dhakaDayKey(v.created_at);
+    if (!buckets.has(key)) continue;
+    if (!visitDays.has(key)) visitDays.set(key, new Set());
+    visitDays.get(key)!.add(v.visitor_id || v.created_at);
+  }
+  const visitorsChart = chart.map((c) => ({ day: c.day, visitors: visitDays.get(c.day)?.size ?? 0 }));
+  const todayVisitors = visitDays.get(today)?.size ?? 0;
+  const visitors30 = (visitsRes.data ?? []).length
+    ? new Set((visitsRes.data as any[]).map((v) => v.visitor_id || v.created_at)).size
+    : 0;
+
   // Booked orders due within the next 3 days (or already overdue) → reminder list.
   const cutoff = new Date(Date.now() + DHAKA_OFFSET_MS + 3 * 86400000).toISOString().slice(0, 10);
   const bookedSoon = (bookedRes.data ?? [])
@@ -128,6 +144,9 @@ async function getStats() {
     cancelRate,
     salesConfirmed30,
     bookedSoon,
+    todayVisitors,
+    visitors30,
+    visitorsChart,
     revenue30,
     todayOrders: todayOrders.length,
     todayRevenue,
@@ -180,6 +199,7 @@ export default async function AdminDashboard() {
   const stats = await getStats();
   const maxBar = Math.max(1, ...stats.chart.map((c) => c.total));
   const maxCount = Math.max(1, ...stats.chart.map((c) => c.count));
+  const maxVisitors = Math.max(1, ...stats.visitorsChart.map((c) => c.visitors));
 
   return (
     <div>
@@ -208,7 +228,8 @@ export default async function AdminDashboard() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
+        <StatCard label="👥 আজকের ভিজিটর" value={stats.todayVisitors} />
         <StatCard label="আজকের অর্ডার" value={stats.todayOrders} />
         <StatCard label="আজকের আয়" value={taka(stats.todayRevenue)} />
         <StatCard label="পেন্ডিং অর্ডার" value={stats.pending} href="/admin/orders?status=pending" />
@@ -259,6 +280,22 @@ export default async function AdminDashboard() {
           })}
         </div>
         <p className="text-xs text-gray-400 mt-2">প্রতিদিনের অর্ডার সংখ্যা স্ট্যাটাস অনুযায়ী। বারের উপর হোভার করলে বিস্তারিত।</p>
+      </div>
+
+      {/* 30-day visitors chart */}
+      <div className="mt-6 rounded-xl border bg-white p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+          <h2 className="text-lg font-bold">দৈনিক ভিজিটর</h2>
+          <span className="text-sm text-gray-500">৩০ দিনে মোট: <b>{stats.visitors30}</b> · আজ: <b>{stats.todayVisitors}</b></span>
+        </div>
+        <div className="flex items-end gap-1 h-40">
+          {stats.visitorsChart.map((c) => (
+            <div key={c.day} className="flex-1 flex flex-col justify-end" title={`${c.day}: ${c.visitors} ভিজিটর`}>
+              <div className="bg-indigo-400 hover:bg-indigo-500 rounded-t transition-colors" style={{ height: `${(c.visitors / maxVisitors) * 100}%`, minHeight: c.visitors > 0 ? "2px" : "0" }} />
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-gray-400 mt-2">প্রতিদিনের ইউনিক ভিজিটর সংখ্যা। বারের উপর হোভার করলে বিস্তারিত।</p>
       </div>
 
       {/* 30-day sales chart */}

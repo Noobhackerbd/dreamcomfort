@@ -14,7 +14,9 @@ export type MetaEventName =
   | "AddToCart"
   | "InitiateCheckout"
   | "Purchase"
-  | "Lead";
+  | "Lead"
+  | "Search"
+  | "Scroll"; // custom engagement event
 
 export interface ServerSignals {
   fbp?: string;

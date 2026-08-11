@@ -6,7 +6,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/ssr-browser";
 import { saveLanding } from "./actions";
 import type { LandingConfig } from "@/lib/landing";
 
-interface ProductOpt { slug: string; name: string }
+interface ProductOpt { slug: string; name: string; price?: number; image?: string | null }
 
 const cls = "w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-brand";
 
@@ -32,6 +32,27 @@ export function LandingEditor({
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+
+  // Selected products (in order) + those still available to add.
+  const slugs = c.productSlugs ?? [];
+  const bySlug = new Map(products.map((p) => [p.slug, p]));
+  const selected = slugs.map((s) => bySlug.get(s)).filter(Boolean) as ProductOpt[];
+  const available = products.filter((p) => !slugs.includes(p.slug));
+
+  function setSlugs(next: string[]) {
+    setC((prev) => ({ ...prev, productSlugs: next, productSlug: next[0] ?? "" }));
+    setSaved(false);
+  }
+  function addProduct(slug: string) { setSlugs([...slugs, slug]); }
+  function removeProduct(slug: string) { setSlugs(slugs.filter((s) => s !== slug)); }
+  function move(from: number, to: number) {
+    if (to < 0 || to >= slugs.length || from === to) return;
+    const next = slugs.slice();
+    const [m] = next.splice(from, 1);
+    next.splice(to, 0, m);
+    setSlugs(next);
+  }
 
   function set<K extends keyof LandingConfig>(key: K, value: LandingConfig[K]) {
     setC((prev) => ({ ...prev, [key]: value }));
@@ -63,32 +84,70 @@ export function LandingEditor({
       <section className="rounded-xl border bg-white p-5 space-y-3">
         <h2 className="font-semibold">প্রধান পণ্য ও লোগো</h2>
         <div>
-          <label className="block text-sm mb-1">ল্যান্ডিং পেজে যে পণ্যগুলো দেখাবে</label>
-          <p className="text-xs text-gray-400 mb-2">একাধিক পণ্য বেছে নিন — ক্রেতা ল্যান্ডিং পেজে যেকোনো একটি বেছে অর্ডার করতে পারবে। কিছু না বাছলে সব সক্রিয় পণ্য দেখাবে।</p>
-          <div className="max-h-56 overflow-y-auto rounded-lg border divide-y">
-            {products.length === 0 && <p className="p-3 text-sm text-gray-400">কোনো পণ্য নেই — আগে পণ্য যোগ করুন।</p>}
-            {products.map((p) => {
-              const checked = (c.productSlugs ?? []).includes(p.slug);
-              return (
-                <label key={p.slug} className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-gray-50">
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={(e) => {
-                      const cur = c.productSlugs ?? [];
-                      const next = e.target.checked ? [...cur, p.slug] : cur.filter((s) => s !== p.slug);
-                      setC((prev) => ({ ...prev, productSlugs: next, productSlug: next[0] ?? "" }));
-                      setSaved(false);
-                    }}
-                  />
-                  {p.name}
-                </label>
-              );
-            })}
-          </div>
-          {(c.productSlugs ?? []).length > 0 && (
-            <p className="text-xs text-gray-500 mt-1">{c.productSlugs.length}টি পণ্য নির্বাচিত।</p>
+          <label className="block text-sm mb-1">ল্যান্ডিং পেজের পণ্য (ড্র্যাগ করে সাজান)</label>
+          <p className="text-xs text-gray-400 mb-2">
+            পণ্য উপরে-নিচে ড্র্যাগ করে বা ▲▼ চেপে ক্রম বদলান — ক্রেতা এই ক্রমেই পণ্য দেখবে। কিছু না বাছলে সব সক্রিয় পণ্য দেখাবে।
+          </p>
+
+          {selected.length === 0 ? (
+            <p className="rounded-lg border border-dashed p-3 text-sm text-gray-400">কোনো পণ্য নির্বাচিত নয় — নিচ থেকে যোগ করুন।</p>
+          ) : (
+            <div className="rounded-lg border divide-y">
+              {selected.map((p, idx) => (
+                <div
+                  key={p.slug}
+                  draggable
+                  onDragStart={() => setDragIdx(idx)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={() => { if (dragIdx !== null) move(dragIdx, idx); setDragIdx(null); }}
+                  onDragEnd={() => setDragIdx(null)}
+                  className={"flex items-center gap-2 px-2 py-2 bg-white " + (dragIdx === idx ? "opacity-50" : "")}
+                >
+                  <span className="cursor-grab select-none text-gray-400 px-1" title="ড্র্যাগ করুন">⠿</span>
+                  <span className="w-5 text-center text-xs text-gray-400">{idx + 1}</span>
+                  {p.image ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={p.image} alt="" className="h-9 w-9 rounded object-cover" />
+                  ) : (
+                    <span className="h-9 w-9 rounded bg-gray-100" />
+                  )}
+                  <span className="flex-1 min-w-0 truncate text-sm">{p.name}</span>
+                  <div className="flex items-center gap-1">
+                    <button type="button" onClick={() => move(idx, idx - 1)} disabled={idx === 0} className="h-7 w-7 rounded border text-sm disabled:opacity-30">▲</button>
+                    <button type="button" onClick={() => move(idx, idx + 1)} disabled={idx === selected.length - 1} className="h-7 w-7 rounded border text-sm disabled:opacity-30">▼</button>
+                    <button type="button" onClick={() => removeProduct(p.slug)} className="h-7 w-7 rounded border border-red-200 text-red-500 text-sm" title="সরান">×</button>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
+
+          {available.length > 0 && (
+            <div className="mt-3">
+              <label className="block text-xs font-medium text-gray-500 mb-1">পণ্য যোগ করুন</label>
+              <div className="max-h-40 overflow-y-auto rounded-lg border divide-y">
+                {available.map((p) => (
+                  <button
+                    type="button"
+                    key={p.slug}
+                    onClick={() => addProduct(p.slug)}
+                    className="w-full flex items-center gap-2 px-2 py-2 text-left text-sm hover:bg-gray-50"
+                  >
+                    {p.image ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={p.image} alt="" className="h-8 w-8 rounded object-cover" />
+                    ) : (
+                      <span className="h-8 w-8 rounded bg-gray-100" />
+                    )}
+                    <span className="flex-1 min-w-0 truncate">{p.name}</span>
+                    <span className="text-brand text-lg leading-none">＋</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {products.length === 0 && <p className="mt-2 text-sm text-gray-400">কোনো পণ্য নেই — আগে <a href="/admin/products" className="text-brand underline">পণ্য যোগ করুন</a>।</p>}
+          {selected.length > 0 && <p className="text-xs text-gray-500 mt-2">{selected.length}টি পণ্য নির্বাচিত।</p>}
         </div>
         <div>
           <label className="block text-sm mb-1">লোগো</label>
