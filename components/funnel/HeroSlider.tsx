@@ -55,8 +55,8 @@ export function HeroSlider({ images, alt }: { images: string[]; alt: string }) {
                 alt={alt}
                 fill
                 priority={idx === 0}
-                quality={70}
-                sizes="(max-width: 768px) 100vw, 560px"
+                quality={62}
+                sizes="(max-width: 768px) 94vw, 520px"
                 draggable={false}
                 className="object-cover"
               />

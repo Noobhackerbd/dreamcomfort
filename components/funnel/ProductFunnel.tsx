@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useRef, useState } from "react";
 import { HeroSlider } from "@/components/funnel/HeroSlider";
 import { OrderForm } from "@/components/funnel/OrderForm";
 import { fireEvent } from "@/components/track";
@@ -53,6 +53,11 @@ export function ProductFunnel({
   const viewed = useRef<Set<string>>(new Set());
 
   const p = list.find((x) => x.id === selectedId) ?? list[0];
+  // Defer only the heavy hero image-swap so a product tap feels instant
+  // (chip highlight, price, and the order form update immediately).
+  const deferredId = useDeferredValue(selectedId);
+  const heroP = list.find((x) => x.id === deferredId) ?? p;
+  const switching = deferredId !== selectedId;
 
   // Fire ViewContent when a product becomes selected (once per product).
   useEffect(() => {
@@ -90,7 +95,9 @@ export function ProductFunnel({
   return (
     <section className="grid lg:grid-cols-2 gap-8 py-8 lg:py-12 items-start">
       <div className="lg:sticky lg:top-8">
-        <HeroSlider images={p.images} alt={p.name} />
+        <div className={switching ? "opacity-80 transition-opacity duration-200" : "transition-opacity duration-200"}>
+          <HeroSlider key={heroP.id} images={heroP.images} alt={heroP.name} />
+        </div>
 
         {/* Product picker — directly below the hero photo (all screens) */}
         {list.length > 1 && (
