@@ -39,10 +39,10 @@ body { font-family: "Noto Sans Bengali", Arial, Helvetica, sans-serif; color: #0
 .pod-label:last-child { page-break-after: auto; }
 .pod-barcode-section { text-align: center; margin-bottom: 0.8mm; }
 svg.pod-barcode { display: block; width: 100%; height: 9mm; margin: 0 auto; }
-.pod-sender-box { display: flex; align-items: center; border: 1pt solid #000; border-radius: 6pt; padding: 0.8mm 1.2mm; margin-bottom: 0.8mm; }
+.pod-sender-box { display: flex; align-items: center; border: 1pt solid #000; border-radius: 6pt; padding: 0.8mm 1.2mm; margin-bottom: 0.8mm; min-height: 0; overflow: hidden; flex-shrink: 1; }
 .pod-sender-logo { width: 7mm; height: 7mm; flex: 0 0 7mm; border-radius: 50%; border: 1.2pt solid #000; display: flex; align-items: center; justify-content: center; margin-right: 1.2mm; font-size: 12pt; font-weight: 700; }
 .pod-sender-name { font-size: 11.5pt; font-weight: 700; line-height: 1.05; }
-.pod-sender-category { font-size: 7.5pt; line-height: 1.1; margin-top: 0.2mm; }
+.pod-sender-category { font-size: 9pt; line-height: 1.18; margin-top: 0.6mm; }
 .pod-hub-section { display: flex; justify-content: space-between; gap: 1.5mm; border-top: 1pt solid #000; border-bottom: 1pt solid #000; padding: 0.8mm 0; margin-bottom: 0.8mm; }
 .pod-hub-label { font-size: 7pt; font-weight: 700; }
 .pod-hub-name { font-size: 9pt; font-weight: 700; line-height: 1.05; }
@@ -55,15 +55,17 @@ svg.pod-barcode { display: block; width: 100%; height: 9mm; margin: 0 auto; }
 .pod-id-box { border: 1pt solid #000; border-radius: 4pt; padding: 0.8mm 1.2mm; margin-bottom: 0.8mm; }
 .pod-id-title { font-size: 6.5pt; }
 .pod-id-value { font-size: 10pt; font-weight: 700; letter-spacing: 0.2pt; }
-.pod-recipient-section { border: 1.5pt solid #000; border-radius: 4pt; padding: 1mm 1.2mm; margin-top: 0.4mm; }
-.pod-section-title { font-size: 7.5pt; font-weight: 700; }
-.pod-recipient-name { font-size: 14pt; font-weight: 700; line-height: 1.08; word-break: break-word; }
-.pod-recipient-phone { font-size: 14pt; font-weight: 700; line-height: 1.12; }
-.pod-recipient-address { font-size: 9.5pt; line-height: 1.18; margin-top: 0.3mm; }`;
+.pod-recipient-section { border: 1.5pt solid #000; border-radius: 5pt; padding: 2mm 2mm; margin-top: auto; flex-shrink: 0; }
+.pod-section-title { font-size: 7.5pt; font-weight: 700; margin-bottom: 1mm; }
+.pod-recipient-name { font-size: 12.5pt; font-weight: 700; line-height: 1.1; word-break: break-word; margin-bottom: 0.9mm; }
+.pod-recipient-phone { font-size: 12.5pt; font-weight: 700; line-height: 1.12; letter-spacing: 0.3pt; }`;
 
-function buildLabel(business: any, order: any): string {
+function buildLabel(business: any, order: any, fallback?: { name?: string; phone?: string }): string {
   const businessInitial = (business?.name || "B").charAt(0).toUpperCase();
   const amount = order.collectable_amount === 0 || order.collectable_amount ? order.collectable_amount : 0;
+  // Prefer CarryBee POD values, but fall back to our own order record (which always has them).
+  const recipientName = order.recipient_name || fallback?.name || "";
+  const recipientPhone = order.recipient_phone || fallback?.phone || "";
 
   return (
     '<div class="pod-label">' +
@@ -74,17 +76,7 @@ function buildLabel(business: any, order: any): string {
         '<div class="pod-sender-logo">' + esc(businessInitial) + "</div>" +
         '<div style="flex:1; min-width:0;">' +
           '<div class="pod-sender-name">' + esc(business?.name || "N/A") + "</div>" +
-          (order.product_description ? '<div class="pod-sender-category">' + esc(truncateToLines(order.product_description, 1, 32)) + "</div>" : "") +
-        "</div>" +
-      "</div>" +
-      '<div class="pod-hub-section">' +
-        "<div>" +
-          '<div class="pod-hub-label">PickUp Hub</div>' +
-          '<div class="pod-hub-name">' + esc(order.pickup_hub_name || "N/A") + "</div>" +
-        "</div>" +
-        '<div class="pod-hub-right">' +
-          '<div class="pod-hub-label">Delivery Hub</div>' +
-          '<div class="pod-hub-name">' + esc(order.delivery_hub_name || "N/A") + "</div>" +
+          (order.product_description ? '<div class="pod-sender-category">' + esc(truncateToLines(order.product_description, 6, 38)) + "</div>" : "") +
         "</div>" +
       "</div>" +
       '<div class="pod-details-row">' +
@@ -104,9 +96,8 @@ function buildLabel(business: any, order: any): string {
       "</div>" +
       '<div class="pod-recipient-section">' +
         '<div class="pod-section-title">Recipient Details</div>' +
-        '<div class="pod-recipient-name">' + esc(order.recipient_name || "") + "</div>" +
-        '<div class="pod-recipient-phone">' + esc(order.recipient_phone || "") + "</div>" +
-        '<div class="pod-recipient-address">' + esc(truncateToLines(order.recipient_address || "Address not provided", 2, 40)) + "</div>" +
+        '<div class="pod-recipient-name">' + esc(recipientName) + "</div>" +
+        '<div class="pod-recipient-phone">' + esc(recipientPhone) + "</div>" +
       "</div>" +
     "</div>"
   );
@@ -116,7 +107,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   const supabase = getServerSupabase();
   const { data: order } = await supabase
     .from("orders")
-    .select("courier, tracking_id")
+    .select("courier, tracking_id, customer_name, customer_phone")
     .eq("id", params.id)
     .single();
 
@@ -138,7 +129,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     });
   }
 
-  const labels = pod.orders.map((o) => buildLabel(pod.business, o)).join("");
+  const fallback = { name: order.customer_name as string, phone: order.customer_phone as string };
+  const labels = pod.orders.map((o) => buildLabel(pod.business, o, fallback)).join("");
   const html =
     '<!DOCTYPE html><html><head><meta charset="utf-8"><title>CarryBee-' + esc(order.tracking_id) + "</title>" +
     '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' +

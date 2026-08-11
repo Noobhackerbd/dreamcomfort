@@ -1,15 +1,19 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { getPrintQueue, markLabelPrinted } from "../orders/actions";
+import { getPrintQueue, markLabelPrinted, getPrintedProductCounts } from "../orders/actions";
 
 interface LogRow { t: string; msg: string }
+interface ProdCount { name: string; image: string | null; count: number }
 
 export function PrintStation() {
   const [auto, setAuto] = useState(true);
   const [queueCount, setQueueCount] = useState(0);
   const [log, setLog] = useState<LogRow[]>([]);
   const [lastCheck, setLastCheck] = useState<string>("—");
+  const [products, setProducts] = useState<ProdCount[]>([]);
+  const [totalLabels, setTotalLabels] = useState(0);
+  const [scopedToday, setScopedToday] = useState(true);
   const printing = useRef(false);
   const processed = useRef<Set<string>>(new Set());
   const autoRef = useRef(auto);
@@ -17,6 +21,17 @@ export function PrintStation() {
 
   function addLog(msg: string) {
     setLog((l) => [{ t: new Date().toLocaleTimeString("en-GB"), msg }, ...l].slice(0, 60));
+  }
+
+  async function loadCounts() {
+    try {
+      const res = await getPrintedProductCounts();
+      if (res.ok) {
+        setProducts(res.products as ProdCount[]);
+        setTotalLabels(res.totalLabels);
+        setScopedToday(res.scopedToday);
+      }
+    } catch {}
   }
 
   /** Load the label in a hidden iframe; the label page auto-prints itself on load. */
@@ -53,6 +68,7 @@ export function PrintStation() {
       await printLabel(next.id);
       await markLabelPrinted(next.id);
       addLog(`✓ প্রিন্ট সম্পন্ন: ${next.order_number}`);
+      loadCounts(); // refresh the product tally after each print
     } catch {
       addLog(`⚠️ প্রিন্ট ব্যর্থ: ${next.order_number}`);
       processed.current.delete(next.id); // allow retry next cycle
@@ -64,7 +80,9 @@ export function PrintStation() {
   useEffect(() => {
     const t = setInterval(tick, 6000);
     tick();
-    return () => clearInterval(t);
+    loadCounts();
+    const c = setInterval(loadCounts, 30000); // refresh tally every 30s
+    return () => { clearInterval(t); clearInterval(c); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -89,6 +107,42 @@ export function PrintStation() {
           <span>সারিতে অপেক্ষমাণ: <b>{queueCount}</b></span>
           <span>শেষ চেক: <b>{lastCheck}</b></span>
         </div>
+      </div>
+
+      <div className="mt-4 rounded-xl border bg-white p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-semibold">
+            {scopedToday ? "আজ প্রিন্ট হওয়া পণ্য" : "প্রিন্ট হওয়া পণ্য (সর্বমোট)"}
+          </h2>
+          <span className="text-sm text-gray-500">মোট লেবেল: <b>{totalLabels}</b></span>
+        </div>
+        {products.length === 0 ? (
+          <p className="text-sm text-gray-400">
+            {scopedToday ? "আজ এখনও কোনো পণ্যের লেবেল প্রিন্ট হয়নি।" : "এখনও কোনো পণ্যের লেবেল প্রিন্ট হয়নি।"}
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {products.map((p, i) => (
+              <div key={i} className="flex items-center gap-3 rounded-lg border bg-gray-50 p-2">
+                <div className="h-14 w-14 flex-shrink-0 rounded-md overflow-hidden bg-white border flex items-center justify-center">
+                  {p.image ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={p.image} alt={p.name} className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="text-gray-300 text-xl">📦</span>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium leading-tight line-clamp-2">{p.name}</p>
+                  <p className="mt-1 text-2xl font-bold text-brand tabular-nums leading-none">{p.count}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {scopedToday && (
+          <p className="mt-3 text-xs text-gray-400">প্রতি রাত ১২টায় (বাংলাদেশ সময়) কাউন্ট আবার শূন্য থেকে শুরু হবে।</p>
+        )}
       </div>
 
       <div className="mt-4 rounded-xl border bg-white p-4">

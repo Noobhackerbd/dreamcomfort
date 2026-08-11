@@ -76,9 +76,11 @@ export async function saveCarryBeeSettings(cb: {
   clientContext: string;
   storeId: string;
   autoOnConfirm?: boolean;
+  defaultWeight?: number;
 }) {
   await requireAdmin();
   try {
+    const w = Number(cb.defaultWeight);
     await saveSetting("carrybee", {
       env: cb.env === "sandbox" ? "sandbox" : "production",
       clientId: (cb.clientId || "").trim(),
@@ -86,6 +88,7 @@ export async function saveCarryBeeSettings(cb: {
       clientContext: (cb.clientContext || "").trim(),
       storeId: (cb.storeId || "").trim(),
       autoOnConfirm: !!cb.autoOnConfirm,
+      defaultWeight: Number.isFinite(w) && w > 0 ? w : 1.5,
     });
   } catch (e: any) {
     return { ok: false, error: e?.message ?? "সেভ ব্যর্থ। settings টেবিল আছে কিনা দেখুন (supabase-migration-2.sql)।" };

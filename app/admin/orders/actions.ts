@@ -89,9 +89,70 @@ export async function getPrintQueue() {
 export async function markLabelPrinted(orderId: string) {
   await requireAdmin();
   const supabase = getServerSupabase();
-  const { error } = await supabase.from("orders").update({ label_printed: true }).eq("id", orderId);
-  if (error) return { ok: false, error: error.message };
+  // Try to set both the flag and the timestamp (migration 8). If the timestamp
+  // column doesn't exist yet, fall back to just the flag so printing still works.
+  const stamped = await supabase
+    .from("orders")
+    .update({ label_printed: true, label_printed_at: new Date().toISOString() })
+    .eq("id", orderId);
+  if (stamped.error) {
+    const { error } = await supabase.from("orders").update({ label_printed: true }).eq("id", orderId);
+    if (error) return { ok: false, error: error.message };
+  }
   return { ok: true };
+}
+
+/**
+ * Print Station tally: for every label printed TODAY (Bangladesh time), sum the
+ * product quantities so the operator sees "which products, how many" to pack.
+ * Falls back to all-time printed if migration 8 (label_printed_at) isn't run yet.
+ */
+export async function getPrintedProductCounts() {
+  await requireAdmin();
+  const supabase = getServerSupabase();
+
+  // Start of "today" in Bangladesh (UTC+6), expressed as a UTC instant.
+  const nowBd = new Date(Date.now() + 6 * 3600 * 1000);
+  const cutoff = new Date(
+    Date.UTC(nowBd.getUTCFullYear(), nowBd.getUTCMonth(), nowBd.getUTCDate()) - 6 * 3600 * 1000
+  ).toISOString();
+
+  const cols = "id, order_items(product_name, quantity, products(images))";
+  let res = await supabase
+    .from("orders")
+    .select(cols)
+    .eq("courier", "CarryBee")
+    .eq("label_printed", true)
+    .gte("label_printed_at", cutoff);
+
+  let scopedToday = true;
+  if (res.error) {
+    // label_printed_at column missing (migration 8 not run) — count all printed.
+    scopedToday = false;
+    res = await supabase
+      .from("orders")
+      .select(cols)
+      .eq("courier", "CarryBee")
+      .eq("label_printed", true);
+  }
+  if (res.error) return { ok: false, error: res.error.message, products: [] as any[], totalLabels: 0, scopedToday };
+
+  const map = new Map<string, { name: string; image: string | null; count: number }>();
+  let totalLabels = 0;
+  for (const o of (res.data ?? []) as any[]) {
+    totalLabels++;
+    for (const it of o.order_items ?? []) {
+      const name = (it.product_name || "পণ্য").trim();
+      const qty = Number(it.quantity || 0) || 0;
+      const image = it.products?.images?.[0] ?? null;
+      const cur = map.get(name) || { name, image, count: 0 };
+      cur.count += qty;
+      if (!cur.image && image) cur.image = image;
+      map.set(name, cur);
+    }
+  }
+  const products = Array.from(map.values()).sort((a, b) => b.count - a.count);
+  return { ok: true, products, totalLabels, scopedToday };
 }
 
 export async function updateOrderCourier(
@@ -135,12 +196,17 @@ export async function sendToCarryBee(orderId: string) {
     .join(", ");
   const productDesc = items.map((it: any) => `${it.product_name} x${it.quantity}`).join(", ").slice(0, 250);
 
+  // Default parcel weight from Settings (kg → grams); falls back to 1.5kg.
+  const cb = await getCarryBeeSettings();
+  const weightGrams = Math.max(1, Math.round((Number(cb.defaultWeight) || 1.5) * 1000));
+
   const res = await createParcel({
     recipientName: order.customer_name,
     recipientPhone: order.customer_phone,
     recipientAddress: address,
     collectableAmount: Number(order.total), // COD
     itemQuantity: qty,
+    itemWeightGrams: weightGrams,
     merchantOrderId: order.order_number,
     specialInstruction: order.notes || "",
     productDescription: productDesc,

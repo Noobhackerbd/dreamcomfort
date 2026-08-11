@@ -26,6 +26,7 @@ export interface CarryBeeSettings {
   clientContext: string;
   storeId: string;
   autoOnConfirm: boolean; // auto-create consignment when an order is confirmed
+  defaultWeight: number; // default parcel weight (kg) sent to CarryBee
 }
 
 export interface AiSettings {
@@ -84,6 +85,7 @@ export function getCarryBeeSettings(): Promise<CarryBeeSettings> {
     clientContext: process.env.CARRYBEE_CLIENT_CONTEXT || "",
     storeId: process.env.CARRYBEE_STORE_ID || "",
     autoOnConfirm: process.env.CARRYBEE_AUTO_CONFIRM === "1",
+    defaultWeight: Number(process.env.CARRYBEE_DEFAULT_WEIGHT) || 1.5,
   });
 }
 
