@@ -139,17 +139,6 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
       .insert(lineItems.map((li) => ({ ...li, order_id: order.id })));
     if (iErr) return { ok: false, error: iErr.message };
 
-    // Notify admins of the new order (Web Push). Awaited (not fire-and-forget) so it
-    // reliably completes even on serverless hosts that kill background tasks after
-    // the response. sendOrderPush never throws and only hits a few devices (~fast).
-    await sendOrderPush({
-      id: order.id,
-      orderNumber: order.order_number,
-      total: Number(order.total),
-      customerName: name,
-      area: input.area?.trim() || input.city?.trim() || null,
-    });
-
     // Mark the abandoned-cart lead (if any) as converted. Best-effort.
     if (input.leadId) {
       void markLeadConverted(input.leadId, order.id, order.order_number);
@@ -194,57 +183,67 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
       }
     })();
 
-    // Server-side Purchase (Meta CAPI) — moved OFF the critical path so checkout
-    // returns immediately. Request-scoped values (headers/cookies) are read now;
-    // the Facebook round-trip + logging run in the background.
+    // Reliable tracking + admin push — run CONCURRENTLY and await together, so both
+    // complete before the response (survives serverless hosts that kill post-response
+    // background work) while adding only ~max(one round-trip) of latency, not the sum.
+    // A hard timeout guarantees checkout never hangs if Meta/push is slow.
     {
+      // Read request-scoped values (headers/cookies) now, before any await.
       const host = headers().get("host");
       const origin = process.env.NEXT_PUBLIC_SITE_URL || (host ? `https://${host}` : "");
       const externalId = getExternalId() || undefined;
       const { first, last } = splitName(name);
       const snap = { order_number: order.order_number, created_at: order.created_at, total: Number(order.total) };
-      const items = lineItems.map((li) => ({ id: li.product_id, quantity: li.quantity, item_price: li.unit_price }));
+      const contents = lineItems.map((li) => ({ id: li.product_id, quantity: li.quantity, item_price: li.unit_price }));
       const numItems = lineItems.reduce((n, li) => n + li.quantity, 0);
 
-      void (async () => {
-        try {
-          const metaCfg = await getMetaSettings();
-          if (!metaCfg.capiToken || !metaCfg.pixelId) return;
-          const res = await sendServerEvent({
-            eventName: "Purchase",
-            eventId,
-            eventTime: Math.floor(new Date(snap.created_at).getTime() / 1000) || undefined,
-            eventSourceUrl: `${origin}/order/${snap.order_number}`,
-            user: {
-              email: input.email,
-              phone: input.phone,
-              firstName: first,
-              lastName: last,
-              city: input.city || (deliveryArea === "inside" ? "dhaka" : undefined),
-              state: undefined,
-              externalId,
-            },
-            signals,
-            customData: {
-              currency: "BDT",
-              value: snap.total,
-              num_items: numItems,
-              content_ids: items.map((i) => i.id),
-              content_type: "product",
-              contents: items,
-            },
-          });
-          await logEvent({
-            event_name: "Purchase",
-            event_id: eventId,
-            source: "server",
-            fbtrace_id: res.fbtrace_id,
-            payload: { order_number: snap.order_number },
-          });
-        } catch {
-          // never fail the order because tracking failed
-        }
-      })();
+      const capiTask = (async () => {
+        const metaCfg = await getMetaSettings();
+        if (!metaCfg.capiToken || !metaCfg.pixelId) return;
+        const res = await sendServerEvent({
+          eventName: "Purchase",
+          eventId,
+          eventTime: Math.floor(new Date(snap.created_at).getTime() / 1000) || undefined,
+          eventSourceUrl: `${origin}/order/${snap.order_number}`,
+          user: {
+            email: input.email,
+            phone: input.phone,
+            firstName: first,
+            lastName: last,
+            city: input.city || (deliveryArea === "inside" ? "dhaka" : undefined),
+            state: undefined,
+            externalId,
+          },
+          signals,
+          customData: {
+            currency: "BDT",
+            value: snap.total,
+            num_items: numItems,
+            content_ids: contents.map((i) => i.id),
+            content_type: "product",
+            contents,
+          },
+        });
+        await logEvent({
+          event_name: "Purchase",
+          event_id: eventId,
+          source: "server",
+          fbtrace_id: res.fbtrace_id,
+          payload: { order_number: snap.order_number },
+        });
+      })().catch(() => {}); // swallow late rejections (e.g. after the timeout)
+
+      const pushTask = sendOrderPush({
+        id: order.id,
+        orderNumber: order.order_number,
+        total: snap.total,
+        customerName: name,
+        area: input.area?.trim() || input.city?.trim() || null,
+      }).catch(() => {});
+
+      const timeout = new Promise<void>((resolve) => setTimeout(resolve, 4000));
+      // Both tasks never throw (internal try/catch); allSettled is belt-and-suspenders.
+      await Promise.race([Promise.allSettled([capiTask, pushTask]), timeout]);
     }
 
     return { ok: true, orderNumber: order.order_number };

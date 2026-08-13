@@ -21,6 +21,7 @@ const notoBengali = Noto_Sans_Bengali({
   display: "swap",
 });
 import { Header } from "@/components/Header";
+import { HideOnAdmin, SiteMain } from "@/components/SiteChrome";
 import { STORE, STORE_NAME } from "@/lib/config";
 import { getLandingConfig } from "@/lib/landing";
 
@@ -50,10 +51,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="bn" className={`${fredoka.variable} ${notoBengali.variable}`}>
       <body className="min-h-screen antialiased flex flex-col">
-        <Header logoUrl={landing.logoUrl || "/logo.png"} phone={store.phone} />
+        <HideOnAdmin>
+          <Header logoUrl={landing.logoUrl || "/logo.png"} phone={store.phone} />
+        </HideOnAdmin>
 
-        <main className="mx-auto max-w-6xl px-4 py-8 w-full flex-1">{children}</main>
+        <SiteMain>{children}</SiteMain>
 
+        <HideOnAdmin>
         <footer className="mt-16 border-t border-black/5 bg-white/60">
           <div className="mx-auto max-w-6xl px-4 py-10 grid gap-8 md:grid-cols-4 text-sm">
             <div>
@@ -94,10 +98,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             </div>
           </div>
         </footer>
+        </HideOnAdmin>
 
-        <MetaPixel pixelId={meta.pixelId || undefined} />
-        <VisitTracker />
-        <ScrollTracker />
+        {/* Trackers only on the storefront — never on /admin (keeps visitor &
+            Pixel data clean, no admin noise). */}
+        <HideOnAdmin>
+          <MetaPixel pixelId={meta.pixelId || undefined} />
+          <VisitTracker />
+          <ScrollTracker />
+        </HideOnAdmin>
       </body>
     </html>
   );
