@@ -296,33 +296,30 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
         <Kpi icon="📦" label="মোট পণ্য" value={stats.products} tone="violet" />
       </div>
 
-      {/* Today's ordered products (with image) */}
+      {/* Today's ordered products — image + order count only, horizontal slider */}
       <div className="mt-4 rounded-2xl border border-black/5 bg-white p-5 shadow-sm">
-        <h2 className="font-display text-base font-bold mb-3">🛍️ আজকের অর্ডার (পণ্য অনুযায়ী)</h2>
+        <h2 className="font-display text-base font-bold mb-3">🛍️ আজকের অর্ডার</h2>
         {stats.todayProducts.length === 0 ? (
           <p className="text-sm text-gray-400">আজ এখনও কোনো অর্ডার আসেনি।</p>
         ) : (
-          <ul className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1 snap-x snap-mandatory [scrollbar-width:thin]">
             {stats.todayProducts.map((p) => (
-              <li key={p.name} className="flex items-center gap-3 rounded-xl border border-black/5 p-2.5">
-                <div className="h-12 w-12 rounded-lg bg-gray-100 overflow-hidden shrink-0 flex items-center justify-center">
+              <div key={p.name} className="snap-start shrink-0 w-28 sm:w-32">
+                <div className="relative aspect-square w-full rounded-2xl overflow-hidden bg-gray-100 border border-black/5">
                   {p.image ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={p.image} alt={p.name} className="h-full w-full object-cover" />
+                    <img src={p.image} alt="" className="h-full w-full object-cover" />
                   ) : (
-                    <span className="text-[10px] text-gray-400 text-center px-1">ছবি নেই</span>
+                    <span className="absolute inset-0 flex items-center justify-center text-[10px] text-gray-400">ছবি নেই</span>
                   )}
+                  <span className="absolute bottom-1.5 right-1.5 rounded-full bg-brand text-white text-sm font-bold px-2.5 py-0.5 shadow-md tabular-nums">
+                    {p.orders}
+                  </span>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate leading-tight">{p.name}</p>
-                  <p className="text-xs text-gray-500">{p.qty} পিস</p>
-                </div>
-                <span className="rounded-full bg-brand-soft text-brand-dark text-sm font-bold px-2.5 py-1 shrink-0 tabular-nums">
-                  {p.orders} অর্ডার
-                </span>
-              </li>
+                <p className="mt-1.5 text-center text-xs text-gray-500">অর্ডার</p>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </div>
 
