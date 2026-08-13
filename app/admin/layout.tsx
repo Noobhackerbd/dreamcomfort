@@ -128,7 +128,7 @@ export default async function AdminLayout({
         </div>
       </aside>
 
-      <section className="min-w-0 mt-4 md:mt-0">{children}</section>
+      <section className="min-w-0">{children}</section>
 
       {/* Live updates + new-order sound/toast (client) */}
       <AdminLive />

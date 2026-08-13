@@ -139,8 +139,10 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
       .insert(lineItems.map((li) => ({ ...li, order_id: order.id })));
     if (iErr) return { ok: false, error: iErr.message };
 
-    // Notify admins of the new order (Web Push). Best-effort, never blocks the order.
-    void sendOrderPush({
+    // Notify admins of the new order (Web Push). Awaited (not fire-and-forget) so it
+    // reliably completes even on serverless hosts that kill background tasks after
+    // the response. sendOrderPush never throws and only hits a few devices (~fast).
+    await sendOrderPush({
       id: order.id,
       orderNumber: order.order_number,
       total: Number(order.total),
@@ -153,96 +155,96 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
       void markLeadConverted(input.leadId, order.id, order.order_number);
     }
 
-    // Upsert the customer (best-effort; never blocks the order).
-    try {
-      const { data: existing } = await supabase
-        .from("customers")
-        .select("id, total_orders, total_spent")
-        .eq("phone", phone)
-        .maybeSingle();
-      if (existing) {
-        await supabase
-          .from("customers")
-          .update({
-            name,
-            total_orders: (existing.total_orders ?? 0) + 1,
-            total_spent: Number(existing.total_spent ?? 0) + Number(order.total),
-          })
-          .eq("id", existing.id);
-      } else {
-        await supabase.from("customers").insert({
-          phone,
-          name,
-          total_orders: 1,
-          total_spent: Number(order.total),
-        });
-      }
-    } catch {
-      /* ignore customer upsert errors */
-    }
-
-    // Order-placed SMS (async, never blocks / fails the order).
-    try {
-      const templates = await getSmsTemplates();
-      const msg = fillTemplate(templates.order_placed, {
-        name,
-        order: order.order_number,
-        total: Number(order.total),
-      });
-      void sendSmsAsync({ phone, message: msg, orderId: order.id });
-    } catch {
-      /* ignore */
-    }
-
-    // Fire server-side Purchase ONLY if Meta is configured (safe no-op otherwise).
-    const metaCfg = await getMetaSettings();
-    if (metaCfg.capiToken && metaCfg.pixelId) {
+    // Upsert the customer (best-effort) — backgrounded so it never blocks checkout.
+    const orderTotal = Number(order.total);
+    void (async () => {
       try {
-        const { first, last } = splitName(name);
-        // Robust absolute origin (never "undefined/order/…"): env → request host.
-        const host = headers().get("host");
-        const origin = process.env.NEXT_PUBLIC_SITE_URL || (host ? `https://${host}` : "");
-        const res = await sendServerEvent({
-          eventName: "Purchase",
-          eventId,
-          // Use the order's creation time as the event time (the moment the purchase happened).
-          eventTime: Math.floor(new Date(order.created_at).getTime() / 1000) || undefined,
-          eventSourceUrl: `${origin}/order/${order.order_number}`,
-          user: {
-            email: input.email,
-            phone: input.phone,
-            firstName: first,
-            lastName: last,
-            city: input.city || (deliveryArea === "inside" ? "dhaka" : undefined),
-            // Only send a real division as state; sending city as state can lower match quality.
-            state: undefined,
-            // Stable, PLAIN external id, identical to the browser value → links the journey.
-            externalId: getExternalId() || undefined,
-          },
-          signals,
-          customData: {
-            currency: "BDT",
-            value: Number(order.total),
-            num_items: lineItems.reduce((n, li) => n + li.quantity, 0),
-            content_ids: lineItems.map((li) => li.product_id),
-            content_type: "product",
-            contents: lineItems.map((li) => ({
-              id: li.product_id,
-              quantity: li.quantity,
-              item_price: li.unit_price,
-            })),
-          },
-        });
-        await logEvent({
-          event_name: "Purchase",
-          event_id: eventId,
-          source: "server",
-          fbtrace_id: res.fbtrace_id,
-          payload: { order_number: order.order_number },
-        });
+        const { data: existing } = await supabase
+          .from("customers")
+          .select("id, total_orders, total_spent")
+          .eq("phone", phone)
+          .maybeSingle();
+        if (existing) {
+          await supabase
+            .from("customers")
+            .update({
+              name,
+              total_orders: (existing.total_orders ?? 0) + 1,
+              total_spent: Number(existing.total_spent ?? 0) + orderTotal,
+            })
+            .eq("id", existing.id);
+        } else {
+          await supabase.from("customers").insert({ phone, name, total_orders: 1, total_spent: orderTotal });
+        }
       } catch {
-        // never fail the order because tracking failed
+        /* ignore customer upsert errors */
       }
+    })();
+
+    // Order-placed SMS — backgrounded (template fetch + send off the critical path).
+    const orderNumber = order.order_number;
+    const orderId = order.id;
+    void (async () => {
+      try {
+        const templates = await getSmsTemplates();
+        const msg = fillTemplate(templates.order_placed, { name, order: orderNumber, total: orderTotal });
+        await sendSmsAsync({ phone, message: msg, orderId });
+      } catch {
+        /* ignore */
+      }
+    })();
+
+    // Server-side Purchase (Meta CAPI) — moved OFF the critical path so checkout
+    // returns immediately. Request-scoped values (headers/cookies) are read now;
+    // the Facebook round-trip + logging run in the background.
+    {
+      const host = headers().get("host");
+      const origin = process.env.NEXT_PUBLIC_SITE_URL || (host ? `https://${host}` : "");
+      const externalId = getExternalId() || undefined;
+      const { first, last } = splitName(name);
+      const snap = { order_number: order.order_number, created_at: order.created_at, total: Number(order.total) };
+      const items = lineItems.map((li) => ({ id: li.product_id, quantity: li.quantity, item_price: li.unit_price }));
+      const numItems = lineItems.reduce((n, li) => n + li.quantity, 0);
+
+      void (async () => {
+        try {
+          const metaCfg = await getMetaSettings();
+          if (!metaCfg.capiToken || !metaCfg.pixelId) return;
+          const res = await sendServerEvent({
+            eventName: "Purchase",
+            eventId,
+            eventTime: Math.floor(new Date(snap.created_at).getTime() / 1000) || undefined,
+            eventSourceUrl: `${origin}/order/${snap.order_number}`,
+            user: {
+              email: input.email,
+              phone: input.phone,
+              firstName: first,
+              lastName: last,
+              city: input.city || (deliveryArea === "inside" ? "dhaka" : undefined),
+              state: undefined,
+              externalId,
+            },
+            signals,
+            customData: {
+              currency: "BDT",
+              value: snap.total,
+              num_items: numItems,
+              content_ids: items.map((i) => i.id),
+              content_type: "product",
+              contents: items,
+            },
+          });
+          await logEvent({
+            event_name: "Purchase",
+            event_id: eventId,
+            source: "server",
+            fbtrace_id: res.fbtrace_id,
+            payload: { order_number: snap.order_number },
+          });
+        } catch {
+          // never fail the order because tracking failed
+        }
+      })();
     }
 
     return { ok: true, orderNumber: order.order_number };
