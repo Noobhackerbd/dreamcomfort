@@ -28,6 +28,7 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://dreamcomfortbd.com
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
+  manifest: "/manifest.webmanifest",
   title: {
     default: `${STORE_NAME} — ${STORE.tagline}`,
     template: `%s — ${STORE_NAME}`,

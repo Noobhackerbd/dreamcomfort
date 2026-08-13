@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getSupabaseServerClient } from "@/lib/supabase/ssr-server";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { SignOutButton } from "./SignOutButton";
+import { AdminLive } from "@/components/admin/AdminLive";
 import { STORE_NAME } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
@@ -102,6 +103,9 @@ export default async function AdminLayout({
       </aside>
 
       <section className="min-w-0">{children}</section>
+
+      {/* Live updates + new-order sound/toast + push enablement (client) */}
+      <AdminLive />
     </div>
   );
 }

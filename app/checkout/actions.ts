@@ -10,6 +10,7 @@ import { resolveShippingFee, getSmsTemplates, getMetaSettings } from "@/lib/sett
 import { sendSmsAsync } from "@/lib/sms";
 import { fillTemplate } from "@/lib/sms/templates";
 import { markLeadConverted } from "./lead-actions";
+import { sendOrderPush } from "@/lib/push";
 import type { DeliveryArea } from "@/lib/config";
 
 export interface PlaceOrderInput {
@@ -137,6 +138,15 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
       .from("order_items")
       .insert(lineItems.map((li) => ({ ...li, order_id: order.id })));
     if (iErr) return { ok: false, error: iErr.message };
+
+    // Notify admins of the new order (Web Push). Best-effort, never blocks the order.
+    void sendOrderPush({
+      id: order.id,
+      orderNumber: order.order_number,
+      total: Number(order.total),
+      customerName: name,
+      area: input.area?.trim() || input.city?.trim() || null,
+    });
 
     // Mark the abandoned-cart lead (if any) as converted. Best-effort.
     if (input.leadId) {
