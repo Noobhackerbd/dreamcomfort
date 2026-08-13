@@ -4,6 +4,10 @@ const nextConfig = {
     // Order screenshots are sent to the AI reader via a Server Action; the
     // default body cap is 1MB which rejects many screenshots. Raise it.
     serverActions: { bodySizeLimit: "10mb" },
+    // Don't reuse the client Router Cache for dynamic pages. Without this,
+    // switching order-status tabs (?status=pending → confirmed → …) served the
+    // previously cached list until a hard reload. 0 = always refetch on nav.
+    staleTimes: { dynamic: 0, static: 0 },
   },
   images: {
     // Serve resized, modern-format (AVIF/WebP) images via Vercel's optimizer.

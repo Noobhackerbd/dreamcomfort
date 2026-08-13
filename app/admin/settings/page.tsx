@@ -1,5 +1,6 @@
 import { getShippingSettings, getStoreSettings, getSmsTemplates, getCarryBeeSettings, getAiSettings, getMetaSettings } from "@/lib/settings";
 import { SettingsForm } from "./SettingsForm";
+import { NotificationSetup } from "./NotificationSetup";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,10 @@ export default async function AdminSettings() {
   return (
     <div>
       <h1 className="text-2xl font-bold mb-6">সেটিংস</h1>
+
+      <div className="max-w-2xl mb-6">
+        <NotificationSetup />
+      </div>
 
       <SettingsForm shipping={shipping} store={store} templates={templates} carrybee={carrybee} ai={ai} meta={meta} />
 
