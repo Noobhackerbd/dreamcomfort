@@ -23,8 +23,9 @@ async function getStats(rangeDays: number) {
   const now = Date.now();
   const winStart = new Date(now - rangeDays * 86400000).toISOString();
   const prevStart = new Date(now - 2 * rangeDays * 86400000).toISOString();
+  const todayStartUtc = new Date(`${todayKey()}T00:00:00+06:00`).toISOString(); // Dhaka midnight → UTC
 
-  const [productsRes, ordersRes, pendingRes, twoWinRes, recentRes, lowStockRes, itemsRes, abandonedRes, bookedRes, visitsRes, prevVisitsRes] =
+  const [productsRes, ordersRes, pendingRes, twoWinRes, recentRes, lowStockRes, itemsRes, abandonedRes, bookedRes, visitsRes, prevVisitsRes, todayItemsRes] =
     await Promise.all([
       supabase.from("products").select("id", { count: "exact", head: true }),
       supabase.from("orders").select("id", { count: "exact", head: true }),
@@ -37,6 +38,8 @@ async function getStats(rangeDays: number) {
       supabase.from("orders").select("id, order_number, customer_name, customer_phone, booked_date, total, status").eq("is_booked", true).not("booked_date", "is", null).not("status", "in", "(delivered,cancelled,returned)").order("booked_date", { ascending: true }).limit(60),
       supabase.from("page_visits").select("visitor_id, created_at").gte("created_at", winStart).limit(100000),
       supabase.from("page_visits").select("visitor_id", { count: "exact", head: true }).gte("created_at", prevStart).lt("created_at", winStart),
+      // Today's ordered products (with image) — join orders for the date filter + products for the image.
+      supabase.from("order_items").select("order_id, product_id, product_name, quantity, products(images), orders!inner(created_at)").gte("orders.created_at", todayStartUtc),
     ]);
 
   const two = (twoWinRes.data ?? []) as any[];
@@ -120,8 +123,24 @@ async function getStats(rangeDays: number) {
   for (const it of (itemsRes.data ?? []) as any[]) qtyByName.set(it.product_name, (qtyByName.get(it.product_name) || 0) + Number(it.quantity || 0));
   const topProducts = Array.from(qtyByName.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5);
 
+  // Today's ordered products — how many orders + units per product, with image.
+  const todayProdMap = new Map<string, { name: string; image: string | null; orders: Set<string>; qty: number }>();
+  for (const it of (todayItemsRes.data ?? []) as any[]) {
+    const key = it.product_id || it.product_name;
+    const img = it.products?.images?.[0] ?? null;
+    const cell = todayProdMap.get(key) || { name: it.product_name, image: img, orders: new Set<string>(), qty: 0 };
+    if (it.order_id) cell.orders.add(it.order_id);
+    cell.qty += Number(it.quantity || 0);
+    if (!cell.image && img) cell.image = img;
+    todayProdMap.set(key, cell);
+  }
+  const todayProducts = Array.from(todayProdMap.values())
+    .map((p) => ({ name: p.name, image: p.image, orders: p.orders.size, qty: p.qty }))
+    .sort((a, b) => b.orders - a.orders || b.qty - a.qty);
+
   return {
     rangeDays,
+    todayProducts,
     products: productsRes.count ?? 0,
     orders: ordersRes.count ?? 0,
     pending: pendingRes.count ?? 0,
@@ -275,6 +294,36 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
         <Kpi icon="⏳" label="পেন্ডিং অর্ডার" value={stats.pending} href="/admin/orders?status=pending" tone="amber" alert />
         <Kpi icon="🛒" label="অসম্পূর্ণ লিড" value={stats.abandoned} href="/admin/abandoned" tone="accent" alert />
         <Kpi icon="📦" label="মোট পণ্য" value={stats.products} tone="violet" />
+      </div>
+
+      {/* Today's ordered products (with image) */}
+      <div className="mt-4 rounded-2xl border border-black/5 bg-white p-5 shadow-sm">
+        <h2 className="font-display text-base font-bold mb-3">🛍️ আজকের অর্ডার (পণ্য অনুযায়ী)</h2>
+        {stats.todayProducts.length === 0 ? (
+          <p className="text-sm text-gray-400">আজ এখনও কোনো অর্ডার আসেনি।</p>
+        ) : (
+          <ul className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {stats.todayProducts.map((p) => (
+              <li key={p.name} className="flex items-center gap-3 rounded-xl border border-black/5 p-2.5">
+                <div className="h-12 w-12 rounded-lg bg-gray-100 overflow-hidden shrink-0 flex items-center justify-center">
+                  {p.image ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={p.image} alt={p.name} className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="text-[10px] text-gray-400 text-center px-1">ছবি নেই</span>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium truncate leading-tight">{p.name}</p>
+                  <p className="text-xs text-gray-500">{p.qty} পিস</p>
+                </div>
+                <span className="rounded-full bg-brand-soft text-brand-dark text-sm font-bold px-2.5 py-1 shrink-0 tabular-nums">
+                  {p.orders} অর্ডার
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {/* Range performance with deltas */}

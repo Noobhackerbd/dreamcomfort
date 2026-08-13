@@ -1,4 +1,5 @@
 import { PrintStation } from "./PrintStation";
+import { PrintStationGate } from "./PrintStationGate";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +11,7 @@ export default function PrintStationPage() {
         যে ল্যাপটপে লেবেল প্রিন্টার লাগানো, সেখানে এই পেজটি খোলা রাখুন।
       </p>
 
+      <PrintStationGate>
       <PrintStation />
 
       <div className="mt-6 max-w-2xl rounded-xl border bg-white p-5 text-sm">
@@ -24,6 +26,7 @@ export default function PrintStationPage() {
           <b>দ্রষ্টব্য:</b> <code>--kiosk-printing</code> ছাড়া প্রতিটি লেবেলের জন্য একটি প্রিন্ট ডায়ালগ আসবে (আপনি শুধু Print চাপবেন)। এটি ব্রাউজারের নিরাপত্তা নিয়ম — সাইলেন্ট প্রিন্ট শুধু kiosk মোডে সম্ভব। সেটিংসে <b>“কনফার্ম করলে অটো CarryBee”</b> অপশনটি চালু আছে কিনা নিশ্চিত করুন।
         </p>
       </div>
+      </PrintStationGate>
     </div>
   );
 }
