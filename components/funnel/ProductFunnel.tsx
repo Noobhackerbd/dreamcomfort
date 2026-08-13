@@ -38,6 +38,7 @@ export function ProductFunnel({
   statText,
   badges,
   ctaText,
+  initialProductId,
 }: {
   products: Product[];
   shipping: { inside: number; outside: number };
@@ -47,9 +48,17 @@ export function ProductFunnel({
   statText: string;
   badges: string[];
   ctaText: string;
+  /** Pre-selected product id (resolved server-side from the ?color= URL param). */
+  initialProductId?: string;
 }) {
   const list = products.map(toFunnel);
-  const [selectedId, setSelectedId] = useState<string>(list[0]?.id ?? "");
+  // Seed the selection from the URL (?color=) when it matches a featured
+  // product; otherwise fall back to the first product.
+  const initialId =
+    initialProductId && list.some((x) => x.id === initialProductId)
+      ? initialProductId
+      : list[0]?.id ?? "";
+  const [selectedId, setSelectedId] = useState<string>(initialId);
   const viewed = useRef<Set<string>>(new Set());
 
   const p = list.find((x) => x.id === selectedId) ?? list[0];

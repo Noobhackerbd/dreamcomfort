@@ -34,6 +34,35 @@ async function getFeaturedProducts(slugs: string[], legacy: string): Promise<Pro
   return (data as Product[]) ?? [];
 }
 
+/**
+ * Resolve a ?color= (or ?product= / ?slug=) URL param to one of the featured
+ * products, so an ad link like `/?color=pink` opens with that color pre-selected.
+ * Matching is case-insensitive and tolerant: exact slug → slug contains → name
+ * contains. Returns undefined when nothing matches (funnel keeps its default).
+ */
+function resolvePreselect(
+  products: Product[],
+  raw: string | string[] | undefined
+): string | undefined {
+  const q = (Array.isArray(raw) ? raw[0] : raw)?.trim().toLowerCase();
+  if (!q) return undefined;
+  const norm = (s: string) => s.toLowerCase().replace(/[\s_]+/g, "-");
+  const key = norm(q);
+
+  // 1) exact slug match
+  let m = products.find((p) => p.slug.toLowerCase() === q || norm(p.slug) === key);
+  // 2) slug contains the color word (e.g. "pink" → "...-pillow-pink")
+  if (!m) m = products.find((p) => norm(p.slug).includes(key));
+  // 3) product name contains it (Bangla or English)
+  if (!m)
+    m = products.find(
+      (p) =>
+        (p.name_bn ?? "").toLowerCase().includes(q) ||
+        (p.name_en ?? "").toLowerCase().includes(q)
+    );
+  return m?.id;
+}
+
 const USE_REASONS = [
   { icon: "😣", title: "রাতে কোমরের অসহ্য ব্যথা", text: "ডাবল লেয়ার সাপোর্ট শরীরের শেপ অনুযায়ী বসে যায়, ফলে কোমরের ব্যথা ৮০% পর্যন্ত কমে আসে।" },
   { icon: "🦴", title: "মেরুদণ্ড ও পিঠের ব্যথা", text: "পুরো শরীরকে সমানভাবে সাপোর্ট দেয়, তাই মেরুদণ্ডে বাড়তি চাপ পড়ে না।" },
@@ -56,12 +85,22 @@ const WHY_US = [
   { icon: "🚚", title: "দ্রুত গতির হোম ডেলিভারি", text: "ঢাকায় ১-২ দিন, সারা বাংলাদেশে যেকোনো জায়গায় ২-৩ দিনের মধ্যেই হাতে পাবেন।" },
 ];
 
-export default async function HomePage() {
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams?: { [key: string]: string | string[] | undefined };
+}) {
   const landing = await getLandingConfig();
   const [products, shipping] = await Promise.all([
     getFeaturedProducts(landing.productSlugs ?? [], landing.productSlug),
     getShippingSettings(),
   ]);
+
+  // Pre-selected product/color from the ad URL (?color= / ?product= / ?slug=).
+  const initialProductId = resolvePreselect(
+    products,
+    searchParams?.color ?? searchParams?.product ?? searchParams?.slug
+  );
 
   const Logo = (
     <div className="flex flex-col items-center pt-8 pb-2">
@@ -126,6 +165,7 @@ export default async function HomePage() {
         {/* HERO + product picker + order form */}
         <ProductFunnel
           products={products}
+          initialProductId={initialProductId}
           shipping={{ inside: shipping.insideDhaka, outside: shipping.outsideDhaka }}
           headline={landing.headline}
           subheadline={landing.subheadline}
