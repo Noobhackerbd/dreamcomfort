@@ -1,3 +1,4 @@
+import { Plus_Jakarta_Sans, Hind_Siliguri } from "next/font/google";
 import { getSupabaseServerClient } from "@/lib/supabase/ssr-server";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { SignOutButton } from "./SignOutButton";
@@ -6,6 +7,29 @@ import { AdminNav, type NavItem } from "@/components/admin/AdminNav";
 import { STORE_NAME } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
+
+// Premium, refined typography — scoped to the admin only (storefront keeps its
+// playful Fredoka). Jakarta for Latin/numbers, Hind Siliguri for Bangla.
+const adminLatin = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-admin-latin",
+  display: "swap",
+});
+const adminBangla = Hind_Siliguri({
+  subsets: ["bengali"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-admin-bn",
+  display: "swap",
+});
+
+const ADMIN_FONT_CSS = `
+  .admin-shell{font-family:var(--font-admin-bn),var(--font-admin-latin),system-ui,sans-serif;-webkit-font-smoothing:antialiased;letter-spacing:-0.003em}
+  .admin-shell .font-display{font-family:var(--font-admin-latin),var(--font-admin-bn),system-ui,sans-serif;letter-spacing:-0.018em}
+  .admin-shell .font-bold{font-weight:600}
+  .admin-shell h1{font-weight:600}
+  .admin-shell table{font-variant-numeric:tabular-nums}
+`;
 
 const NAV = [
   { href: "/admin", label: "🏠 ড্যাশবোর্ড" },
@@ -78,7 +102,8 @@ export default async function AdminLayout({
   }));
 
   return (
-    <div className="grid md:grid-cols-[230px_1fr] gap-5">
+    <div className={`${adminLatin.variable} ${adminBangla.variable} admin-shell grid md:grid-cols-[230px_1fr] gap-5`}>
+      <style dangerouslySetInnerHTML={{ __html: ADMIN_FONT_CSS }} />
       <aside className="md:sticky md:top-6 h-fit rounded-2xl border border-black/5 bg-white p-4 shadow-sm">
         <div className="flex items-center gap-2 mb-4 pb-4 border-b border-black/5">
           <span className="h-9 w-9 rounded-xl bg-gradient-to-br from-brand to-accent text-white flex items-center justify-center font-bold shadow-sm">
