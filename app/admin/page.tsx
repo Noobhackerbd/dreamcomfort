@@ -309,7 +309,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
             </div>
           }
           note="বারে হোভার করলে বিস্তারিত।">
-          <div className="flex items-end gap-[3px]" style={{ height: CHART_H }}>
+          <div className="flex items-end gap-px" style={{ height: CHART_H }}>
             {stats.chart.map((c) => {
               const barH = px(c.count, maxCount);
               const seg = (n: number) => (c.count > 0 ? Math.round((n / c.count) * barH) : 0);
@@ -329,7 +329,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
         </ChartCard>
 
         <ChartCard title="দৈনিক বিক্রি (৳)" right={<span className="text-sm text-gray-500">{rangeLabel}: <b>{taka(stats.revenueCur)}</b></span>} note="দৈনিক মোট বিক্রি (৳)।">
-          <div className="flex items-end gap-[3px]" style={{ height: CHART_H }}>
+          <div className="flex items-end gap-px" style={{ height: CHART_H }}>
             {stats.chart.map((c) => (
               <div key={c.day} className="flex-1 min-w-0 flex items-end" title={`${c.day}: ${taka(c.total)}`}>
                 <div className="w-full rounded-t bg-gradient-to-t from-brand-dark to-brand-light hover:from-brand transition-colors" style={{ height: px(c.total, maxBar) }} />
@@ -342,7 +342,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <ChartCard title="দৈনিক ভিজিটর" right={<span className="text-sm text-gray-500">{rangeLabel}: <b>{stats.visitorsCur}</b></span>} note="প্রতিদিনের ইউনিক ভিজিটর।">
-          <div className="flex items-end gap-[3px]" style={{ height: 120 }}>
+          <div className="flex items-end gap-px" style={{ height: 120 }}>
             {stats.visitorsChart.map((c) => (
               <div key={c.day} className="flex-1 min-w-0 flex items-end" title={`${c.day}: ${c.visitors} ভিজিটর`}>
                 <div className="w-full rounded-t bg-gradient-to-t from-accent-dark to-accent-light hover:from-accent transition-colors" style={{ height: px(c.visitors, maxVisitors, 120) }} />

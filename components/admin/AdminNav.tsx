@@ -10,13 +10,19 @@ export interface NavItem {
   badge?: number;
 }
 
-export function AdminNav({ items }: { items: NavItem[] }) {
+export function AdminNav({ items, vertical }: { items: NavItem[]; vertical?: boolean }) {
   const pathname = usePathname();
   const isActive = (href: string) =>
     href === "/admin" ? pathname === "/admin" : pathname.startsWith(href);
 
   return (
-    <nav className="flex md:flex-col gap-1.5 overflow-x-auto md:overflow-visible -mx-1 px-1 md:mx-0 md:px-0">
+    <nav
+      className={
+        vertical
+          ? "flex flex-col gap-1.5"
+          : "flex md:flex-col gap-1.5 overflow-x-auto md:overflow-visible -mx-1 px-1 md:mx-0 md:px-0"
+      }
+    >
       {items.map((n) => {
         const active = isActive(n.href);
         return (

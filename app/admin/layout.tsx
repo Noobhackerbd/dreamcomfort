@@ -4,6 +4,7 @@ import { getServerSupabase } from "@/lib/supabase/server";
 import { SignOutButton } from "./SignOutButton";
 import { AdminLive } from "@/components/admin/AdminLive";
 import { AdminNav, type NavItem } from "@/components/admin/AdminNav";
+import { AdminMobileBar } from "@/components/admin/AdminMobileBar";
 import { STORE_NAME } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
@@ -102,9 +103,14 @@ export default async function AdminLayout({
   }));
 
   return (
-    <div className={`${adminLatin.variable} ${adminBangla.variable} admin-shell grid md:grid-cols-[230px_1fr] gap-5`}>
+    <div className={`${adminLatin.variable} ${adminBangla.variable} admin-shell md:grid md:grid-cols-[230px_1fr] md:gap-5`}>
       <style dangerouslySetInnerHTML={{ __html: ADMIN_FONT_CSS }} />
-      <aside className="md:sticky md:top-6 h-fit rounded-2xl border border-black/5 bg-white p-4 shadow-sm">
+
+      {/* Mobile top bar + drawer (hidden on desktop) */}
+      <AdminMobileBar storeName={STORE_NAME} email={user.email ?? ""} items={navItems} />
+
+      {/* Desktop sidebar (hidden on mobile) */}
+      <aside className="hidden md:block md:sticky md:top-6 h-fit rounded-2xl border border-black/5 bg-white p-4 shadow-sm">
         <div className="flex items-center gap-2 mb-4 pb-4 border-b border-black/5">
           <span className="h-9 w-9 rounded-xl bg-gradient-to-br from-brand to-accent text-white flex items-center justify-center font-bold shadow-sm">
             {STORE_NAME.charAt(0)}
@@ -122,7 +128,7 @@ export default async function AdminLayout({
         </div>
       </aside>
 
-      <section className="min-w-0">{children}</section>
+      <section className="min-w-0 mt-4 md:mt-0">{children}</section>
 
       {/* Live updates + new-order sound/toast (client) */}
       <AdminLive />

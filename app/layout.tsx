@@ -5,7 +5,7 @@ import "./globals.css";
 import { MetaPixel } from "@/components/MetaPixel";
 import { VisitTracker } from "@/components/VisitTracker";
 import { ScrollTracker } from "@/components/ScrollTracker";
-import { getMetaSettings } from "@/lib/settings";
+import { getMetaSettings, getStoreSettings } from "@/lib/settings";
 
 // Self-hosted via next/font — no render-blocking Google Fonts request, auto-preloaded.
 const fredoka = Fredoka({
@@ -46,11 +46,11 @@ export const viewport: Viewport = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const [landing, meta] = await Promise.all([getLandingConfig(), getMetaSettings()]);
+  const [landing, meta, store] = await Promise.all([getLandingConfig(), getMetaSettings(), getStoreSettings()]);
   return (
     <html lang="bn" className={`${fredoka.variable} ${notoBengali.variable}`}>
       <body className="min-h-screen antialiased flex flex-col">
-        <Header logoUrl={landing.logoUrl || "/logo.png"} />
+        <Header logoUrl={landing.logoUrl || "/logo.png"} phone={store.phone} />
 
         <main className="mx-auto max-w-6xl px-4 py-8 w-full flex-1">{children}</main>
 
