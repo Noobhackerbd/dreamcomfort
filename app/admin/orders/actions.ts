@@ -395,22 +395,49 @@ export async function saveOrderItemsAndTotals(
   return { ok: true, subtotal, total };
 }
 
-/** Permanently delete an order (items cascade). */
+/** Move a single order to trash (soft delete — reversible). */
 export async function deleteOrder(orderId: string) {
   await requireAdmin();
   const supabase = getServerSupabase();
-  const { error } = await supabase.from("orders").delete().eq("id", orderId);
+  const { error } = await supabase.from("orders").update({ deleted_at: new Date().toISOString() }).eq("id", orderId);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/admin/orders");
+  revalidatePath("/admin");
   return { ok: true };
 }
 
-/** Permanently delete many orders at once (items cascade). Requires the delete code. */
-export async function bulkDeleteOrders(orderIds: string[], code: string) {
+/** Move many orders to trash (soft delete — reversible, no code needed). */
+export async function bulkTrashOrders(orderIds: string[]) {
+  await requireAdmin();
+  const ids = (orderIds || []).filter(Boolean);
+  if (ids.length === 0) return { ok: false, error: "কোনো অর্ডার নির্বাচন করা হয়নি।" };
+  const supabase = getServerSupabase();
+  const { error } = await supabase.from("orders").update({ deleted_at: new Date().toISOString() }).in("id", ids);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/admin/orders");
+  revalidatePath("/admin");
+  return { ok: true, count: ids.length };
+}
+
+/** Restore trashed orders back to the list. */
+export async function bulkRestoreOrders(orderIds: string[]) {
+  await requireAdmin();
+  const ids = (orderIds || []).filter(Boolean);
+  if (ids.length === 0) return { ok: false, error: "কোনো অর্ডার নির্বাচন করা হয়নি।" };
+  const supabase = getServerSupabase();
+  const { error } = await supabase.from("orders").update({ deleted_at: null }).in("id", ids);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/admin/orders");
+  revalidatePath("/admin");
+  return { ok: true, count: ids.length };
+}
+
+/** Permanently delete trashed orders (items cascade). Requires the delete code. */
+export async function bulkPurgeOrders(orderIds: string[], code: string) {
   await requireAdmin();
   const expected = process.env.ADMIN_DELETE_CODE || "103020";
   if (String(code || "").trim() !== expected) {
-    return { ok: false, error: "ভুল কোড। ডিলিট করতে সঠিক কোড দিন।" };
+    return { ok: false, error: "ভুল কোড। স্থায়ীভাবে ডিলিট করতে সঠিক কোড দিন।" };
   }
   const ids = (orderIds || []).filter(Boolean);
   if (ids.length === 0) return { ok: false, error: "কোনো অর্ডার নির্বাচন করা হয়নি।" };
@@ -418,7 +445,7 @@ export async function bulkDeleteOrders(orderIds: string[], code: string) {
   const { error } = await supabase.from("orders").delete().in("id", ids);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/admin/orders");
-  return { ok: true, deleted: ids.length };
+  return { ok: true, count: ids.length };
 }
 
 /** Normalize a BD phone to 8801XXXXXXXXX for storage. */

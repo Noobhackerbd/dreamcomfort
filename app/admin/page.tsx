@@ -1,6 +1,7 @@
 // app/admin/page.tsx — premium admin dashboard with advanced analytics.
 import { getServerSupabase } from "@/lib/supabase/server";
 import { taka } from "@/lib/format";
+import { ResetDailyButton } from "@/components/admin/ResetDailyButton";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +26,7 @@ async function getStats(rangeDays: number) {
   const prevStart = new Date(now - 2 * rangeDays * 86400000).toISOString();
   const todayStartUtc = new Date(`${todayKey()}T00:00:00+06:00`).toISOString(); // Dhaka midnight → UTC
 
-  const [productsRes, ordersRes, pendingRes, twoWinRes, recentRes, lowStockRes, itemsRes, abandonedRes, bookedRes, visitsRes, prevVisitsRes, todayItemsRes] =
+  const [productsRes, ordersRes, pendingRes, twoWinRes, recentRes, lowStockRes, itemsRes, abandonedRes, bookedRes, visitsRes, prevVisitsRes, todayItemsRes, resetRes] =
     await Promise.all([
       supabase.from("products").select("id", { count: "exact", head: true }),
       supabase.from("orders").select("id", { count: "exact", head: true }),
@@ -40,7 +41,17 @@ async function getStats(rangeDays: number) {
       supabase.from("page_visits").select("visitor_id", { count: "exact", head: true }).gte("created_at", prevStart).lt("created_at", winStart),
       // Today's ordered products (with image) — join orders for the date filter + products for the image.
       supabase.from("order_items").select("order_id, product_id, product_name, quantity, products(images), orders!inner(created_at)").gte("orders.created_at", todayStartUtc),
+      // Optional daily-reset baseline (PIN-protected reset button in the dashboard).
+      supabase.from("settings").select("value").eq("key", "dashboard_daily_reset").maybeSingle(),
     ]);
+
+  // If the owner reset today's counters, count from that moment instead of midnight.
+  const resetAt = (resetRes as any)?.data?.value?.at as string | undefined;
+  const effectiveTodayStart = resetAt && resetAt > todayStartUtc ? resetAt : todayStartUtc;
+  const resetTimeLabel =
+    resetAt && resetAt > todayStartUtc
+      ? new Date(new Date(resetAt).getTime() + DHAKA_OFFSET_MS).toISOString().slice(11, 16)
+      : null;
 
   const two = (twoWinRes.data ?? []) as any[];
   const cur = two.filter((o) => o.created_at >= winStart);
@@ -53,7 +64,7 @@ async function getStats(rangeDays: number) {
   const ordersDelta = prev.length > 0 ? Math.round(((cur.length - prev.length) / prev.length) * 100) : cur.length > 0 ? 100 : 0;
 
   const today = todayKey();
-  const todayOrders = cur.filter((o) => dhakaDayKey(o.created_at) === today);
+  const todayOrders = cur.filter((o) => o.created_at >= effectiveTodayStart);
   const todayRevenue = sum(todayOrders);
 
   // Daily buckets for the selected range.
@@ -126,6 +137,8 @@ async function getStats(rangeDays: number) {
   // Today's ordered products — how many orders + units per product, with image.
   const todayProdMap = new Map<string, { name: string; image: string | null; orders: Set<string>; qty: number }>();
   for (const it of (todayItemsRes.data ?? []) as any[]) {
+    const created = it.orders?.created_at as string | undefined;
+    if (created && created < effectiveTodayStart) continue; // respect the daily reset baseline
     const key = it.product_id || it.product_name;
     const img = it.products?.images?.[0] ?? null;
     const cell = todayProdMap.get(key) || { name: it.product_name, image: img, orders: new Set<string>(), qty: 0 };
@@ -140,6 +153,7 @@ async function getStats(rangeDays: number) {
 
   return {
     rangeDays,
+    resetTimeLabel,
     todayProducts,
     products: productsRes.count ?? 0,
     orders: ordersRes.count ?? 0,
@@ -298,7 +312,13 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
 
       {/* Today's ordered products — image + order count only, horizontal slider */}
       <div className="mt-4 rounded-2xl border border-black/5 bg-white p-5 shadow-sm">
-        <h2 className="font-display text-base font-bold mb-3">🛍️ আজকের অর্ডার</h2>
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <h2 className="font-display text-base font-bold">
+            🛍️ আজকের অর্ডার
+            {stats.resetTimeLabel && <span className="ml-2 text-xs font-normal text-gray-400">({stats.resetTimeLabel} থেকে)</span>}
+          </h2>
+          <ResetDailyButton />
+        </div>
         {stats.todayProducts.length === 0 ? (
           <p className="text-sm text-gray-400">আজ এখনও কোনো অর্ডার আসেনি।</p>
         ) : (

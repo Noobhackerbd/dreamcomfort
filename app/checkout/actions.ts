@@ -114,7 +114,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
         customer_email: input.email?.trim() || null,
         address_line: address,
         area: input.area?.trim() || null,
-        city: input.city?.trim() || (deliveryArea === "inside" ? "Dhaka" : null),
+        city: input.city?.trim() || null,
         district: input.city?.trim() || null,
         payment_method: "cod",
         subtotal,

@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { taka, bdDateTime } from "@/lib/format";
 import { StatusSelect } from "./StatusSelect";
 import { CarryBeeActions } from "./CarryBeeActions";
-import { bulkDeleteOrders } from "./actions";
+import { bulkTrashOrders, bulkRestoreOrders, bulkPurgeOrders } from "./actions";
 
 export interface OrderRow {
   id: string;
@@ -23,15 +23,16 @@ export interface OrderRow {
   total: number;
   status: string;
   created_at: string;
+  notes?: string;
   is_booked?: boolean;
   booked_date?: string | null;
   items: { product_name: string; quantity: number; image?: string | null }[];
 }
 
-export function OrdersList({ orders, cbReady }: { orders: OrderRow[]; cbReady: boolean }) {
+export function OrdersList({ orders, cbReady, isTrash }: { orders: OrderRow[]; cbReady: boolean; isTrash?: boolean }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [confirm, setConfirm] = useState(false);
+  const [confirmMode, setConfirmMode] = useState<null | "trash" | "purge">(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [code, setCode] = useState("");
@@ -50,22 +51,29 @@ export function OrdersList({ orders, cbReady }: { orders: OrderRow[]; cbReady: b
     setSelected(allSelected ? new Set() : new Set(orders.map((o) => o.id)));
   }
 
-  async function doBulkDelete() {
+  const ids = () => Array.from(selected);
+
+  async function doTrash() {
+    setBusy(true); setErr(null);
+    const res = await bulkTrashOrders(ids());
+    setBusy(false);
+    if (!res.ok) return setErr(res.error ?? "ব্যর্থ হয়েছে।");
+    setConfirmMode(null); setSelected(new Set()); router.refresh();
+  }
+  async function doRestore() {
+    setBusy(true); setErr(null);
+    const res = await bulkRestoreOrders(ids());
+    setBusy(false);
+    if (!res.ok) return setErr(res.error ?? "ব্যর্থ হয়েছে।");
+    setSelected(new Set()); router.refresh();
+  }
+  async function doPurge() {
     if (!code.trim()) return setErr("ডিলিট কোড দিন।");
     setBusy(true); setErr(null);
-    const res = await bulkDeleteOrders(Array.from(selected), code.trim());
+    const res = await bulkPurgeOrders(ids(), code.trim());
     setBusy(false);
     if (!res.ok) return setErr(res.error ?? "ডিলিট ব্যর্থ।");
-    setConfirm(false);
-    setCode("");
-    setSelected(new Set());
-    router.refresh();
-  }
-
-  function openConfirm() {
-    setErr(null);
-    setCode("");
-    setConfirm(true);
+    setConfirmMode(null); setCode(""); setSelected(new Set()); router.refresh();
   }
 
   const selectedCount = selected.size;
@@ -75,7 +83,7 @@ export function OrdersList({ orders, cbReady }: { orders: OrderRow[]; cbReady: b
   );
 
   if (orders.length === 0) {
-    return <p className="text-center text-gray-400 py-10">কোনো অর্ডার নেই।</p>;
+    return <p className="text-center text-gray-400 py-10">{isTrash ? "ট্রাশ খালি।" : "কোনো অর্ডার নেই।"}</p>;
   }
 
   return (
@@ -88,12 +96,14 @@ export function OrdersList({ orders, cbReady }: { orders: OrderRow[]; cbReady: b
           {someSelected && <span className="text-gray-400">({selectedCount} নির্বাচিত)</span>}
         </label>
         {someSelected && (
-          <button
-            onClick={openConfirm}
-            className="rounded-lg bg-red-600 text-white px-4 py-1.5 text-sm font-medium hover:bg-red-700"
-          >
-            🗑️ নির্বাচিত {selectedCount}টি ডিলিট করুন
-          </button>
+          isTrash ? (
+            <div className="flex items-center gap-2">
+              <button onClick={doRestore} disabled={busy} className="rounded-lg bg-green-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-green-700 disabled:opacity-60">♻️ রিস্টোর</button>
+              <button onClick={() => { setErr(null); setCode(""); setConfirmMode("purge"); }} className="rounded-lg bg-red-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-red-700">❌ স্থায়ী ডিলিট</button>
+            </div>
+          ) : (
+            <button onClick={() => { setErr(null); setConfirmMode("trash"); }} className="rounded-lg bg-red-600 text-white px-4 py-1.5 text-sm font-medium hover:bg-red-700">🗑️ {selectedCount}টি ট্রাশে পাঠান</button>
+          )
         )}
       </div>
 
@@ -101,7 +111,7 @@ export function OrdersList({ orders, cbReady }: { orders: OrderRow[]; cbReady: b
         {orders.map((o) => {
           const on = selected.has(o.id);
           return (
-            <div key={o.id} className={"rounded-xl border bg-white p-4 transition " + (on ? "ring-2 ring-red-300 border-red-200" : "")}>
+            <div key={o.id} className={"rounded-xl border bg-white p-4 transition " + (on ? "ring-2 ring-red-300 border-red-200" : "") + (isTrash ? " opacity-90" : "")}>
               <div className="flex items-start gap-3">
                 <input
                   type="checkbox"
@@ -132,46 +142,55 @@ export function OrdersList({ orders, cbReady }: { orders: OrderRow[]; cbReady: b
                       <p className="text-xs text-gray-400 mt-1 truncate">
                         {(o.items ?? []).map((it) => `${it.product_name} ×${it.quantity}`).join("، ")}
                       </p>
+                      {o.notes && o.notes.trim() && (
+                        <p className="mt-1.5 text-xs rounded-lg bg-amber-50 text-amber-800 border border-amber-100 px-2 py-1 whitespace-pre-wrap break-words">
+                          📝 {o.notes}
+                        </p>
+                      )}
                     </div>
                     <div className="text-right shrink-0">
                       <p className="font-bold text-base sm:text-lg whitespace-nowrap">{taka(Number(o.total))}</p>
-                      <div className="mt-2">
-                        <StatusSelect id={o.id} value={o.status} />
-                      </div>
+                      {!isTrash && (
+                        <div className="mt-2">
+                          <StatusSelect id={o.id} value={o.status} />
+                        </div>
+                      )}
                       <Link href={`/admin/orders/${o.id}`} prefetch={false} className="text-xs text-brand hover:underline">
                         বিস্তারিত →
                       </Link>
                     </div>
                   </div>
 
-                  <div className="mt-3 pt-3 border-t flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      {o.customer_phone && (
-                        <a href={telLink(o.customer_phone)} className="flex-1 sm:flex-none text-center rounded-lg bg-brand text-white px-3 py-1.5 text-xs font-medium">📞 কল</a>
-                      )}
-                      {o.customer_phone && (
-                        <a href={waLink(o.customer_phone)} target="_blank" rel="noopener" className="flex-1 sm:flex-none text-center rounded-lg bg-green-600 text-white px-3 py-1.5 text-xs font-medium">💬 WhatsApp</a>
-                      )}
+                  {!isTrash && (
+                    <div className="mt-3 pt-3 border-t flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        {o.customer_phone && (
+                          <a href={telLink(o.customer_phone)} className="flex-1 sm:flex-none text-center rounded-lg bg-brand text-white px-3 py-1.5 text-xs font-medium">📞 কল</a>
+                        )}
+                        {o.customer_phone && (
+                          <a href={waLink(o.customer_phone)} target="_blank" rel="noopener" className="flex-1 sm:flex-none text-center rounded-lg bg-green-600 text-white px-3 py-1.5 text-xs font-medium">💬 WhatsApp</a>
+                        )}
+                      </div>
+                      <div className="w-full sm:w-48">
+                        <CarryBeeActions
+                          configured={cbReady}
+                          compact
+                          order={{
+                            id: o.id,
+                            orderNumber: o.order_number,
+                            name: o.customer_name,
+                            phone: o.customer_phone,
+                            address: [o.address_line, o.area, o.city, o.district].filter(Boolean).join(", "),
+                            total: Number(o.total),
+                            quantity: (o.items ?? []).reduce((n, it) => n + Number(it.quantity || 0), 0) || 1,
+                            description: (o.items ?? []).map((it) => `${it.product_name} x${it.quantity}`).join(", "),
+                            courier: o.courier ?? "",
+                            trackingId: o.tracking_id ?? "",
+                          }}
+                        />
+                      </div>
                     </div>
-                    <div className="w-full sm:w-48">
-                      <CarryBeeActions
-                        configured={cbReady}
-                        compact
-                        order={{
-                          id: o.id,
-                          orderNumber: o.order_number,
-                          name: o.customer_name,
-                          phone: o.customer_phone,
-                          address: [o.address_line, o.area, o.city, o.district].filter(Boolean).join(", "),
-                          total: Number(o.total),
-                          quantity: (o.items ?? []).reduce((n, it) => n + Number(it.quantity || 0), 0) || 1,
-                          description: (o.items ?? []).map((it) => `${it.product_name} x${it.quantity}`).join(", "),
-                          courier: o.courier ?? "",
-                          trackingId: o.tracking_id ?? "",
-                        }}
-                      />
-                    </div>
-                  </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -182,27 +201,49 @@ export function OrdersList({ orders, cbReady }: { orders: OrderRow[]; cbReady: b
       {/* Sticky bulk-action bar (mobile-friendly) */}
       {someSelected && (
         <div className="fixed bottom-4 inset-x-3 z-40 mx-auto max-w-md rounded-2xl bg-gray-900 text-white shadow-2xl px-4 py-3 flex items-center justify-between gap-3">
-          <span className="text-sm">{selectedCount}টি অর্ডার · {taka(selectedTotal)}</span>
+          <span className="text-sm">{selectedCount}টি · {taka(selectedTotal)}</span>
           <div className="flex items-center gap-2">
             <button onClick={() => setSelected(new Set())} className="rounded-lg bg-white/15 px-3 py-1.5 text-sm">বাতিল</button>
-            <button onClick={openConfirm} className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium">🗑️ ডিলিট</button>
+            {isTrash ? (
+              <>
+                <button onClick={doRestore} disabled={busy} className="rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium">♻️ রিস্টোর</button>
+                <button onClick={() => { setErr(null); setCode(""); setConfirmMode("purge"); }} className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium">❌ ডিলিট</button>
+              </>
+            ) : (
+              <button onClick={() => { setErr(null); setConfirmMode("trash"); }} className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium">🗑️ ট্রাশে</button>
+            )}
           </div>
         </div>
       )}
 
-      {/* Confirm modal */}
-      {confirm && (
-        <div className="fixed inset-0 z-[90] bg-black/50 flex items-center justify-center p-4" onClick={() => !busy && setConfirm(false)}>
+      {/* Trash confirm (no code — reversible) */}
+      {confirmMode === "trash" && (
+        <div className="fixed inset-0 z-[90] bg-black/50 flex items-center justify-center p-4" onClick={() => !busy && setConfirmMode(null)}>
           <div className="bg-white rounded-2xl w-full max-w-sm p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="font-bold text-lg mb-1">{selectedCount}টি অর্ডার ডিলিট করবেন?</h3>
-            <p className="text-sm text-gray-500 mb-3">
-              নির্বাচিত অর্ডারগুলো স্থায়ীভাবে মুছে যাবে। এটি ফেরানো যাবে না। নিশ্চিত করতে সিকিউরিটি কোড দিন।
-            </p>
+            <h3 className="font-bold text-lg mb-1">{selectedCount}টি অর্ডার ট্রাশে পাঠাবেন?</h3>
+            <p className="text-sm text-gray-500 mb-4">এগুলো ট্রাশে চলে যাবে — পরে <b>রিস্টোর</b> করা যাবে বা স্থায়ীভাবে ডিলিট করা যাবে।</p>
+            {err && <p className="text-sm text-red-600 mb-3">{err}</p>}
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setConfirmMode(null)} disabled={busy} className="rounded-lg border px-4 py-2 text-sm">বাতিল</button>
+              <button onClick={doTrash} disabled={busy} className="rounded-lg bg-red-600 text-white px-4 py-2 text-sm disabled:opacity-60">
+                {busy ? "..." : `হ্যাঁ, ট্রাশে পাঠান`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Purge confirm (permanent — needs code) */}
+      {confirmMode === "purge" && (
+        <div className="fixed inset-0 z-[90] bg-black/50 flex items-center justify-center p-4" onClick={() => !busy && setConfirmMode(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-sm p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-bold text-lg mb-1">{selectedCount}টি অর্ডার স্থায়ীভাবে ডিলিট?</h3>
+            <p className="text-sm text-gray-500 mb-3">এটি আর ফেরানো যাবে না। নিশ্চিত করতে সিকিউরিটি কোড দিন।</p>
             <label className="block text-xs font-medium mb-1">সিকিউরিটি কোড</label>
             <input
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-              onKeyDown={(e) => { if (e.key === "Enter" && !busy) doBulkDelete(); }}
+              onKeyDown={(e) => { if (e.key === "Enter" && !busy) doPurge(); }}
               inputMode="numeric"
               autoFocus
               placeholder="কোড লিখুন"
@@ -210,9 +251,9 @@ export function OrdersList({ orders, cbReady }: { orders: OrderRow[]; cbReady: b
             />
             {err && <p className="text-sm text-red-600 mb-3">{err}</p>}
             <div className="flex justify-end gap-2">
-              <button onClick={() => setConfirm(false)} disabled={busy} className="rounded-lg border px-4 py-2 text-sm">বাতিল</button>
-              <button onClick={doBulkDelete} disabled={busy || !code.trim()} className="rounded-lg bg-red-600 text-white px-4 py-2 text-sm disabled:opacity-60">
-                {busy ? "ডিলিট হচ্ছে..." : `হ্যাঁ, ${selectedCount}টি ডিলিট করুন`}
+              <button onClick={() => setConfirmMode(null)} disabled={busy} className="rounded-lg border px-4 py-2 text-sm">বাতিল</button>
+              <button onClick={doPurge} disabled={busy || !code.trim()} className="rounded-lg bg-red-600 text-white px-4 py-2 text-sm disabled:opacity-60">
+                {busy ? "ডিলিট হচ্ছে..." : `স্থায়ীভাবে ডিলিট`}
               </button>
             </div>
           </div>

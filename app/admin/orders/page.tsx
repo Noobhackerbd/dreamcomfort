@@ -19,6 +19,7 @@ const STATUS_FILTERS = [
   { value: "delivered", label: "ডেলিভার্ড" },
   { value: "cancelled", label: "বাতিল" },
   { value: "returned", label: "রিটার্ন" },
+  { value: "trash", label: "🗑️ ট্রাশ" },
 ];
 
 export default async function AdminOrders({
@@ -31,31 +32,36 @@ export default async function AdminOrders({
   const from = (page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
 
-  let query = supabase
-    .from("orders")
-    .select(
-      "id, order_number, customer_name, customer_phone, address_line, area, city, district, courier, tracking_id, total, status, created_at, is_booked, booked_date, order_items(product_name, quantity, products(images))",
-      { count: "exact" }
-    )
-    .order("created_at", { ascending: false })
-    .range(from, to);
-
-  // "booked" = scheduled orders still pending; once confirmed they move to the
-  // Confirmed tab automatically. Pending tab excludes booked so they only show under বুকড.
   const statusFilter = searchParams.status;
-  if (statusFilter === "booked") {
-    query = query.eq("is_booked", true).eq("status", "pending");
-  } else if (statusFilter === "pending") {
-    query = query.eq("status", "pending").eq("is_booked", false);
-  } else if (statusFilter) {
-    query = query.eq("status", statusFilter);
-  }
-  if (searchParams.q) {
-    const q = searchParams.q.trim();
-    query = query.or(`order_number.ilike.%${q}%,customer_phone.ilike.%${q}%,customer_name.ilike.%${q}%`);
+  const isTrash = statusFilter === "trash";
+  const SELECT_COLS =
+    "id, order_number, customer_name, customer_phone, address_line, area, city, district, courier, tracking_id, total, status, notes, created_at, is_booked, booked_date, order_items(product_name, quantity, products(images))";
+
+  function build(withDeleted: boolean) {
+    let q = supabase.from("orders").select(SELECT_COLS, { count: "exact" }).order("created_at", { ascending: false }).range(from, to);
+    if (isTrash) {
+      if (withDeleted) q = q.not("deleted_at", "is", null);
+    } else {
+      // Exclude trashed orders from every normal view.
+      if (withDeleted) q = q.is("deleted_at", null);
+      if (statusFilter === "booked") q = q.eq("is_booked", true).eq("status", "pending");
+      else if (statusFilter === "pending") q = q.eq("status", "pending").eq("is_booked", false);
+      else if (statusFilter) q = q.eq("status", statusFilter);
+    }
+    if (searchParams.q) {
+      const s = searchParams.q.trim();
+      q = q.or(`order_number.ilike.%${s}%,customer_phone.ilike.%${s}%,customer_name.ilike.%${s}%`);
+    }
+    return q;
   }
 
-  const { data: orders, count } = await query;
+  let { data: orders, count, error } = await build(true);
+  let trashUnavailable = false;
+  if (error && ((error as any).code === "42703" || /deleted_at/i.test(error.message || ""))) {
+    // The `deleted_at` column hasn't been added yet — run the migration.
+    if (isTrash) { orders = []; count = 0; trashUnavailable = true; }
+    else { ({ data: orders, count } = await build(false)); }
+  }
   const total = count ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const active = searchParams.status ?? "";
@@ -98,6 +104,7 @@ export default async function AdminOrders({
     tracking_id: o.tracking_id ?? "",
     total: Number(o.total ?? 0),
     status: o.status,
+    notes: o.notes ?? "",
     created_at: o.created_at,
     is_booked: !!o.is_booked,
     booked_date: o.booked_date ?? null,
@@ -141,10 +148,16 @@ export default async function AdminOrders({
       </div>
 
       <p className="text-xs text-gray-400 mb-3">
-        মোট {total}টি অর্ডার · পৃষ্ঠা {page}/{totalPages}
+        {isTrash ? "ট্রাশে" : "মোট"} {total}টি অর্ডার · পৃষ্ঠা {page}/{totalPages}
       </p>
 
-      <OrdersList orders={rows} cbReady={cbReady} />
+      {trashUnavailable && (
+        <p className="mb-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          ট্রাশ ফিচার চালু করতে <code className="bg-white/60 px-1 rounded">deleted_at</code> কলাম যোগ করার migration চালান (নিচে SQL দেওয়া আছে)।
+        </p>
+      )}
+
+      <OrdersList orders={rows} cbReady={cbReady} isTrash={isTrash} />
 
       {totalPages > 1 && (
         <div className="mt-6 flex items-center justify-center gap-1.5 flex-wrap">
