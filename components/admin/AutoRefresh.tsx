@@ -8,6 +8,9 @@ import { useRouter } from "next/navigation";
 export function AutoRefresh({ seconds = 15 }: { seconds?: number }) {
   const router = useRouter();
   useEffect(() => {
+    // Refresh immediately on mount so a stale (client-router-cached) render is
+    // corrected the moment the page opens — no manual reload needed.
+    router.refresh();
     const id = setInterval(() => {
       if (document.visibilityState === "visible") router.refresh();
     }, Math.max(5, seconds) * 1000);
