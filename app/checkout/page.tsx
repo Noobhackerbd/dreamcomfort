@@ -110,7 +110,7 @@ export default function CheckoutPage() {
 
         <div>
           <label className="block text-sm mb-1">সম্পূর্ণ ঠিকানা *</label>
-          <textarea name="address" autoComplete="street-address" value={address} onChange={(e) => setAddress(e.target.value)} rows={3} placeholder="বাসা/হোল্ডিং, রোড, এলাকা, থানা" className={inputCls} />
+          <input name="address" type="text" autoComplete="street-address" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="বাসা/হোল্ডিং, রোড, এলাকা, থানা" className={inputCls} />
         </div>
 
         <div>

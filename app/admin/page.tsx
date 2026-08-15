@@ -3,7 +3,7 @@ import { getServerSupabase } from "@/lib/supabase/server";
 import { taka } from "@/lib/format";
 import { ResetDailyButton } from "@/components/admin/ResetDailyButton";
 import { AutoRefresh } from "@/components/admin/AutoRefresh";
-import { OrdersStatusChart, RevenueChart, VisitorsChart } from "@/components/admin/DashboardCharts";
+import { OrdersStatusChart, RevenueChart, VisitorsChart, VisitorsByHourChart } from "@/components/admin/DashboardCharts";
 
 export const dynamic = "force-dynamic";
 
@@ -67,13 +67,19 @@ async function getStats(rangeDays: number) {
       supabase.from("settings").select("value").eq("key", "dashboard_daily_reset").maybeSingle(),
     ]);
 
-  // If the owner reset today's counters, count from that moment instead of midnight.
+  // Reset baseline: once the owner resets, the "order tally" counts from that moment
+  // and PERSISTS until the next manual reset (does NOT auto-clear at midnight) — so it
+  // reflects "parcels accumulated since the last courier handover". No reset yet → today.
   const resetAt = (resetRes as any)?.data?.value?.at as string | undefined;
-  const effectiveTodayStart = resetAt && resetAt > todayStartUtc ? resetAt : todayStartUtc;
-  const resetTimeLabel =
-    resetAt && resetAt > todayStartUtc
-      ? new Date(new Date(resetAt).getTime() + DHAKA_OFFSET_MS).toISOString().slice(11, 16)
-      : null;
+  const resetActive = !!resetAt;
+  const effectiveTodayStart = resetAt ? resetAt : todayStartUtc;
+  const resetTimeLabel = resetAt
+    ? (() => {
+        const iso = new Date(new Date(resetAt).getTime() + DHAKA_OFFSET_MS).toISOString();
+        const hm = iso.slice(11, 16);
+        return iso.slice(0, 10) === todayKey() ? `আজ ${hm}` : `${iso.slice(8, 10)}/${iso.slice(5, 7)} ${hm}`;
+      })()
+    : null;
 
   const two = (twoWinRes.data ?? []) as any[];
   const cur = two.filter((o) => o.created_at >= winStart);
@@ -134,6 +140,24 @@ async function getStats(rangeDays: number) {
   const visitorsDelta = visitorsPrev > 0 ? Math.round(((visitorsCur - visitorsPrev) / visitorsPrev) * 100) : visitorsCur > 0 ? 100 : 0;
   const conversion = visitorsCur ? Math.round((total / visitorsCur) * 1000) / 10 : 0; // %
 
+  // Visitors by time-of-day (Dhaka hour, 0–23) across the range → "most visited time".
+  const hourCounts = new Array(24).fill(0);
+  for (const v of (visitsRes ?? []) as any[]) {
+    const h = new Date(new Date(v.created_at).getTime() + DHAKA_OFFSET_MS).getUTCHours();
+    hourCounts[h] += 1;
+  }
+  const hourly = hourCounts.map((visits, hour) => ({ hour, visits }));
+  let peakHour = 0;
+  let peakVisits = 0;
+  hourCounts.forEach((c: number, h: number) => { if (c > peakVisits) { peakVisits = c; peakHour = h; } });
+  const bnNum = (n: number) => String(n).replace(/\d/g, (d) => "০১২৩৪৫৬৭৮৯"[Number(d)]);
+  const hourLabelBn = (h: number) => {
+    const period = h < 4 ? "রাত" : h < 6 ? "ভোর" : h < 12 ? "সকাল" : h < 15 ? "দুপুর" : h < 18 ? "বিকেল" : h < 20 ? "সন্ধ্যা" : "রাত";
+    let hr = h % 12; if (hr === 0) hr = 12;
+    return `${period} ${bnNum(hr)}টা`;
+  };
+  const peakLabel = peakVisits > 0 ? `${hourLabelBn(peakHour)}–${hourLabelBn((peakHour + 1) % 24)}` : "—";
+
   // Top delivery areas (by order count) in the current window.
   const areaCount = new Map<string, { orders: number; revenue: number }>();
   for (const o of cur) {
@@ -176,6 +200,7 @@ async function getStats(rangeDays: number) {
   return {
     rangeDays,
     resetTimeLabel,
+    resetActive,
     todayProducts,
     products: productsRes.count ?? 0,
     orders: ordersRes.count ?? 0,
@@ -185,6 +210,7 @@ async function getStats(rangeDays: number) {
     total, confirmed, cancelled, confirmRate, cancelRate, salesConfirmed, aov,
     todayOrders: todayOrders.length, todayRevenue, todayVisitors,
     visitorsCur, visitorsDelta, conversion,
+    hourly, peakHour, peakLabel, peakVisits,
     bookedSoon, visitorsChart, chart, topProducts, topAreas,
     recent: (recentRes.data ?? []) as any[],
     lowStock: (lowStockRes.data ?? []) as any[],
@@ -309,8 +335,8 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
       {/* Today */}
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi icon="👥" label="আজকের ভিজিটর" value={stats.todayVisitors} tone="indigo" />
-        <Kpi icon="🛍️" label="আজকের অর্ডার" value={stats.todayOrders} tone="brand" />
-        <Kpi icon="💰" label="আজকের আয়" value={taka(stats.todayRevenue)} tone="green" />
+        <Kpi icon="🛍️" label={stats.resetActive ? "অর্ডার (রিসেটের পর)" : "আজকের অর্ডার"} value={stats.todayOrders} tone="brand" />
+        <Kpi icon="💰" label={stats.resetActive ? "আয় (রিসেটের পর)" : "আজকের আয়"} value={taka(stats.todayRevenue)} tone="green" />
         <Kpi icon="⏳" label="পেন্ডিং অর্ডার" value={stats.pending} href="/admin/orders?status=pending" tone="amber" alert />
         <Kpi icon="🛒" label="অসম্পূর্ণ লিড" value={stats.abandoned} href="/admin/abandoned" tone="accent" alert />
         <Kpi icon="📦" label="মোট পণ্য" value={stats.products} tone="violet" />
@@ -320,7 +346,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
       <div className="mt-4 rounded-2xl border border-black/5 bg-white p-5 shadow-sm">
         <div className="flex items-center justify-between gap-2 mb-3">
           <h2 className="font-display text-base font-bold">
-            🛍️ আজকের অর্ডার
+            🛍️ {stats.resetActive ? "অর্ডার (রিসেটের পর)" : "আজকের অর্ডার"}
             {stats.resetTimeLabel && <span className="ml-2 text-xs font-normal text-gray-400">({stats.resetTimeLabel} থেকে)</span>}
           </h2>
           <ResetDailyButton />
@@ -403,6 +429,23 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
               ))}
             </ul>
           )}
+        </ChartCard>
+      </div>
+
+      {/* Visitors by time of day (tower/column bars) */}
+      <div className="mt-4">
+        <ChartCard
+          title="⏰ সময় অনুযায়ী ভিজিটর"
+          right={
+            <span className="text-sm">
+              <span className="text-gray-500">সবচেয়ে বেশি: </span>
+              <b className="text-green-600">{stats.peakLabel}</b>
+              {stats.peakVisits > 0 && <span className="text-gray-400"> ({stats.peakVisits})</span>}
+            </span>
+          }
+          note="দিনের কোন সময়ে সবচেয়ে বেশি ভিজিটর আসে (সবুজ = পিক টাইম)। বারে হোভার করলে বিস্তারিত।"
+        >
+          <VisitorsByHourChart data={stats.hourly} peakHour={stats.peakHour} />
         </ChartCard>
       </div>
 

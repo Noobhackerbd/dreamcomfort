@@ -268,13 +268,13 @@ export function OrderForm({
           {invalid.phone && <p className="mt-1 text-xs text-red-600">⚠️ সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন</p>}
         </div>
         <div>
-          <textarea
+          <input
             id="dc-address"
             name="address"
+            type="text"
             autoComplete="street-address"
             value={address}
             onChange={(e) => { setAddress(e.target.value); if (invalid.address) setInvalid((v) => ({ ...v, address: false })); }}
-            rows={2}
             placeholder="সম্পূর্ণ ঠিকানা *"
             className={fieldCls(invalid.address)}
           />
