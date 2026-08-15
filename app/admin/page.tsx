@@ -2,6 +2,7 @@
 import { getServerSupabase } from "@/lib/supabase/server";
 import { taka } from "@/lib/format";
 import { ResetDailyButton } from "@/components/admin/ResetDailyButton";
+import { AutoRefresh } from "@/components/admin/AutoRefresh";
 
 export const dynamic = "force-dynamic";
 
@@ -266,6 +267,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
 
   return (
     <div>
+      <AutoRefresh seconds={12} />
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div className="flex items-center gap-2">
           <h1 className="font-display text-2xl font-bold">ড্যাশবোর্ড</h1>

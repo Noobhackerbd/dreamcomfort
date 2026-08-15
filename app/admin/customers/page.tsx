@@ -1,5 +1,6 @@
 import { getServerSupabase } from "@/lib/supabase/server";
 import { taka } from "@/lib/format";
+import { CustomersExport } from "./CustomersExport";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,10 @@ export default async function AdminCustomers({
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">গ্রাহক</h1>
+      <div className="flex items-center justify-between gap-3 mb-6">
+        <h1 className="text-2xl font-bold">গ্রাহক</h1>
+        <CustomersExport />
+      </div>
 
       <form method="get" className="flex gap-2 mb-4">
         <input

@@ -4,6 +4,7 @@ import { taka, bdDateTime } from "@/lib/format";
 import { aiConfigured } from "@/lib/ai";
 import { AbandonedActions } from "./AbandonedActions";
 import { ManualOrderModal, type PickProduct } from "../orders/ManualOrderModal";
+import { AutoRefresh } from "@/components/admin/AutoRefresh";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +52,7 @@ export default async function AbandonedPage({ searchParams }: { searchParams: { 
 
   return (
     <div>
+      <AutoRefresh seconds={12} />
       <div className="flex items-center justify-between mb-2">
         <h1 className="text-2xl font-bold">অসম্পূর্ণ অর্ডার (লিড)</h1>
       </div>
