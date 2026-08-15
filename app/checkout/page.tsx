@@ -100,22 +100,22 @@ export default function CheckoutPage() {
       <form onSubmit={onSubmit} className="space-y-4">
         <div>
           <label className="block text-sm mb-1">আপনার নাম *</label>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="আপনার নাম লিখুন" className={inputCls} />
+          <input name="name" type="text" autoComplete="name" autoCapitalize="words" value={name} onChange={(e) => setName(e.target.value)} placeholder="আপনার নাম লিখুন" className={inputCls} />
         </div>
 
         <div>
           <label className="block text-sm mb-1">মোবাইল নম্বর *</label>
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="numeric" placeholder="০১XXXXXXXXX" className={inputCls} />
+          <input name="phone" type="tel" autoComplete="tel" inputMode="numeric" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="০১XXXXXXXXX" className={inputCls} />
         </div>
 
         <div>
           <label className="block text-sm mb-1">সম্পূর্ণ ঠিকানা *</label>
-          <textarea value={address} onChange={(e) => setAddress(e.target.value)} rows={3} placeholder="বাসা/হোল্ডিং, রোড, এলাকা, থানা" className={inputCls} />
+          <textarea name="address" autoComplete="street-address" value={address} onChange={(e) => setAddress(e.target.value)} rows={3} placeholder="বাসা/হোল্ডিং, রোড, এলাকা, থানা" className={inputCls} />
         </div>
 
         <div>
           <label className="block text-sm mb-1">এলাকা / জেলা</label>
-          <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="যেমন: ঢাকা, চট্টগ্রাম" className={inputCls} />
+          <input name="city" type="text" autoComplete="address-level2" value={city} onChange={(e) => setCity(e.target.value)} placeholder="যেমন: ঢাকা, চট্টগ্রাম" className={inputCls} />
         </div>
 
         <div>

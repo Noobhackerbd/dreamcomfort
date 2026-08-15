@@ -242,6 +242,10 @@ export function OrderForm({
         <div>
           <input
             id="dc-name"
+            name="name"
+            type="text"
+            autoComplete="name"
+            autoCapitalize="words"
             value={name}
             onChange={(e) => { setName(e.target.value); if (invalid.name) setInvalid((v) => ({ ...v, name: false })); }}
             placeholder="আপনার নাম *"
@@ -252,9 +256,12 @@ export function OrderForm({
         <div>
           <input
             id="dc-phone"
+            name="phone"
+            type="tel"
+            autoComplete="tel"
+            inputMode="numeric"
             value={phone}
             onChange={(e) => { setPhone(e.target.value); if (invalid.phone) setInvalid((v) => ({ ...v, phone: false })); }}
-            inputMode="numeric"
             placeholder="মোবাইল নম্বর (০১XXXXXXXXX) *"
             className={fieldCls(invalid.phone)}
           />
@@ -263,6 +270,8 @@ export function OrderForm({
         <div>
           <textarea
             id="dc-address"
+            name="address"
+            autoComplete="street-address"
             value={address}
             onChange={(e) => { setAddress(e.target.value); if (invalid.address) setInvalid((v) => ({ ...v, address: false })); }}
             rows={2}
