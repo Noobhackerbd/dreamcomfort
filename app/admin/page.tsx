@@ -3,6 +3,7 @@ import { getServerSupabase } from "@/lib/supabase/server";
 import { taka } from "@/lib/format";
 import { ResetDailyButton } from "@/components/admin/ResetDailyButton";
 import { AutoRefresh } from "@/components/admin/AutoRefresh";
+import { OrdersStatusChart, RevenueChart, VisitorsChart } from "@/components/admin/DashboardCharts";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,26 @@ async function getStats(rangeDays: number) {
   const prevStart = new Date(now - 2 * rangeDays * 86400000).toISOString();
   const todayStartUtc = new Date(`${todayKey()}T00:00:00+06:00`).toISOString(); // Dhaka midnight → UTC
 
+  // PostgREST caps a single request at 1000 rows, so `.limit(100000)` silently
+  // returned only 1000 (and, with no ORDER BY, the OLDEST 1000 — dropping today's
+  // visits). Paginate newest-first to get the full window.
+  async function fetchAllVisits(sinceIso: string): Promise<any[]> {
+    const out: any[] = [];
+    const pageSize = 1000;
+    for (let from = 0; from < 200000; from += pageSize) {
+      const { data, error } = await supabase
+        .from("page_visits")
+        .select("visitor_id, created_at")
+        .gte("created_at", sinceIso)
+        .order("created_at", { ascending: false })
+        .range(from, from + pageSize - 1);
+      if (error || !data || data.length === 0) break;
+      out.push(...data);
+      if (data.length < pageSize) break;
+    }
+    return out;
+  }
+
   const [productsRes, ordersRes, pendingRes, twoWinRes, recentRes, lowStockRes, itemsRes, abandonedRes, bookedRes, visitsRes, prevVisitsRes, todayItemsRes, resetRes] =
     await Promise.all([
       supabase.from("products").select("id", { count: "exact", head: true }),
@@ -38,7 +59,7 @@ async function getStats(rangeDays: number) {
       supabase.from("order_items").select("product_name, quantity"),
       supabase.from("abandoned_carts").select("id", { count: "exact", head: true }).eq("status", "abandoned"),
       supabase.from("orders").select("id, order_number, customer_name, customer_phone, booked_date, total, status").eq("is_booked", true).not("booked_date", "is", null).not("status", "in", "(delivered,cancelled,returned)").order("booked_date", { ascending: true }).limit(60),
-      supabase.from("page_visits").select("visitor_id, created_at").gte("created_at", winStart).limit(100000),
+      fetchAllVisits(winStart),
       supabase.from("page_visits").select("visitor_id", { count: "exact", head: true }).gte("created_at", prevStart).lt("created_at", winStart),
       // Today's ordered products (with image) — join orders for the date filter + products for the image.
       supabase.from("order_items").select("order_id, product_id, product_name, quantity, products(images), orders!inner(created_at)").gte("orders.created_at", todayStartUtc),
@@ -98,7 +119,7 @@ async function getStats(rangeDays: number) {
   // Visitors + conversion.
   const visitDays = new Map<string, Set<string>>();
   const allVisitors = new Set<string>();
-  for (const v of (visitsRes.data ?? []) as any[]) {
+  for (const v of (visitsRes ?? []) as any[]) {
     const id = v.visitor_id || v.created_at;
     allVisitors.add(id);
     const key = dhakaDayKey(v.created_at);
@@ -175,7 +196,6 @@ const STATUS_STYLE: Record<string, string> = {
   pending: "bg-amber-100 text-amber-700", confirmed: "bg-brand-soft text-brand-dark", processing: "bg-indigo-100 text-indigo-700",
   shipped: "bg-purple-100 text-purple-700", delivered: "bg-green-100 text-green-700", cancelled: "bg-red-100 text-red-700", returned: "bg-gray-200 text-gray-600",
 };
-const CHART_H = 170;
 const RANGES = [
   { v: 7, label: "৭ দিন" },
   { v: 30, label: "৩০ দিন" },
@@ -242,28 +262,12 @@ function ChartCard({ title, right, children, note }: { title: string; right?: Re
   );
 }
 
-function AxisLabels({ days }: { days: string[] }) {
-  if (!days.length) return null;
-  const fmt = (d: string) => d.slice(8, 10) + "/" + d.slice(5, 7);
-  const mid = days[Math.floor(days.length / 2)];
-  return (
-    <div className="flex justify-between text-[10px] text-gray-400 mt-1.5">
-      <span>{fmt(days[0])}</span><span>{fmt(mid)}</span><span>{fmt(days[days.length - 1])}</span>
-    </div>
-  );
-}
-
 export default async function AdminDashboard({ searchParams }: { searchParams?: { range?: string } }) {
   const rangeDays = [7, 30, 90].includes(Number(searchParams?.range)) ? Number(searchParams?.range) : 30;
   const stats = await getStats(rangeDays);
   const rangeLabel = RANGES.find((r) => r.v === rangeDays)!.label;
 
-  const maxBar = Math.max(1, ...stats.chart.map((c) => c.total));
-  const maxCount = Math.max(1, ...stats.chart.map((c) => c.count));
-  const maxVisitors = Math.max(1, ...stats.visitorsChart.map((c) => c.visitors));
   const maxArea = Math.max(1, ...stats.topAreas.map((a) => a.orders));
-  const days = stats.chart.map((c) => c.day);
-  const px = (v: number, max: number, h = CHART_H) => Math.max(v > 0 ? 3 : 0, Math.round((v / max) * h));
 
   return (
     <div>
@@ -367,57 +371,18 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
 
       {/* Charts */}
       <div className="mt-8 grid gap-4 lg:grid-cols-2">
-        <ChartCard title="দৈনিক অর্ডার (স্ট্যাটাস)"
-          right={
-            <div className="flex flex-wrap gap-3 text-xs text-gray-500">
-              <span className="inline-flex items-center gap-1"><i className="h-2.5 w-2.5 rounded-sm bg-green-500 inline-block" /> ডেলিভার্ড</span>
-              <span className="inline-flex items-center gap-1"><i className="h-2.5 w-2.5 rounded-sm bg-brand inline-block" /> কনফার্মড</span>
-              <span className="inline-flex items-center gap-1"><i className="h-2.5 w-2.5 rounded-sm bg-amber-400 inline-block" /> পেন্ডিং</span>
-              <span className="inline-flex items-center gap-1"><i className="h-2.5 w-2.5 rounded-sm bg-red-400 inline-block" /> বাতিল</span>
-            </div>
-          }
-          note="বারে হোভার করলে বিস্তারিত।">
-          <div className="flex items-end gap-px" style={{ height: CHART_H }}>
-            {stats.chart.map((c) => {
-              const barH = px(c.count, maxCount);
-              const seg = (n: number) => (c.count > 0 ? Math.round((n / c.count) * barH) : 0);
-              return (
-                <div key={c.day} className="flex-1 min-w-0 flex flex-col justify-end" title={`${c.day}\nমোট ${c.count} · ডেলিভার্ড ${c.delivered} · কনফার্মড ${c.confirmed} · পেন্ডিং ${c.pending} · বাতিল ${c.cancelled}\nবিক্রি ${taka(c.total)}`}>
-                  <div className="w-full rounded-t overflow-hidden" style={{ height: barH }}>
-                    <div className="bg-red-400" style={{ height: seg(c.cancelled) }} />
-                    <div className="bg-amber-400" style={{ height: seg(c.pending) }} />
-                    <div className="bg-brand" style={{ height: seg(c.confirmed) }} />
-                    <div className="bg-green-500" style={{ height: seg(c.delivered) }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          <AxisLabels days={days} />
+        <ChartCard title="দৈনিক অর্ডার (স্ট্যাটাস)" note="প্রতিদিন কোন স্ট্যাটাসে কত অর্ডার। বার/লেজেন্ডে হোভার করলে বিস্তারিত।">
+          <OrdersStatusChart data={stats.chart} />
         </ChartCard>
 
-        <ChartCard title="দৈনিক বিক্রি (৳)" right={<span className="text-sm text-gray-500">{rangeLabel}: <b>{taka(stats.revenueCur)}</b></span>} note="দৈনিক মোট বিক্রি (৳)।">
-          <div className="flex items-end gap-px" style={{ height: CHART_H }}>
-            {stats.chart.map((c) => (
-              <div key={c.day} className="flex-1 min-w-0 flex items-end" title={`${c.day}: ${taka(c.total)}`}>
-                <div className="w-full rounded-t bg-gradient-to-t from-brand-dark to-brand-light hover:from-brand transition-colors" style={{ height: px(c.total, maxBar) }} />
-              </div>
-            ))}
-          </div>
-          <AxisLabels days={days} />
+        <ChartCard title="দৈনিক বিক্রি (৳)" right={<span className="text-sm text-gray-500">{rangeLabel}: <b>{taka(stats.revenueCur)}</b></span>} note="লাইনে হোভার করলে ঐ দিনের বিক্রি।">
+          <RevenueChart data={stats.chart} />
         </ChartCard>
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <ChartCard title="দৈনিক ভিজিটর" right={<span className="text-sm text-gray-500">{rangeLabel}: <b>{stats.visitorsCur}</b></span>} note="প্রতিদিনের ইউনিক ভিজিটর।">
-          <div className="flex items-end gap-px" style={{ height: 120 }}>
-            {stats.visitorsChart.map((c) => (
-              <div key={c.day} className="flex-1 min-w-0 flex items-end" title={`${c.day}: ${c.visitors} ভিজিটর`}>
-                <div className="w-full rounded-t bg-gradient-to-t from-accent-dark to-accent-light hover:from-accent transition-colors" style={{ height: px(c.visitors, maxVisitors, 120) }} />
-              </div>
-            ))}
-          </div>
-          <AxisLabels days={days} />
+          <VisitorsChart data={stats.visitorsChart} />
         </ChartCard>
 
         <ChartCard title="🗺️ টপ এরিয়া (অর্ডার)" note="এই সময়ে সবচেয়ে বেশি অর্ডার আসা এলাকা।">

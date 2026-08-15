@@ -50,6 +50,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const [landing, meta, store] = await Promise.all([getLandingConfig(), getMetaSettings(), getStoreSettings()]);
   return (
     <html lang="bn" className={`${fredoka.variable} ${notoBengali.variable}`}>
+      <head>
+        {/* Connect to Meta Pixel origin early → faster tracking load, better LCP/TBT. */}
+        <link rel="preconnect" href="https://connect.facebook.net" crossOrigin="" />
+        <link rel="dns-prefetch" href="https://connect.facebook.net" />
+      </head>
       <body className="min-h-screen antialiased flex flex-col">
         <HideOnAdmin>
           <Header logoUrl={landing.logoUrl || "/logo.png"} phone={store.phone} />
