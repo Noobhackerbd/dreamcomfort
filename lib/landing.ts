@@ -67,3 +67,39 @@ export async function getLandingConfig(): Promise<LandingConfig> {
   }
   return DEFAULT_LANDING;
 }
+
+/* ---------------- Extra landing pages (variants) ----------------
+ * Same design as the homepage; only the featured products differ. Stored in the
+ * settings row `landing_variants` = { list: [{ key, name, productSlugs }] }.
+ * Reachable at /<key> (e.g. /landing2). */
+export interface LandingVariant {
+  key: string;
+  name: string;
+  productSlugs: string[];
+}
+
+export async function getLandingVariants(): Promise<LandingVariant[]> {
+  try {
+    const supabase = getServerSupabase();
+    const { data } = await supabase.from("settings").select("value").eq("key", "landing_variants").single();
+    const list = (data?.value as any)?.list;
+    if (Array.isArray(list)) {
+      return list
+        .filter((v) => v && typeof v.key === "string" && v.key.trim())
+        .map((v) => ({ key: String(v.key).trim(), name: String(v.name || v.key), productSlugs: Array.isArray(v.productSlugs) ? v.productSlugs : [] }));
+    }
+  } catch {
+    /* no variants yet */
+  }
+  return [];
+}
+
+/** Config for a named landing variant — base landing config with its own products.
+ *  Returns null if the key is not a registered variant. */
+export async function getLandingConfigForVariant(key: string): Promise<LandingConfig | null> {
+  const variants = await getLandingVariants();
+  const v = variants.find((x) => x.key.toLowerCase() === key.toLowerCase());
+  if (!v) return null;
+  const base = await getLandingConfig();
+  return { ...base, productSlugs: v.productSlugs, productSlug: v.productSlugs[0] ?? base.productSlug };
+}
