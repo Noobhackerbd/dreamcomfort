@@ -2,14 +2,16 @@
   "name": "Dream Comfort Admin",
   "short_name": "DC Admin",
   "description": "Dream Comfort store admin — orders, products, notifications.",
+  "id": "/admin",
   "start_url": "/admin",
   "scope": "/",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#ffffff",
   "theme_color": "#0d9488",
   "icons": [
-    { "src": "/icon.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/apple-icon.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }
