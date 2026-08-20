@@ -1,4 +1,5 @@
 // Thank-you / order confirmation page (server component).
+import { Suspense } from "react";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import { taka } from "@/lib/format";
@@ -6,6 +7,30 @@ import { getStoreSettings } from "@/lib/settings";
 import { PurchasePixel } from "./PurchasePixel";
 
 export const dynamic = "force-dynamic";
+
+// Streamed shell → navigation to this page completes INSTANTLY with this skeleton,
+// then the order details fill in as the DB query resolves (feels sub-second).
+function OrderSkeleton() {
+  return (
+    <div className="max-w-2xl mx-auto">
+      <div className="pt-2" />
+      <div className="rounded-3xl overflow-hidden bg-white shadow-sm ring-1 ring-black/5">
+        <div className="border-b border-black/5 px-6 py-8 text-center">
+          <div className="mx-auto h-16 w-16 rounded-full bg-green-50 ring-1 ring-green-200 flex items-center justify-center">
+            <span className="text-3xl text-green-600 font-bold">✓</span>
+          </div>
+          <h1 className="mt-4 font-display text-2xl md:text-[26px] font-bold text-gray-900">অর্ডার সফলভাবে গৃহীত হয়েছে</h1>
+          <p className="mt-3 text-sm text-gray-400">বিস্তারিত লোড হচ্ছে…</p>
+          <div className="mt-6 flex justify-center"><span className="dc-dots" /></div>
+        </div>
+        <div className="p-6 space-y-3">
+          <div className="h-16 rounded-2xl bg-gray-100 animate-pulse" />
+          <div className="h-16 rounded-2xl bg-gray-100 animate-pulse" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 async function getOrder(orderNumber: string) {
   const supabase = getServerSupabase();
@@ -48,7 +73,15 @@ function waLink(phone: string, text?: string): string {
   return "https://wa.me/" + n + (text ? "?text=" + encodeURIComponent(text) : "");
 }
 
-export default async function OrderPage({
+export default function OrderPage({ params }: { params: { order_number: string } }) {
+  return (
+    <Suspense fallback={<OrderSkeleton />}>
+      <OrderContent params={params} />
+    </Suspense>
+  );
+}
+
+async function OrderContent({
   params,
 }: {
   params: { order_number: string };
