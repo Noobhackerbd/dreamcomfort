@@ -111,7 +111,7 @@ export function ProductFunnel({
         {/* Product picker — directly below the hero photo (all screens) */}
         {list.length > 1 && (
           <div id="product-picker" className="mt-4 scroll-mt-24">
-            <label className="block text-center text-base font-bold mb-3"><span className="dc-gradient-text">একটি কালার বেছে নিন</span></label>
+            <label className="block text-center text-lg font-bold text-brand-dark mb-3">একটি কালার বেছে নিন 👇</label>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {list.map((x) => (
                 <ProductChip key={x.id} p={x} on={x.id === selectedId} onSelect={() => { setSelectedId(x.id); playSelect(); }} />
