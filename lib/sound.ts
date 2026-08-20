@@ -49,8 +49,13 @@ export function isMuted(): boolean {
   return muted;
 }
 
+// Storefront sounds disabled — no audio on the landing/checkout for a cleaner,
+// faster, more professional feel. (Admin new-order sound is separate.)
+const STOREFRONT_SOUND = false;
+
 /** One soft voice with a gentle attack + smooth exponential release. */
 function voice(freq: number, start: number, dur: number, gain = 0.05, type: OscillatorType = "sine") {
+  if (!STOREFRONT_SOUND) return;
   const c = ac();
   if (!c || !filter || isMuted()) return;
   const osc = c.createOscillator();

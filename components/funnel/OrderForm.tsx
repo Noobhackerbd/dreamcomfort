@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { placeOrder } from "@/app/checkout/actions";
 import { saveAbandonedLead } from "@/app/checkout/lead-actions";
@@ -376,13 +377,9 @@ export function OrderForm({
         </p>
       </div>
 
-      {/* Simple order-confirming overlay — light transparent backdrop + brand dots */}
-      {submitting && (
-        <div className="fixed inset-0 z-[90] flex flex-col items-center justify-center bg-white/55 backdrop-blur-sm">
-          <span className="dc-dots" role="status" aria-label="অর্ডার নিশ্চিত হচ্ছে" />
-          <p className="mt-9 text-sm font-medium text-brand-dark">অর্ডার নিশ্চিত হচ্ছে...</p>
-        </div>
-      )}
+      {/* Full-screen order-confirming overlay — portaled to <body> so it truly covers
+          the viewport (the form's backdrop-blur would otherwise trap position:fixed). */}
+      {submitting && <OrderLoadingOverlay />}
 
       {/* Image popup / lightbox */}
       {zoomIdx !== null && gallery[zoomIdx] && (
@@ -436,5 +433,19 @@ export function OrderForm({
         </div>
       )}
     </form>
+  );
+}
+
+/** Full-screen loading overlay rendered into <body> via a portal. */
+function OrderLoadingOverlay() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted || typeof document === "undefined") return null;
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-white/60 backdrop-blur-sm">
+      <span className="dc-dots" role="status" aria-label="অর্ডার নিশ্চিত হচ্ছে" />
+      <p className="mt-9 text-sm font-medium text-brand-dark">অর্ডার নিশ্চিত হচ্ছে...</p>
+    </div>,
+    document.body
   );
 }

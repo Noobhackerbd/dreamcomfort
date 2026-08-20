@@ -19,13 +19,21 @@ async function getOrder(orderNumber: string) {
     .from("order_items")
     .select("*")
     .eq("order_id", order.id);
-  return { order, items: items ?? [] };
+  const list = items ?? [];
+  // Fetch a thumbnail for each ordered product.
+  const ids = Array.from(new Set(list.map((it: any) => it.product_id).filter(Boolean)));
+  const imageMap: Record<string, string | null> = {};
+  if (ids.length) {
+    const { data: prods } = await supabase.from("products").select("id, images").in("id", ids);
+    (prods ?? []).forEach((p: any) => { imageMap[p.id] = p.images?.[0] ?? null; });
+  }
+  return { order, items: list, imageMap };
 }
 
 const STEPS = [
-  { icon: "📞", title: "কল করে কনফার্ম", text: "আমরা শীঘ্রই আপনাকে কল করে অর্ডারটি নিশ্চিত করব।" },
-  { icon: "📦", title: "প্যাকেজিং ও কুরিয়ার", text: "যত্নসহকারে প্যাক করে কুরিয়ারে পাঠানো হবে।" },
-  { icon: "🚚", title: "ডেলিভারি ও পেমেন্ট", text: "পণ্য হাতে পেয়ে ক্যাশ অন ডেলিভারিতে টাকা দিন।" },
+  { n: "১", title: "কল করে কনফার্ম", text: "আমরা শীঘ্রই আপনাকে কল করে অর্ডারটি নিশ্চিত করব।" },
+  { n: "২", title: "প্যাকেজিং ও কুরিয়ার", text: "যত্নসহকারে প্যাক করে কুরিয়ারে পাঠানো হবে।" },
+  { n: "৩", title: "ডেলিভারি ও পেমেন্ট", text: "পণ্য হাতে পেয়ে ক্যাশ অন ডেলিভারিতে টাকা দিন।" },
 ];
 
 /** Build a wa.me link (BD number → 8801…) with an optional prefilled message. */
@@ -48,113 +56,119 @@ export default async function OrderPage({
     getStoreSettings(),
   ]);
   if (!data) notFound();
-  const { order, items } = data;
+  const { order, items, imageMap } = data;
+  const fullAddress = [order.address_line, order.area, order.city || order.district]
+    .filter((s: any) => s && String(s).trim())
+    .join(", ");
 
   return (
-    <div className="max-w-2xl mx-auto relative">
-      {/* celebratory hearts burst */}
-      <div aria-hidden className="pointer-events-none absolute inset-x-0 -top-4 h-40 overflow-hidden">
-        {Array.from({ length: 12 }).map((_, i) => (
-          <span
-            key={i}
-            className="absolute text-2xl"
-            style={{
-              left: `${6 + i * 8}%`,
-              color: i % 2 ? "#F0A0C0" : "#5FB4E4",
-              animation: `dc-burst 1.5s ease-out ${i * 0.07}s both`,
-            }}
-          >
-            ♥
-          </span>
-        ))}
-      </div>
-
+    <div className="max-w-2xl mx-auto">
       <div className="pt-2" />
 
-      <div className="rounded-[2rem] overflow-hidden bg-white shadow-soft ring-1 ring-brand/10">
-        {/* success header */}
-        <div className="relative bg-gradient-to-br from-brand to-accent text-white p-8 text-center">
-          <div className="mx-auto h-20 w-20 rounded-full bg-white/20 backdrop-blur flex items-center justify-center dc-pop">
-            <div className="h-14 w-14 rounded-full bg-white text-accent-dark flex items-center justify-center text-4xl font-bold">✓</div>
+      <div className="rounded-3xl overflow-hidden bg-white shadow-sm ring-1 ring-black/5">
+        {/* success header — clean, professional */}
+        <div className="border-b border-black/5 px-6 py-8 text-center">
+          <div className="mx-auto h-16 w-16 rounded-full bg-green-50 ring-1 ring-green-200 flex items-center justify-center dc-pop">
+            <span className="text-3xl text-green-600 font-bold">✓</span>
           </div>
-          <h1 className="mt-4 font-display text-2xl md:text-3xl font-bold">ধন্যবাদ! আপনার অর্ডার পেয়েছি 💕</h1>
-          <p className="mt-1 text-white/90">আমরা শীঘ্রই কল করে অর্ডারটি নিশ্চিত করব।</p>
-          <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-white/15 backdrop-blur px-4 py-1.5 text-sm">
-            অর্ডার নম্বর <span className="font-bold">{order.order_number}</span>
+          <h1 className="mt-4 font-display text-2xl md:text-[26px] font-bold text-gray-900">অর্ডার সফলভাবে গৃহীত হয়েছে</h1>
+          <p className="mt-1.5 text-gray-500 text-sm">আমরা শীঘ্রই কল করে অর্ডারটি নিশ্চিত করব। ধন্যবাদ।</p>
+          <div className="mt-4 inline-flex items-center gap-2 rounded-lg bg-gray-50 ring-1 ring-black/5 px-4 py-1.5 text-sm text-gray-600">
+            অর্ডার নম্বর <span className="font-bold text-gray-900">{order.order_number}</span>
           </div>
         </div>
 
         <div className="p-5 md:p-6">
-          {/* items */}
-          <div className="rounded-2xl bg-cream-deep/50 p-4 space-y-2 text-sm">
-            {items.map((it: any) => (
-              <div key={it.id} className="flex justify-between">
-                <span className="truncate pr-2">{it.product_name} × {it.quantity}</span>
-                <span>{taka(Number(it.line_total))}</span>
+          {/* order summary with product images */}
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-3">অর্ডার সামারি</h2>
+          <div className="rounded-2xl ring-1 ring-black/5 divide-y divide-black/5 overflow-hidden">
+            {items.map((it: any) => {
+              const img = it.product_id ? imageMap[it.product_id] : null;
+              return (
+                <div key={it.id} className="flex items-center gap-3 p-3">
+                  <div className="h-14 w-14 shrink-0 rounded-xl overflow-hidden bg-gray-100 ring-1 ring-black/5 flex items-center justify-center">
+                    {img ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={img} alt={it.product_name} className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="text-lg">🛍️</span>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-sm text-gray-900 leading-snug line-clamp-2">{it.product_name}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">পরিমাণ: {it.quantity}</p>
+                  </div>
+                  <span className="font-semibold text-sm text-gray-900 whitespace-nowrap">{taka(Number(it.line_total))}</span>
+                </div>
+              );
+            })}
+            <div className="p-3 space-y-1.5 text-sm bg-gray-50/60">
+              <div className="flex justify-between text-gray-500">
+                <span>সাবটোটাল</span>
+                <span>{taka(Number(order.subtotal ?? Number(order.total) - Number(order.shipping_fee || 0)))}</span>
               </div>
-            ))}
-            <div className="flex justify-between border-t border-black/5 pt-2">
-              <span className="text-gray-500">ডেলিভারি</span>
-              <span>{Number(order.shipping_fee) === 0 ? "ফ্রি 🎉" : taka(Number(order.shipping_fee))}</span>
-            </div>
-            <div className="flex justify-between font-bold text-lg">
-              <span>সর্বমোট</span>
-              <span className="text-accent-dark">{taka(Number(order.total))}</span>
+              <div className="flex justify-between text-gray-500">
+                <span>ডেলিভারি চার্জ</span>
+                <span>{Number(order.shipping_fee) === 0 ? "ফ্রি" : taka(Number(order.shipping_fee))}</span>
+              </div>
+              <div className="flex justify-between font-bold text-base text-gray-900 border-t border-black/5 pt-1.5">
+                <span>সর্বমোট</span>
+                <span>{taka(Number(order.total))}</span>
+              </div>
             </div>
           </div>
 
-          {/* customer */}
-          <div className="mt-4 grid sm:grid-cols-2 gap-3 text-sm">
-            <div className="rounded-2xl border border-brand/10 p-4">
+          {/* customer + billing address */}
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mt-6 mb-3">গ্রাহক ও বিলিং তথ্য</h2>
+          <div className="grid sm:grid-cols-2 gap-3 text-sm">
+            <div className="rounded-2xl ring-1 ring-black/5 p-4">
               <p className="text-gray-400 text-xs mb-1">গ্রাহক</p>
-              <p className="font-semibold">{order.customer_name}</p>
-              <p className="text-gray-600">{order.customer_phone}</p>
+              <p className="font-semibold text-gray-900">{order.customer_name}</p>
+              <p className="text-gray-600 mt-0.5">{order.customer_phone}</p>
             </div>
-            <div className="rounded-2xl border border-brand/10 p-4">
-              <p className="text-gray-400 text-xs mb-1">ডেলিভারি ঠিকানা</p>
-              <p className="text-gray-700">{order.address_line}</p>
-              <p className="mt-1 text-xs text-brand-dark">💵 ক্যাশ অন ডেলিভারি</p>
+            <div className="rounded-2xl ring-1 ring-black/5 p-4">
+              <p className="text-gray-400 text-xs mb-1">বিলিং / ডেলিভারি ঠিকানা</p>
+              <p className="text-gray-700 leading-relaxed">{fullAddress || order.address_line}</p>
+              <p className="mt-2 inline-flex items-center gap-1 rounded-md bg-green-50 text-green-700 text-xs font-medium px-2 py-0.5 ring-1 ring-green-200">💵 ক্যাশ অন ডেলিভারি</p>
             </div>
           </div>
 
           {/* next steps */}
-          <div className="mt-5">
-            <h2 className="font-display font-bold mb-3">পরবর্তী ধাপ</h2>
-            <div className="grid sm:grid-cols-3 gap-3">
-              {STEPS.map((s, i) => (
-                <div key={i} className="rounded-2xl bg-gradient-to-br from-brand-soft to-accent-soft/60 p-4 text-center">
-                  <div className="text-3xl">{s.icon}</div>
-                  <p className="mt-1 font-semibold text-sm">{s.title}</p>
-                  <p className="mt-0.5 text-xs text-gray-600">{s.text}</p>
-                </div>
-              ))}
-            </div>
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-400 mt-6 mb-3">পরবর্তী ধাপ</h2>
+          <div className="grid sm:grid-cols-3 gap-3">
+            {STEPS.map((s, i) => (
+              <div key={i} className="rounded-2xl ring-1 ring-black/5 p-4">
+                <div className="h-7 w-7 rounded-full bg-brand-soft text-brand-dark font-bold text-sm flex items-center justify-center">{s.n}</div>
+                <p className="mt-2 font-semibold text-sm text-gray-900">{s.title}</p>
+                <p className="mt-0.5 text-xs text-gray-500 leading-relaxed">{s.text}</p>
+              </div>
+            ))}
           </div>
         </div>
       </div>
 
       {/* actions */}
       <div className="mt-6 flex flex-wrap gap-3 justify-center">
-        <a href="/" className="rounded-2xl bg-brand text-white px-6 py-3 font-bold hover:bg-brand-dark transition">
-          🏠 হোমে ফিরে যান
+        <a href="/" className="rounded-xl bg-gray-900 text-white px-6 py-3 font-semibold hover:bg-gray-800 transition">
+          হোমে ফিরে যান
         </a>
         <a
           href={waLink(store.phone, `আসসালামু আলাইকুম, আমার অর্ডার নম্বর ${order.order_number} নিয়ে কথা বলতে চাই।`)}
           target="_blank"
           rel="noopener"
-          className="rounded-2xl bg-green-600 text-white px-6 py-3 font-bold hover:bg-green-700 transition inline-flex items-center gap-2"
+          className="rounded-xl bg-green-600 text-white px-6 py-3 font-semibold hover:bg-green-700 transition inline-flex items-center gap-2"
         >
           💬 WhatsApp-এ যোগাযোগ
         </a>
       </div>
 
       {/* location + trust */}
-      <div className="mt-5 rounded-2xl bg-white/70 ring-1 ring-brand/10 p-4 text-center text-sm text-gray-600">
+      <div className="mt-5 rounded-2xl bg-white ring-1 ring-black/5 p-4 text-center text-sm text-gray-500">
         <p>📍 {store.address}</p>
         <div className="mt-2 flex flex-wrap justify-center gap-2 text-xs">
-          <span className="rounded-full bg-brand-soft text-brand-dark px-3 py-1">✓ ৩ দিনের মানিব্যাক গ্যারান্টি</span>
-          <span className="rounded-full bg-accent-soft text-accent-dark px-3 py-1">✓ ফ্রি রিটার্ন</span>
-          <span className="rounded-full bg-brand-soft text-brand-dark px-3 py-1">✓ সারা দেশে ডেলিভারি</span>
+          <span className="rounded-full bg-gray-50 ring-1 ring-black/5 text-gray-600 px-3 py-1">✓ ৩ দিনের মানিব্যাক গ্যারান্টি</span>
+          <span className="rounded-full bg-gray-50 ring-1 ring-black/5 text-gray-600 px-3 py-1">✓ ফ্রি রিটার্ন</span>
+          <span className="rounded-full bg-gray-50 ring-1 ring-black/5 text-gray-600 px-3 py-1">✓ সারা দেশে ডেলিভারি</span>
         </div>
       </div>
 
