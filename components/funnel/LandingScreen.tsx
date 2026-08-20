@@ -167,7 +167,7 @@ export async function LandingScreen({
             ))}
           </div>
           <div className="mt-8 text-center">
-            <a href="#order-form" className="inline-block rounded-xl bg-brand-dark text-white px-8 py-3.5 font-semibold hover:bg-brand transition">এখনই অর্ডার করুন →</a>
+            <a href="#order-form" className="dc-btn inline-block rounded-xl px-8 py-3.5 font-semibold">এখনই অর্ডার করুন →</a>
           </div>
         </section>
 

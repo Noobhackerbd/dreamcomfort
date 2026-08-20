@@ -12,6 +12,21 @@ import { playTick, playPop, playConfirm, playError } from "@/lib/sound";
 import type { Variant } from "@/lib/types";
 import type { DeliveryArea } from "@/lib/config";
 
+/**
+ * Turn whatever the customer typed into the local BD mobile 01XXXXXXXXX, or null if
+ * it isn't a valid BD mobile. Tolerates +880 / 880 / 0088 country code, Bengali
+ * digits (০১…), and any spaces / dashes / brackets — so those never show an error.
+ */
+function toLocalPhone(raw: string): string | null {
+  const en = String(raw || "").replace(/[০-৯]/g, (ch) => "০১২৩৪৫৬৭৮৯".indexOf(ch).toString());
+  let d = en.replace(/\D/g, "");
+  if (d.startsWith("00")) d = d.slice(2);
+  if (d.startsWith("880")) d = d.slice(3);
+  else if (d.startsWith("88") && d.length > 11) d = d.slice(2);
+  if (d.length === 10 && d.startsWith("1")) d = "0" + d;
+  return /^01\d{9}$/.test(d) ? d : null;
+}
+
 interface Props {
   productId: string;
   productName: string;
@@ -81,15 +96,16 @@ export function OrderForm({
   useEffect(() => {
     const id = leadIdRef.current;
     if (!id) return;
-    const phoneDigits = phone.replace(/\D/g, "");
-    const meaningful = phoneDigits.length >= 6 || (name.trim().length >= 2 && address.trim().length >= 4);
+    const localPhone = toLocalPhone(phone);
+    const rawDigits = phone.replace(/\D/g, "");
+    const meaningful = rawDigits.length >= 6 || (name.trim().length >= 2 && address.trim().length >= 4);
     if (!meaningful) return;
     const t = setTimeout(() => {
       // Manual advanced matching: feed the customer's info to the Pixel as they type.
-      if (/^01\d{9}$/.test(phoneDigits) || name.trim().length >= 2) {
+      if (localPhone || name.trim().length >= 2) {
         const parts = name.trim().split(/\s+/);
         setAdvancedMatching({
-          phone: /^01\d{9}$/.test(phoneDigits) ? phoneDigits : undefined,
+          phone: localPhone ?? undefined,
           firstName: parts[0] || undefined,
           lastName: parts.length > 1 ? parts.slice(1).join(" ") : undefined,
         });
@@ -115,8 +131,8 @@ export function OrderForm({
   // attach the phone so the server copy carries `ph` (higher match quality).
   function markInitiated() {
     if (initiated.current) return;
-    const phoneDigits = phone.replace(/\D/g, "");
-    if (!/^01\d{9}$/.test(phoneDigits)) return; // wait until we have a real number
+    const localPhone = toLocalPhone(phone);
+    if (!localPhone) return; // wait until we have a real number
     try { if (sessionStorage.getItem("dc_ic_fired")) { initiated.current = true; return; } } catch {}
     initiated.current = true;
     try { sessionStorage.setItem("dc_ic_fired", "1"); } catch {}
@@ -124,7 +140,7 @@ export function OrderForm({
     fireEvent(
       "InitiateCheckout",
       { currency: "BDT", value: total, num_items: qty, content_ids: [productId], content_type: "product" },
-      { phone: phoneDigits, firstName: parts[0] || undefined, lastName: parts.length > 1 ? parts.slice(1).join(" ") : undefined }
+      { phone: localPhone, firstName: parts[0] || undefined, lastName: parts.length > 1 ? parts.slice(1).join(" ") : undefined }
     );
   }
 
@@ -132,10 +148,9 @@ export function OrderForm({
     e.preventDefault();
     setError(null);
 
-    const phoneDigits = phone.replace(/\D/g, "");
     const bad = {
       name: !name.trim(),
-      phone: !/^01\d{9}$/.test(phoneDigits),
+      phone: !toLocalPhone(phone),
       address: address.trim().length < 5,
     };
 
@@ -338,7 +353,7 @@ export function OrderForm({
         id="order-submit"
         type="submit"
         disabled={submitting}
-        className="dc-pulse mt-4 w-full rounded-2xl bg-brand-dark text-white px-6 py-4 text-lg font-extrabold shadow-[0_12px_30px_-6px_rgba(62,155,209,0.9)] ring-2 ring-white hover:bg-brand transition disabled:opacity-60 flex items-center justify-center gap-2"
+        className="dc-btn mt-4 w-full rounded-2xl px-6 py-4 text-lg font-bold disabled:opacity-60 flex items-center justify-center gap-2"
       >
         {submitting ? (
           "অর্ডার হচ্ছে..."
@@ -361,75 +376,11 @@ export function OrderForm({
         </p>
       </div>
 
-      {/* Premium "confirming your order" loading overlay */}
+      {/* Simple order-confirming overlay — light transparent backdrop + brand dots */}
       {submitting && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-cream/80 backdrop-blur-md">
-          {/* floating hearts */}
-          <div aria-hidden className="absolute inset-0 overflow-hidden pointer-events-none">
-            {["💙", "💗", "💙", "💗", "💙", "💗", "💙", "💗"].map((h, i) => (
-              <span
-                key={i}
-                className="absolute text-2xl"
-                style={{ left: `${5 + i * 12}%`, bottom: "-30px", animation: `dc-heart ${6 + (i % 4)}s linear ${i * 0.45}s infinite`, opacity: 0.6 }}
-              >
-                {h}
-              </span>
-            ))}
-          </div>
-
-          <div className="relative rounded-[2rem] bg-white/85 backdrop-blur-xl shadow-soft ring-1 ring-brand/15 px-9 py-10 text-center">
-            {/* Premium multi-ring loader (no logo) */}
-            <div className="relative mx-auto h-28 w-28">
-              {/* soft pulsing halo */}
-              <div
-                className="absolute inset-0 rounded-full bg-gradient-to-br from-brand/40 to-accent/40"
-                style={{ animation: "dc-ring-pulse 1.8s ease-in-out infinite" }}
-              />
-              {/* outer gradient ring */}
-              <div
-                className="absolute inset-0 rounded-full dc-loader-ring"
-                style={{
-                  background: "conic-gradient(from 0deg, transparent 0deg, #5FB4E4 130deg, #F0A0C0 250deg, transparent 360deg)",
-                  animation: "dc-spin 1.1s linear infinite",
-                }}
-              />
-              {/* inner counter-rotating ring */}
-              <div
-                className="absolute inset-3 rounded-full dc-loader-ring--inner"
-                style={{
-                  background: "conic-gradient(from 200deg, transparent 0deg, #F0A0C0 120deg, #5FB4E4 260deg, transparent 360deg)",
-                  animation: "dc-spin-rev 0.9s linear infinite",
-                }}
-              />
-              {/* orbiting dot */}
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span
-                  className="block h-3 w-3 rounded-full bg-accent shadow"
-                  style={{ animation: "dc-orbit 1.4s linear infinite" }}
-                />
-              </div>
-              {/* pulsing core */}
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span
-                  className="block h-6 w-6 rounded-full bg-gradient-to-br from-brand to-accent"
-                  style={{ animation: "dc-core 1.2s ease-in-out infinite" }}
-                />
-              </div>
-            </div>
-
-            <p className="mt-6 font-display text-xl font-bold text-accent-dark">আপনার অর্ডার নিশ্চিত হচ্ছে</p>
-            <div className="mt-3 flex justify-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-accent animate-bounce" style={{ animationDelay: "0ms" }} />
-              <span className="h-2.5 w-2.5 rounded-full bg-brand animate-bounce" style={{ animationDelay: "150ms" }} />
-              <span className="h-2.5 w-2.5 rounded-full bg-accent animate-bounce" style={{ animationDelay: "300ms" }} />
-            </div>
-            <p className="mt-3 text-sm text-gray-500">একটু অপেক্ষা করুন 💕</p>
-
-            {/* indeterminate progress */}
-            <div className="mt-5 h-1.5 w-52 mx-auto rounded-full bg-brand-soft overflow-hidden">
-              <div className="h-full w-1/3 rounded-full bg-gradient-to-r from-brand to-accent" style={{ animation: "dc-progress 1.3s ease-in-out infinite" }} />
-            </div>
-          </div>
+        <div className="fixed inset-0 z-[90] flex flex-col items-center justify-center bg-white/55 backdrop-blur-sm">
+          <span className="dc-dots" role="status" aria-label="অর্ডার নিশ্চিত হচ্ছে" />
+          <p className="mt-9 text-sm font-medium text-brand-dark">অর্ডার নিশ্চিত হচ্ছে...</p>
         </div>
       )}
 

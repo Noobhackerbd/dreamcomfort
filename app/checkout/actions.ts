@@ -33,8 +33,25 @@ export interface PlaceOrderResult {
   error?: string;
 }
 
+/**
+ * Turn whatever the customer typed into the local BD mobile 01XXXXXXXXX, or null if
+ * it isn't a valid BD mobile. Tolerates +880 / 880 / 0088 country code, Bengali
+ * digits (০১…), and any spaces / dashes / brackets.
+ */
+function toLocalBdPhone(raw: string): string | null {
+  const en = String(raw || "").replace(/[০-৯]/g, (ch) => "০১২৩৪৫৬৭৮৯".indexOf(ch).toString());
+  let d = en.replace(/\D/g, "");
+  if (d.startsWith("00")) d = d.slice(2);                       // 0088… → 88…
+  if (d.startsWith("880")) d = d.slice(3);                      // strip country code
+  else if (d.startsWith("88") && d.length > 11) d = d.slice(2); // stray 88 prefix
+  if (d.length === 10 && d.startsWith("1")) d = "0" + d;        // 1XXXXXXXXX → 01XXXXXXXXX
+  return /^01\d{9}$/.test(d) ? d : null;
+}
+
 /** Normalize a BD phone to 8801XXXXXXXXX for storage/matching. */
 function normalizePhone(raw: string): string {
+  const local = toLocalBdPhone(raw);
+  if (local) return "88" + local; // 8801XXXXXXXXX
   let d = raw.replace(/\D/g, "");
   if (d.startsWith("00")) d = d.slice(2);
   if (d.startsWith("0")) d = "88" + d;
@@ -52,11 +69,11 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
   try {
     const name = input.name?.trim();
     const address = input.address?.trim();
-    const phoneDigits = (input.phone || "").replace(/\D/g, "");
+    const localPhone = toLocalBdPhone(input.phone || "");
     const deliveryArea: DeliveryArea = input.deliveryArea === "outside" ? "outside" : "inside";
 
     if (!name) return { ok: false, error: "নাম লিখুন।" };
-    if (!/^01\d{9}$/.test(phoneDigits))
+    if (!localPhone)
       return { ok: false, error: "সঠিক মোবাইল নম্বর লিখুন (০১XXXXXXXXX)।" };
     if (!address || address.length < 5)
       return { ok: false, error: "সম্পূর্ণ ঠিকানা লিখুন।" };
