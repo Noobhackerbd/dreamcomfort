@@ -111,7 +111,7 @@ export function ProductFunnel({
         {/* Product picker — directly below the hero photo (all screens) */}
         {list.length > 1 && (
           <div id="product-picker" className="mt-4 scroll-mt-24">
-            <label className="block text-sm font-medium mb-2">আপনার পছন্দের পণ্য বেছে নিন 👇</label>
+            <label className="block text-sm font-medium mb-2">আপনার পছন্দের পণ্য বেছে নিন</label>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {list.map((x) => (
                 <ProductChip key={x.id} p={x} on={x.id === selectedId} onSelect={() => { setSelectedId(x.id); playSelect(); }} />
@@ -123,7 +123,7 @@ export function ProductFunnel({
 
       <div className="min-w-0">
         {urgencyText && (
-          <span className="inline-block rounded-full bg-accent-soft text-accent-dark text-sm px-3 py-1 mb-3 dc-wiggle">
+          <span className="inline-block rounded-full bg-accent-soft text-accent-dark text-sm px-3 py-1 mb-3">
             {urgencyText}
           </span>
         )}

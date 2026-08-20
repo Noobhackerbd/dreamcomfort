@@ -73,7 +73,7 @@ export async function LandingScreen({
 
   const Logo = (
     <div className="flex flex-col items-center pt-8 pb-2">
-      <Image src={landing.logoUrl || "/logo.png"} alt={STORE.name} width={663} height={252} priority sizes="(max-width: 768px) 320px, 420px" className="dc-float h-40 md:h-52 w-auto object-contain drop-shadow-sm" />
+      <Image src={landing.logoUrl || "/logo.png"} alt={STORE.name} width={663} height={252} priority sizes="(max-width: 768px) 320px, 420px" className="h-40 md:h-52 w-auto object-contain drop-shadow-sm" />
     </div>
   );
 
@@ -136,10 +136,10 @@ export async function LandingScreen({
           <div className="grid gap-4 sm:grid-cols-2">
             {USE_REASONS.map((r, i) => (
               <Reveal key={i} delay={i * 80}>
-                <div className="flex gap-4 rounded-[1.5rem] bg-white p-5 h-full shadow-sm ring-1 ring-brand/5 hover:shadow-soft transition">
-                  <div className="shrink-0 h-12 w-12 rounded-2xl bg-gradient-to-br from-brand-soft to-accent-soft flex items-center justify-center text-2xl">{r.icon}</div>
+                <div className="flex gap-4 rounded-2xl bg-white p-5 h-full shadow-sm ring-1 ring-black/5 hover:shadow-md transition">
+                  <div className="shrink-0 h-11 w-11 rounded-xl bg-brand-soft flex items-center justify-center text-xl">{r.icon}</div>
                   <div>
-                    <h3 className="font-display font-bold text-accent-dark">{r.title}</h3>
+                    <h3 className="font-display font-bold text-gray-900">{r.title}</h3>
                     <p className="mt-1 text-sm text-gray-600 leading-relaxed">{r.text}</p>
                   </div>
                 </div>
@@ -155,9 +155,9 @@ export async function LandingScreen({
           <div className="grid gap-4 md:grid-cols-2">
             {DOUBLE_LAYER.map((d, i) => (
               <Reveal key={i} delay={i * 70}>
-                <div className="rounded-[1.5rem] bg-white p-5 h-full shadow-sm ring-1 ring-brand/5 hover:shadow-soft transition">
+                <div className="rounded-2xl bg-white p-5 h-full shadow-sm ring-1 ring-black/5 hover:shadow-md transition">
                   <div className="flex items-center gap-3">
-                    <span className="h-10 w-10 rounded-xl bg-brand-soft flex items-center justify-center text-xl">{d.icon}</span>
+                    <span className="h-10 w-10 rounded-xl bg-brand-soft flex items-center justify-center text-lg">{d.icon}</span>
                     <h3 className="font-display font-bold">{d.title}</h3>
                   </div>
                   <p className="mt-3 text-sm text-gray-600">{d.text}</p>
@@ -167,7 +167,7 @@ export async function LandingScreen({
             ))}
           </div>
           <div className="mt-8 text-center">
-            <a href="#order-form" className="inline-block rounded-2xl bg-accent-dark text-white px-8 py-3.5 font-bold shadow-pink hover:bg-accent transition dc-pulse">🛒 এখনই অর্ডার করুন</a>
+            <a href="#order-form" className="inline-block rounded-xl bg-accent-dark text-white px-8 py-3.5 font-semibold hover:bg-accent transition">এখনই অর্ডার করুন →</a>
           </div>
         </section>
 
@@ -180,8 +180,8 @@ export async function LandingScreen({
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {WHY_US.map((w, i) => (
               <Reveal key={i} delay={i * 80}>
-                <div className="rounded-[1.5rem] bg-white p-5 h-full text-center shadow-sm ring-1 ring-accent/10 hover:shadow-soft hover:-translate-y-1 transition-all">
-                  <div className="mx-auto h-14 w-14 rounded-2xl bg-gradient-to-br from-brand to-accent flex items-center justify-center text-2xl text-white">{w.icon}</div>
+                <div className="rounded-2xl bg-white p-5 h-full text-center shadow-sm ring-1 ring-black/5 hover:shadow-md transition-all">
+                  <div className="mx-auto h-12 w-12 rounded-xl bg-brand-soft flex items-center justify-center text-xl">{w.icon}</div>
                   <h3 className="mt-3 font-display font-bold">{w.title}</h3>
                   <p className="mt-1 text-sm text-gray-600 leading-relaxed">{w.text}</p>
                 </div>
@@ -193,7 +193,7 @@ export async function LandingScreen({
         {landing.reviews.length > 0 && (
           <section className="py-10">
             <Reveal>
-              <h2 className="font-display text-2xl md:text-3xl font-bold text-center mb-8">গ্রাহকদের ভালোবাসা 💕</h2>
+              <h2 className="font-display text-2xl md:text-3xl font-bold text-center mb-8">গ্রাহকদের অভিজ্ঞতা</h2>
             </Reveal>
             <div className="grid gap-4 md:grid-cols-3">
               {landing.reviews.map((r, i) => (
@@ -220,8 +220,8 @@ export async function LandingScreen({
 
         <section className="py-10">
           <Reveal>
-            <div className="rounded-[2rem] bg-gradient-to-br from-brand to-accent text-white p-8 md:p-10 text-center shadow-soft">
-              <div className="text-6xl dc-float">🛡️</div>
+            <div className="rounded-3xl bg-gradient-to-br from-brand to-accent text-white p-8 md:p-10 text-center shadow-soft">
+              <div className="text-4xl">🛡️</div>
               <h2 className="mt-3 font-display text-2xl md:text-3xl font-bold">{landing.guaranteeTitle}</h2>
               <p className="mt-2 text-white/90 max-w-xl mx-auto">{landing.guaranteeText}</p>
               <a href="#order-form" className="mt-6 inline-block rounded-2xl bg-white text-accent-dark px-8 py-3 font-bold hover:scale-105 transition">{landing.ctaText} →</a>
