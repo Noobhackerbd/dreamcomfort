@@ -205,7 +205,9 @@ img {
   animation: dc-shine 3s linear infinite;
 }
 .dc-marquee { animation: dc-marquee 20s linear infinite; }
-.dc-blob { animation: dc-blob 16s ease-in-out infinite; filter: blur(28px); }
+/* Static soft blobs — keep the gentle gradient glow but no infinite animation,
+   so weak phones don't repaint a large blurred layer every frame. */
+.dc-blob { filter: blur(28px); }
 
 .dc-heart {
   position: fixed;

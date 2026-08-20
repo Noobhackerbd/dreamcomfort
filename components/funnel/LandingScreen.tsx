@@ -10,7 +10,6 @@ import { STORE } from "@/lib/config";
 import { taka } from "@/lib/format";
 import { ProductFunnel } from "@/components/funnel/ProductFunnel";
 import { Reveal } from "@/components/Reveal";
-import { HeartsBg } from "@/components/funnel/HeartsBg";
 import { LandingBodyClass } from "@/components/funnel/LandingBodyClass";
 import { StickyOrderButton } from "@/components/funnel/StickyOrderButton";
 import { ProductShowcase } from "@/components/funnel/ProductShowcase";
@@ -97,7 +96,6 @@ export async function LandingScreen({
   return (
     <div className="-mt-8 relative">
       <LandingBodyClass />
-      <HeartsBg />
 
       <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden -z-10">
         <div className="dc-blob absolute -top-10 -left-10 h-72 w-72 rounded-full bg-brand-light/40" />

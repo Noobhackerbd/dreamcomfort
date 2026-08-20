@@ -350,9 +350,16 @@ export function OrderForm({
           </>
         )}
       </button>
-      <p className="mt-2 text-center text-xs text-gray-400">
-        💵 ক্যাশ অন ডেলিভারি {freeDelivery ? "· ফ্রি ডেলিভারি" : ""} · অর্ডারের পর কল করে কনফার্ম করা হবে
-      </p>
+      <div className="mt-3 rounded-xl bg-green-50 border border-green-300 px-3 py-2.5 text-center shadow-sm">
+        <p className="text-sm font-bold text-green-800 flex flex-wrap items-center justify-center gap-1.5">
+          <span className="text-base">💵</span>
+          <span>
+            সম্পূর্ণ{" "}
+            <span className="rounded-md bg-green-600 text-white px-1.5 py-0.5">ফ্রি</span>{" "}
+            ক্যাশ অন ডেলিভারি, কোন অগ্রিম টাকা দিতে হবে না
+          </span>
+        </p>
+      </div>
 
       {/* Premium "confirming your order" loading overlay */}
       {submitting && (

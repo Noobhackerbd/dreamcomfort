@@ -183,10 +183,11 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
       }
     })();
 
-    // Reliable tracking + admin push — run CONCURRENTLY and await together, so both
-    // complete before the response (survives serverless hosts that kill post-response
-    // background work) while adding only ~max(one round-trip) of latency, not the sum.
-    // A hard timeout guarantees checkout never hangs if Meta/push is slow.
+    // Tracking (Meta CAPI) + admin push. Speed rule: NEVER block the customer's
+    // "Order confirmed" response on Facebook's round-trip. The browser Pixel on the
+    // thank-you page is the Purchase safety net (deduped by event_id), so CAPI runs
+    // fully backgrounded. Push is awaited with a short cap so the shop owner still gets
+    // the alert reliably, but checkout stays snappy even if push is slow.
     {
       // Read request-scoped values (headers/cookies) now, before any await.
       const host = headers().get("host");
@@ -197,7 +198,9 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
       const contents = lineItems.map((li) => ({ id: li.product_id, quantity: li.quantity, item_price: li.unit_price }));
       const numItems = lineItems.reduce((n, li) => n + li.quantity, 0);
 
-      const capiTask = (async () => {
+      // CAPI — fire-and-forget. Not awaited: removes the Facebook round-trip from the
+      // checkout critical path. Browser Pixel on /order/[n] backstops the Purchase.
+      void (async () => {
         const metaCfg = await getMetaSettings();
         if (!metaCfg.capiToken || !metaCfg.pixelId) return;
         const res = await sendServerEvent({
@@ -231,8 +234,9 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
           fbtrace_id: res.fbtrace_id,
           payload: { order_number: snap.order_number },
         });
-      })().catch(() => {}); // swallow late rejections (e.g. after the timeout)
+      })().catch(() => {}); // swallow late rejections
 
+      // Push — awaited, but capped short so a slow push never stalls the customer.
       const pushTask = sendOrderPush({
         id: order.id,
         orderNumber: order.order_number,
@@ -240,10 +244,8 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
         customerName: name,
         area: input.area?.trim() || input.city?.trim() || null,
       }).catch(() => {});
-
-      const timeout = new Promise<void>((resolve) => setTimeout(resolve, 4000));
-      // Both tasks never throw (internal try/catch); allSettled is belt-and-suspenders.
-      await Promise.race([Promise.allSettled([capiTask, pushTask]), timeout]);
+      const pushCap = new Promise<void>((resolve) => setTimeout(resolve, 2500));
+      await Promise.race([pushTask, pushCap]);
     }
 
     return { ok: true, orderNumber: order.order_number };
