@@ -192,7 +192,7 @@ export function OrderForm({
       className="rounded-[2rem] border border-white bg-white/80 backdrop-blur p-5 md:p-6 shadow-soft ring-1 ring-brand/10"
     >
       <div className="flex items-center gap-2 mb-4">
-        <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-brand to-accent text-white">🛒</span>
+        <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-brand to-brand-dark text-white">🛒</span>
         <h3 className="font-display text-lg font-bold">অর্ডার করতে ফর্মটি পূরণ করুন</h3>
       </div>
 
@@ -338,7 +338,7 @@ export function OrderForm({
         id="order-submit"
         type="submit"
         disabled={submitting}
-        className="dc-pulse mt-4 w-full rounded-2xl bg-accent-dark text-white px-6 py-4 text-lg font-extrabold shadow-[0_12px_30px_-6px_rgba(231,123,166,0.95)] ring-2 ring-white hover:bg-accent transition disabled:opacity-60 flex items-center justify-center gap-2"
+        className="dc-pulse mt-4 w-full rounded-2xl bg-brand-dark text-white px-6 py-4 text-lg font-extrabold shadow-[0_12px_30px_-6px_rgba(62,155,209,0.9)] ring-2 ring-white hover:bg-brand transition disabled:opacity-60 flex items-center justify-center gap-2"
       >
         {submitting ? (
           "অর্ডার হচ্ছে..."

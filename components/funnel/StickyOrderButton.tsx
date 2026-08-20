@@ -57,7 +57,7 @@ export function StickyOrderButton({ label }: { label: string }) {
     <button
       type="button"
       onClick={onClick}
-      className="lg:hidden fixed bottom-4 inset-x-3 z-50 dc-pulse flex items-center justify-center gap-2 rounded-2xl bg-accent-dark text-white px-5 py-4 text-base font-bold shadow-[0_10px_30px_-4px_rgba(231,123,166,0.85)] ring-2 ring-white"
+      className="lg:hidden fixed bottom-4 inset-x-3 z-50 dc-pulse flex items-center justify-center gap-2 rounded-2xl bg-brand-dark text-white px-5 py-4 text-base font-bold shadow-[0_10px_30px_-4px_rgba(62,155,209,0.8)] ring-2 ring-white"
     >
       <span className="text-xl">🛒</span>
       {label}

@@ -104,7 +104,7 @@ export async function LandingScreen({
 
       <div className="relative z-10">{Logo}</div>
 
-      <div className="relative z-10 overflow-hidden rounded-full mx-auto max-w-3xl bg-gradient-to-r from-brand to-accent text-white text-sm shadow-soft">
+      <div className="relative z-10 overflow-hidden rounded-full mx-auto max-w-3xl bg-gradient-to-r from-brand to-brand-dark text-white text-sm shadow-soft">
         <div className="flex whitespace-nowrap py-2 dc-marquee">
           {Array.from({ length: 2 }).map((_, k) => (
             <span key={k} className="flex shrink-0">
@@ -167,7 +167,7 @@ export async function LandingScreen({
             ))}
           </div>
           <div className="mt-8 text-center">
-            <a href="#order-form" className="inline-block rounded-xl bg-accent-dark text-white px-8 py-3.5 font-semibold hover:bg-accent transition">এখনই অর্ডার করুন →</a>
+            <a href="#order-form" className="inline-block rounded-xl bg-brand-dark text-white px-8 py-3.5 font-semibold hover:bg-brand transition">এখনই অর্ডার করুন →</a>
           </div>
         </section>
 
@@ -220,11 +220,11 @@ export async function LandingScreen({
 
         <section className="py-10">
           <Reveal>
-            <div className="rounded-3xl bg-gradient-to-br from-brand to-accent text-white p-8 md:p-10 text-center shadow-soft">
+            <div className="rounded-3xl bg-gradient-to-br from-brand to-brand-dark text-white p-8 md:p-10 text-center shadow-soft">
               <div className="text-4xl">🛡️</div>
               <h2 className="mt-3 font-display text-2xl md:text-3xl font-bold">{landing.guaranteeTitle}</h2>
               <p className="mt-2 text-white/90 max-w-xl mx-auto">{landing.guaranteeText}</p>
-              <a href="#order-form" className="mt-6 inline-block rounded-2xl bg-white text-accent-dark px-8 py-3 font-bold hover:scale-105 transition">{landing.ctaText} →</a>
+              <a href="#order-form" className="mt-6 inline-block rounded-2xl bg-white text-brand-dark px-8 py-3 font-bold hover:scale-105 transition">{landing.ctaText} →</a>
             </div>
           </Reveal>
         </section>

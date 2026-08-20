@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import Image from "next/image";
-import { Fredoka, Noto_Sans_Bengali } from "next/font/google";
+import { Plus_Jakarta_Sans, Hind_Siliguri } from "next/font/google";
 import "./globals.css";
 import { MetaPixel } from "@/components/MetaPixel";
 import { VisitTracker } from "@/components/VisitTracker";
@@ -8,14 +8,16 @@ import { ScrollTracker } from "@/components/ScrollTracker";
 import { getMetaSettings, getStoreSettings } from "@/lib/settings";
 
 // Self-hosted via next/font — no render-blocking Google Fonts request, auto-preloaded.
-const fredoka = Fredoka({
+// Premium, serious type: geometric Jakarta for Latin/numbers, clean Hind Siliguri for
+// Bangla (matches the admin panel) — replaces the earlier playful, rounded Fredoka.
+const display = Plus_Jakarta_Sans({
   subsets: ["latin"],
-  weight: ["500", "600", "700"], // display/headings only — drop 400 to trim the font payload
-  variable: "--font-fredoka",
+  weight: ["500", "600", "700", "800"],
+  variable: "--font-display",
   display: "swap",
 });
-const notoBengali = Noto_Sans_Bengali({
-  subsets: ["bengali"],
+const notoBengali = Hind_Siliguri({
+  subsets: ["bengali", "latin"],
   weight: ["400", "500", "600", "700"],
   variable: "--font-bengali",
   display: "swap",
@@ -49,7 +51,7 @@ export const viewport: Viewport = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const [landing, meta, store] = await Promise.all([getLandingConfig(), getMetaSettings(), getStoreSettings()]);
   return (
-    <html lang="bn" className={`${fredoka.variable} ${notoBengali.variable}`}>
+    <html lang="bn" className={`${display.variable} ${notoBengali.variable}`}>
       <head>
         {/* Connect to Meta Pixel origin early → faster tracking load, better LCP/TBT. */}
         <link rel="preconnect" href="https://connect.facebook.net" crossOrigin="" />
