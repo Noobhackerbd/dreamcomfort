@@ -9,17 +9,19 @@ export const dynamic = "force-dynamic";
 
 async function getOrder(orderNumber: string) {
   const supabase = getServerSupabase();
+  // One round-trip: order + its items embedded via the FK relationship.
   const { data: order } = await supabase
     .from("orders")
-    .select("*")
+    .select("*, order_items(*)")
     .eq("order_number", orderNumber)
     .single();
   if (!order) return null;
-  const { data: items } = await supabase
-    .from("order_items")
-    .select("*")
-    .eq("order_id", order.id);
-  const list = items ?? [];
+  let list: any[] = (order as any).order_items ?? [];
+  // Fallback if the embedded relation returned nothing (schema without FK hint).
+  if (!list.length) {
+    const { data: items } = await supabase.from("order_items").select("*").eq("order_id", order.id);
+    list = items ?? [];
+  }
   // Fetch a thumbnail for each ordered product.
   const ids = Array.from(new Set(list.map((it: any) => it.product_id).filter(Boolean)));
   const imageMap: Record<string, string | null> = {};

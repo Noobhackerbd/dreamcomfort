@@ -82,7 +82,10 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
     const supabase = getServerSupabase();
 
     // Re-fetch prices from DB — never trust prices sent from the browser.
+    // Kick off the shipping-fee lookup CONCURRENTLY (independent round-trip) so the
+    // two DB reads overlap instead of running one-after-another → faster checkout.
     const ids = input.items.map((i) => i.id);
+    const shippingP = resolveShippingFee(deliveryArea);
     const { data: products, error: pErr } = await supabase
       .from("products")
       .select("id, name_bn, name_en, price")
@@ -113,7 +116,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
       })
       .filter(Boolean) as any[];
 
-    const shippingFee = await resolveShippingFee(deliveryArea);
+    const shippingFee = await shippingP;
     const total = subtotal + shippingFee;
 
     // Meta matching signals + shared event_id (used later for CAPI Purchase dedup).
@@ -200,11 +203,11 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
       }
     })();
 
-    // Tracking (Meta CAPI) + admin push. Speed rule: NEVER block the customer's
-    // "Order confirmed" response on Facebook's round-trip. The browser Pixel on the
-    // thank-you page is the Purchase safety net (deduped by event_id), so CAPI runs
-    // fully backgrounded. Push is awaited with a short cap so the shop owner still gets
-    // the alert reliably, but checkout stays snappy even if push is slow.
+    // Tracking (Meta CAPI) + admin push — BOTH fully backgrounded, nothing awaited.
+    // The customer's "Order confirmed" response returns the instant the order rows are
+    // saved. The browser Pixel on the thank-you page is the Purchase safety net (deduped
+    // by event_id) so CAPI loses nothing; the admin dashboard also polls for new orders,
+    // so a slow push never stalls checkout.
     {
       // Read request-scoped values (headers/cookies) now, before any await.
       const host = headers().get("host");
@@ -253,16 +256,14 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
         });
       })().catch(() => {}); // swallow late rejections
 
-      // Push — awaited, but capped short so a slow push never stalls the customer.
-      const pushTask = sendOrderPush({
+      // Push — fire-and-forget, not awaited.
+      void sendOrderPush({
         id: order.id,
         orderNumber: order.order_number,
         total: snap.total,
         customerName: name,
         area: input.area?.trim() || input.city?.trim() || null,
       }).catch(() => {});
-      const pushCap = new Promise<void>((resolve) => setTimeout(resolve, 2500));
-      await Promise.race([pushTask, pushCap]);
     }
 
     return { ok: true, orderNumber: order.order_number };

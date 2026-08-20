@@ -147,7 +147,9 @@ export function ProductFunnel({
         </div>
 
         <div className="mt-4 flex items-center gap-2 text-sm">
-          <span className="text-amber-400 text-lg">★★★★★</span>
+          <span className="text-amber-400 text-base tracking-tight">★★★★★</span>
+          <span className="font-semibold text-gray-800">৪.৯</span>
+          <span className="text-gray-300">·</span>
           <span className="text-gray-500">{statText}</span>
         </div>
 
