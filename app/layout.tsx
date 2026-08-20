@@ -23,7 +23,7 @@ const notoBengali = Hind_Siliguri({
   display: "swap",
 });
 import { Header } from "@/components/Header";
-import { HideOnAdmin, SiteMain } from "@/components/SiteChrome";
+import { HideOnAdmin, HeaderGate, SiteMain } from "@/components/SiteChrome";
 import { STORE, STORE_NAME } from "@/lib/config";
 import { getLandingConfig } from "@/lib/landing";
 
@@ -58,9 +58,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <link rel="dns-prefetch" href="https://connect.facebook.net" />
       </head>
       <body className="min-h-screen antialiased flex flex-col">
-        <HideOnAdmin>
+        <HeaderGate>
           <Header logoUrl={landing.logoUrl || "/logo.png"} phone={store.phone} />
-        </HideOnAdmin>
+        </HeaderGate>
 
         <SiteMain>{children}</SiteMain>
 

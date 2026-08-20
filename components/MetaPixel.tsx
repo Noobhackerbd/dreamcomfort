@@ -169,7 +169,43 @@ function loadPixel() {
   // setAdvancedMatching) with every browser event.
   const am = currentMatching(xid);
   window.fbq!("init", PIXEL_ID, Object.keys(am).length ? am : undefined);
-  window.fbq!("track", "PageView");
+  firePageView();
+}
+
+/**
+ * PageView deduplicated across browser + server. The browser Pixel event carries an
+ * eventID and the SAME id is sent to the server Conversions API — this is what raises
+ * "event coverage" (previously PageView had no eventID and no CAPI copy, so coverage
+ * sat near ~46%). Fire-and-forget so it never slows the page.
+ */
+function firePageView() {
+  if (typeof window === "undefined" || !window.fbq) return;
+  const eventId =
+    (crypto as any)?.randomUUID
+      ? crypto.randomUUID()
+      : "pv-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2);
+  const url = window.location.href;
+  const eventTime = Math.floor(Date.now() / 1000);
+  const fbclid = new URLSearchParams(window.location.search).get("fbclid") ?? undefined;
+
+  // 1) Browser Pixel PageView WITH an explicit eventID (the dedup key).
+  window.fbq!("track", "PageView", {}, { eventID: eventId });
+
+  // 2) Browser-copy log (fire-and-forget).
+  fetch("/api/track-log", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ eventName: "PageView", eventId, payload: { url } }),
+    keepalive: true,
+  }).catch(() => {});
+
+  // 3) Server PageView via CAPI with the SAME event_id → deduplicated + covered.
+  fetch("/api/capi", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ eventName: "PageView", eventId, eventTime, url, fbclid }),
+    keepalive: true,
+  }).catch(() => {});
 }
 
 export function MetaPixel({ pixelId }: { pixelId?: string }) {
