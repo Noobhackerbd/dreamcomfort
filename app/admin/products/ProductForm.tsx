@@ -11,6 +11,16 @@ interface Props {
   categories: Category[];
 }
 
+// Same rule as the server (actions.ts) so the previewed link matches the saved slug.
+function slugify(input: string): string {
+  const base = input
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9ঀ-৿]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return base;
+}
+
 export function ProductForm({ initial, categories }: Props) {
   const router = useRouter();
   const [nameBn, setNameBn] = useState(initial?.name_bn ?? "");
@@ -30,6 +40,30 @@ export function ProductForm({ initial, categories }: Props) {
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  // Direct ad link — /?color=<slug> pre-selects this product on the landing page.
+  const effectiveSlug = slugify(slug || nameEn || nameBn);
+  const origin =
+    (process.env.NEXT_PUBLIC_SITE_URL && process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "")) ||
+    (typeof window !== "undefined" ? window.location.origin : "https://dreamcomfortbd.com");
+  const directLink = effectiveSlug ? `${origin}/?color=${effectiveSlug}` : "";
+
+  async function copyLink() {
+    if (!directLink) return;
+    try {
+      await navigator.clipboard.writeText(directLink);
+    } catch {
+      const t = document.createElement("textarea");
+      t.value = directLink;
+      document.body.appendChild(t);
+      t.select();
+      try { document.execCommand("copy"); } catch {}
+      document.body.removeChild(t);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1600);
+  }
 
   async function onUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
@@ -126,6 +160,31 @@ export function ProductForm({ initial, categories }: Props) {
           <label className="block text-sm mb-1">স্লাগ (URL, ঐচ্ছিক)</label>
           <input value={slug} onChange={(e) => setSlug(e.target.value)} placeholder="premium-cotton-bedsheet" className={cls} />
         </div>
+      </div>
+
+      {/* Direct ad link — opens the landing page with THIS product pre-selected. */}
+      <div className="rounded-xl border border-brand/25 bg-brand-soft/40 p-3.5">
+        <label className="block text-sm font-semibold mb-1.5">🔗 ডিরেক্ট অ্যাড লিংক</label>
+        <div className="flex items-center gap-2">
+          <input
+            readOnly
+            value={directLink || "প্রথমে নাম বা স্লাগ লিখুন…"}
+            onFocus={(e) => e.currentTarget.select()}
+            className="flex-1 min-w-0 rounded-lg border bg-white px-3 py-2 text-sm font-mono text-brand-dark"
+          />
+          <button
+            type="button"
+            onClick={copyLink}
+            disabled={!directLink}
+            className="shrink-0 rounded-lg bg-brand text-white px-4 py-2 text-sm font-medium hover:bg-brand-dark disabled:opacity-50"
+          >
+            {copied ? "✓ কপি হয়েছে" : "কপি করুন"}
+          </button>
+        </div>
+        <p className="text-xs text-gray-500 mt-1.5">
+          Facebook/বিজ্ঞাপনে এই লিংক দিলে ল্যান্ডিং পেজে এই পণ্যটি অটো-সিলেক্ট হয়ে খুলবে।
+          {!slug.trim() && " (স্লাগ খালি — নাম থেকে অটো তৈরি হচ্ছে; সেভ করার পর লিংক পাকা হবে।)"}
+        </p>
       </div>
 
       <div className="grid md:grid-cols-4 gap-4">

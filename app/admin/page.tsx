@@ -48,21 +48,42 @@ async function getStats(rangeDays: number) {
     return out;
   }
 
+  // Soft-delete aware: if the orders table has a `deleted_at` column, EXCLUDE trashed
+  // orders from EVERY dashboard count, revenue figure, chart and top-product tally.
+  // Resilient — if the migration hasn't run yet the column is absent, so we simply skip
+  // the filter and nothing breaks.
+  const delProbe = await supabase.from("orders").select("deleted_at").limit(1);
+  const hasTrash = !(delProbe.error && (delProbe.error as any).code === "42703");
+  const ordersLive = (sel: string, opts?: any) => {
+    let q: any = supabase.from("orders").select(sel, opts);
+    if (hasTrash) q = q.is("deleted_at", null);
+    return q;
+  };
+  // Top products — exclude items that belong to trashed orders (via an inner join).
+  const topItemsQuery = hasTrash
+    ? supabase.from("order_items").select("product_name, quantity, orders!inner(deleted_at)").is("orders.deleted_at", null)
+    : supabase.from("order_items").select("product_name, quantity");
+  // Today's ordered products (with image) — also skip trashed orders.
+  let todayItemsQuery: any = supabase
+    .from("order_items")
+    .select("order_id, product_id, product_name, quantity, products(images), orders!inner(created_at)")
+    .gte("orders.created_at", todayStartUtc);
+  if (hasTrash) todayItemsQuery = todayItemsQuery.is("orders.deleted_at", null);
+
   const [productsRes, ordersRes, pendingRes, twoWinRes, recentRes, lowStockRes, itemsRes, abandonedRes, bookedRes, visitsRes, prevVisitsRes, todayItemsRes, resetRes] =
     await Promise.all([
       supabase.from("products").select("id", { count: "exact", head: true }),
-      supabase.from("orders").select("id", { count: "exact", head: true }),
-      supabase.from("orders").select("id", { count: "exact", head: true }).eq("status", "pending"),
-      supabase.from("orders").select("total, created_at, status, area, city, district").gte("created_at", prevStart),
-      supabase.from("orders").select("id, order_number, customer_name, total, status, created_at").order("created_at", { ascending: false }).limit(8),
+      ordersLive("id", { count: "exact", head: true }),
+      ordersLive("id", { count: "exact", head: true }).eq("status", "pending"),
+      ordersLive("total, created_at, status, area, city, district").gte("created_at", prevStart),
+      ordersLive("id, order_number, customer_name, total, status, created_at").order("created_at", { ascending: false }).limit(8),
       supabase.from("products").select("id, name_bn, name_en, stock").lte("stock", 5).order("stock", { ascending: true }).limit(8),
-      supabase.from("order_items").select("product_name, quantity"),
+      topItemsQuery,
       supabase.from("abandoned_carts").select("id", { count: "exact", head: true }).eq("status", "abandoned"),
-      supabase.from("orders").select("id, order_number, customer_name, customer_phone, booked_date, total, status").eq("is_booked", true).not("booked_date", "is", null).not("status", "in", "(delivered,cancelled,returned)").order("booked_date", { ascending: true }).limit(60),
+      ordersLive("id, order_number, customer_name, customer_phone, booked_date, total, status").eq("is_booked", true).not("booked_date", "is", null).not("status", "in", "(delivered,cancelled,returned)").order("booked_date", { ascending: true }).limit(60),
       fetchAllVisits(winStart),
       supabase.from("page_visits").select("visitor_id", { count: "exact", head: true }).gte("created_at", prevStart).lt("created_at", winStart),
-      // Today's ordered products (with image) — join orders for the date filter + products for the image.
-      supabase.from("order_items").select("order_id, product_id, product_name, quantity, products(images), orders!inner(created_at)").gte("orders.created_at", todayStartUtc),
+      todayItemsQuery,
       // Optional daily-reset baseline (PIN-protected reset button in the dashboard).
       supabase.from("settings").select("value").eq("key", "dashboard_daily_reset").maybeSingle(),
     ]);
@@ -171,9 +192,9 @@ async function getStats(rangeDays: number) {
 
   // Booked reminders.
   const cutoff = new Date(now + DHAKA_OFFSET_MS + 3 * 86400000).toISOString().slice(0, 10);
-  const bookedSoon = (bookedRes.data ?? [])
+  const bookedSoon = ((bookedRes.data ?? []) as any[])
     .filter((b: any) => b.booked_date && b.booked_date <= cutoff)
-    .map((b: any) => ({ id: b.id, order_number: b.order_number, name: b.customer_name, phone: b.customer_phone, date: b.booked_date as string, total: Number(b.total || 0), overdue: b.booked_date < today }));
+    .map((b: any) => ({ id: b.id as string, order_number: b.order_number as string, name: b.customer_name as string, phone: b.customer_phone as string, date: b.booked_date as string, total: Number(b.total || 0), overdue: b.booked_date < today }));
 
   // Top products.
   const qtyByName = new Map<string, number>();
