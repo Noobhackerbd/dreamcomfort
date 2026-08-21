@@ -1,6 +1,7 @@
 import { getServerSupabase } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import { Category } from "@/lib/types";
+import { getLandingVariants } from "@/lib/landing";
 import { ProductForm } from "../ProductForm";
 
 export const dynamic = "force-dynamic";
@@ -11,9 +12,10 @@ export default async function EditProduct({
   params: { id: string };
 }) {
   const supabase = getServerSupabase();
-  const [{ data: p }, { data: cats }] = await Promise.all([
+  const [{ data: p }, { data: cats }, variants] = await Promise.all([
     supabase.from("products").select("*").eq("id", params.id).single(),
     supabase.from("categories").select("*").order("sort_order", { ascending: true }),
+    getLandingVariants(),
   ]);
   if (!p) notFound();
 
@@ -22,6 +24,7 @@ export default async function EditProduct({
       <h1 className="text-2xl font-bold mb-6">পণ্য এডিট</h1>
       <ProductForm
         categories={(cats as Category[]) ?? []}
+        landings={variants.map((v) => ({ key: v.key, name: v.name }))}
         initial={{
           id: p.id,
           slug: p.slug ?? "",

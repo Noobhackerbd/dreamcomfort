@@ -27,6 +27,20 @@ async function getFeaturedProducts(slugs: string[], legacy: string): Promise<Pro
   return (data as Product[]) ?? [];
 }
 
+/**
+ * Look up a single product by the ?color= value (matches its slug, then its SKU) so a deep
+ * link can show a product even if it isn't in THIS landing's featured list — the link then
+ * "just works" on any landing (homepage, /landing2, new variants).
+ */
+async function fetchProductByColor(raw: string | string[] | undefined): Promise<Product | null> {
+  const v = (Array.isArray(raw) ? raw[0] : raw)?.trim();
+  if (!v) return null;
+  const supabase = getServerSupabase();
+  let res = await supabase.from("products").select("*").eq("slug", v).eq("is_active", true).limit(1);
+  if (!res.data?.length) res = await supabase.from("products").select("*").eq("sku", v).eq("is_active", true).limit(1);
+  return (res.data?.[0] as Product) ?? null;
+}
+
 function resolvePreselect(products: Product[], raw: string | string[] | undefined): string | undefined {
   const rawStr = (Array.isArray(raw) ? raw[0] : raw)?.trim();
   if (!rawStr) return undefined;
@@ -71,12 +85,21 @@ export async function LandingScreen({
   config: LandingConfig;
   searchParams?: { [key: string]: string | string[] | undefined };
 }) {
-  const [products, shipping] = await Promise.all([
+  const [featured, shipping] = await Promise.all([
     getFeaturedProducts(landing.productSlugs ?? [], landing.productSlug),
     getShippingSettings(),
   ]);
 
-  const initialProductId = resolvePreselect(products, searchParams?.color ?? searchParams?.product ?? searchParams?.slug);
+  let products = featured;
+  const colorRaw = searchParams?.color ?? searchParams?.product ?? searchParams?.slug;
+  // If the deep link points to a product that isn't featured on THIS landing, pull it in
+  // and show it first — so ?color=<slug> works on every landing (homepage, /landing2, …).
+  if (colorRaw && !resolvePreselect(products, colorRaw)) {
+    const extra = await fetchProductByColor(colorRaw);
+    if (extra) products = [extra, ...products.filter((p) => p.id !== extra.id)];
+  }
+
+  const initialProductId = resolvePreselect(products, colorRaw);
 
   const Logo = (
     <div className="flex flex-col items-center pt-8 pb-2">
