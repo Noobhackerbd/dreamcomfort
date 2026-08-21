@@ -13,6 +13,7 @@ const STATUS_FILTERS = [
   { value: "", label: "সব" },
   { value: "booked", label: "📅 বুকড" },
   { value: "pending", label: "পেন্ডিং" },
+  { value: "call_attempt", label: "📞 কল অ্যাটেম্পট" },
   { value: "confirmed", label: "কনফার্মড" },
   { value: "processing", label: "প্রসেসিং" },
   { value: "shipped", label: "শিপড" },
@@ -34,8 +35,19 @@ export default async function AdminOrders({
 
   const statusFilter = searchParams.status;
   const isTrash = statusFilter === "trash";
+  const isCallAttempt = statusFilter === "call_attempt";
+
+  // Does the orders table have the call-attempts column yet? (Resilient — the pending
+  // split + "call attempt" filter only apply when the migration has been run.)
+  const caProbe = await supabase.from("orders").select("call_attempts").limit(1);
+  const hasCallAttempts = !(caProbe.error && ((caProbe.error as any).code === "42703" || /call_attempts/i.test(caProbe.error.message || "")));
+
   const SELECT_COLS =
-    "id, order_number, customer_name, customer_phone, address_line, area, city, district, courier, tracking_id, total, status, notes, created_at, is_booked, booked_date, order_items(product_name, quantity, products(images))";
+    "id, order_number, customer_name, customer_phone, address_line, area, city, district, courier, tracking_id, total, status, notes, created_at, is_booked, booked_date" +
+    (hasCallAttempts ? ", call_attempts" : "") +
+    ", order_items(product_name, quantity, products(images))";
+
+  const CALL_LIMIT = 3;
 
   function build(withDeleted: boolean) {
     let q = supabase.from("orders").select(SELECT_COLS, { count: "exact" }).order("created_at", { ascending: false }).range(from, to);
@@ -45,8 +57,15 @@ export default async function AdminOrders({
       // Exclude trashed orders from every normal view.
       if (withDeleted) q = q.is("deleted_at", null);
       if (statusFilter === "booked") q = q.eq("is_booked", true).eq("status", "pending");
-      else if (statusFilter === "pending") q = q.eq("status", "pending").eq("is_booked", false);
-      else if (statusFilter) q = q.eq("status", statusFilter);
+      else if (isCallAttempt) {
+        // Orders that hit the attempt limit — pending, still unreached.
+        q = q.eq("status", "pending").eq("is_booked", false);
+        q = hasCallAttempts ? q.gte("call_attempts", CALL_LIMIT) : q.eq("id", "00000000-0000-0000-0000-000000000000");
+      } else if (statusFilter === "pending") {
+        // Pending list hides orders that already reached the attempt limit.
+        q = q.eq("status", "pending").eq("is_booked", false);
+        if (hasCallAttempts) q = q.lt("call_attempts", CALL_LIMIT);
+      } else if (statusFilter) q = q.eq("status", statusFilter);
     }
     if (searchParams.q) {
       const s = searchParams.q.trim();
@@ -105,6 +124,7 @@ export default async function AdminOrders({
     total: Number(o.total ?? 0),
     status: o.status,
     notes: o.notes ?? "",
+    call_attempts: Number(o.call_attempts ?? 0),
     created_at: o.created_at,
     is_booked: !!o.is_booked,
     booked_date: o.booked_date ?? null,
@@ -154,6 +174,13 @@ export default async function AdminOrders({
       {trashUnavailable && (
         <p className="mb-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           ট্রাশ ফিচার চালু করতে <code className="bg-white/60 px-1 rounded">deleted_at</code> কলাম যোগ করার migration চালান (নিচে SQL দেওয়া আছে)।
+        </p>
+      )}
+
+      {!hasCallAttempts && (isCallAttempt || active === "pending") && (
+        <p className="mb-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          কল-অ্যাটেম্পট ফিচার চালু করতে <code className="bg-white/60 px-1 rounded">call_attempts</code> কলাম যোগ করুন — Supabase SQL:
+          <code className="block mt-1 bg-white/70 px-2 py-1 rounded text-xs">ALTER TABLE orders ADD COLUMN IF NOT EXISTS call_attempts int NOT NULL DEFAULT 0;</code>
         </p>
       )}
 

@@ -68,6 +68,45 @@ export async function updateOrderStatus(orderId: string, status: string) {
   return { ok: true };
 }
 
+/**
+ * Log a call attempt on a pending order (+1). Once it reaches 3, the order drops out of
+ * the "পেন্ডিং" list and appears under the "📞 কল অ্যাটেম্পট" filter (auto-move — that
+ * filter is just status=pending AND call_attempts>=3). Resilient: if the column hasn't
+ * been added yet, returns needsMigration so the UI can prompt the owner.
+ */
+export async function logCallAttempt(orderId: string) {
+  await requireAdmin();
+  const supabase = getServerSupabase();
+  const { data, error } = await supabase.from("orders").select("call_attempts").eq("id", orderId).single();
+  if (error) {
+    if ((error as any).code === "42703" || /call_attempts/i.test(error.message || "")) {
+      return { ok: false, needsMigration: true, error: "call_attempts কলাম নেই — migration চালান।" };
+    }
+    return { ok: false, error: error.message };
+  }
+  const next = Number((data as any)?.call_attempts ?? 0) + 1;
+  const upd = await supabase.from("orders").update({ call_attempts: next }).eq("id", orderId);
+  if (upd.error) return { ok: false, error: upd.error.message };
+  revalidatePath("/admin/orders");
+  revalidatePath(`/admin/orders/${orderId}`);
+  revalidatePath("/admin");
+  return { ok: true, count: next };
+}
+
+/** Reset an order's call-attempt counter back to 0 (e.g. after reaching the customer). */
+export async function resetCallAttempts(orderId: string) {
+  await requireAdmin();
+  const supabase = getServerSupabase();
+  const { error } = await supabase.from("orders").update({ call_attempts: 0 }).eq("id", orderId);
+  if (error) {
+    if ((error as any).code === "42703") return { ok: false, needsMigration: true, error: "call_attempts কলাম নেই।" };
+    return { ok: false, error: error.message };
+  }
+  revalidatePath("/admin/orders");
+  revalidatePath(`/admin/orders/${orderId}`);
+  return { ok: true };
+}
+
 /** Print Station: confirmed CarryBee orders whose label hasn't been printed yet. */
 export async function getPrintQueue() {
   await requireAdmin();

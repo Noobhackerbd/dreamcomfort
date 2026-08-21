@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { taka, bdDateTime } from "@/lib/format";
 import { StatusSelect } from "./StatusSelect";
 import { CarryBeeActions } from "./CarryBeeActions";
-import { bulkTrashOrders, bulkRestoreOrders, bulkPurgeOrders } from "./actions";
+import { bulkTrashOrders, bulkRestoreOrders, bulkPurgeOrders, logCallAttempt, resetCallAttempts } from "./actions";
 
 export interface OrderRow {
   id: string;
@@ -24,9 +24,69 @@ export interface OrderRow {
   status: string;
   created_at: string;
   notes?: string;
+  call_attempts?: number;
   is_booked?: boolean;
   booked_date?: string | null;
   items: { product_name: string; quantity: number; image?: string | null }[];
+}
+
+const CALL_LIMIT = 3;
+
+/** Call button that logs an attempt (+1) and dials. Shows the attempt count; at the
+ *  limit the order moves to the "📞 কল অ্যাটেম্পট" filter on refresh. */
+function CallButton({ id, phone, attempts }: { id: string; phone: string; attempts: number }) {
+  const router = useRouter();
+  const [n, setN] = useState(attempts ?? 0);
+  const [busy, setBusy] = useState(false);
+
+  async function onClick() {
+    if (busy) return;
+    setBusy(true);
+    const res = await logCallAttempt(id);
+    setBusy(false);
+    if ((res as any)?.needsMigration) {
+      alert("কল-অ্যাটেম্পট চালু করতে orders টেবিলে call_attempts কলাম যোগ করুন (Settings/DB migration)।");
+    } else if (res.ok && typeof res.count === "number") {
+      setN(res.count);
+    }
+    // Dial after logging.
+    try { window.location.href = telLink(phone); } catch {}
+    // Refresh so a limit-reached order moves out of pending.
+    setTimeout(() => router.refresh(), 400);
+  }
+
+  const reached = n >= CALL_LIMIT;
+  return (
+    <button
+      onClick={onClick}
+      disabled={busy}
+      className={
+        "flex-1 sm:flex-none text-center rounded-lg px-3 py-1.5 text-xs font-medium disabled:opacity-60 " +
+        (reached ? "bg-red-600 text-white" : "bg-brand text-white")
+      }
+      title={`কল অ্যাটেম্পট: ${n}/${CALL_LIMIT}`}
+    >
+      📞 কল{n > 0 ? ` (${n}/${CALL_LIMIT})` : ""}
+    </button>
+  );
+}
+
+/** Reset the attempt counter (e.g. after reaching the customer). */
+function ResetAttemptButton({ id }: { id: string }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  async function onClick() {
+    if (busy) return;
+    setBusy(true);
+    await resetCallAttempts(id);
+    setBusy(false);
+    router.refresh();
+  }
+  return (
+    <button onClick={onClick} disabled={busy} className="text-center rounded-lg border border-gray-300 text-gray-600 px-3 py-1.5 text-xs font-medium hover:bg-gray-50 disabled:opacity-60">
+      ↺ রিসেট
+    </button>
+  );
 }
 
 export function OrdersList({ orders, cbReady, isTrash }: { orders: OrderRow[]; cbReady: boolean; isTrash?: boolean }) {
@@ -165,8 +225,9 @@ export function OrdersList({ orders, cbReady, isTrash }: { orders: OrderRow[]; c
                     <div className="mt-3 pt-3 border-t flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                       <div className="flex items-center gap-2">
                         {o.customer_phone && (
-                          <a href={telLink(o.customer_phone)} className="flex-1 sm:flex-none text-center rounded-lg bg-brand text-white px-3 py-1.5 text-xs font-medium">📞 কল</a>
+                          <CallButton id={o.id} phone={o.customer_phone} attempts={o.call_attempts ?? 0} />
                         )}
+                        {o.customer_phone && (o.call_attempts ?? 0) > 0 && <ResetAttemptButton id={o.id} />}
                         {o.customer_phone && (
                           <a href={waLink(o.customer_phone)} target="_blank" rel="noopener" className="flex-1 sm:flex-none text-center rounded-lg bg-green-600 text-white px-3 py-1.5 text-xs font-medium">💬 WhatsApp</a>
                         )}
