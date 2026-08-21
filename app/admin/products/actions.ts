@@ -3,14 +3,11 @@
 import { getServerSupabase } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { revalidatePath } from "next/cache";
+import { toSlug } from "@/lib/slug";
 
 function slugify(input: string): string {
-  const base = input
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9ঀ-৿]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return base || "product-" + Math.floor(Math.random() * 100000);
+  // English/ASCII slug — Bengali names are transliterated to Latin so ?color= links work.
+  return toSlug(input) || "product-" + Math.floor(Math.random() * 100000);
 }
 
 export interface ProductInput {

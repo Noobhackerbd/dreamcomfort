@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { getSupabaseBrowserClient } from "@/lib/supabase/ssr-browser";
 import { saveProduct, ProductInput } from "./actions";
 import type { Category } from "@/lib/types";
+import { toSlug } from "@/lib/slug";
 
 interface Props {
   initial?: Partial<ProductInput> & { id?: string };
@@ -12,14 +13,7 @@ interface Props {
 }
 
 // Same rule as the server (actions.ts) so the previewed link matches the saved slug.
-function slugify(input: string): string {
-  const base = input
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9ঀ-৿]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return base;
-}
+const slugify = toSlug;
 
 export function ProductForm({ initial, categories }: Props) {
   const router = useRouter();

@@ -29,10 +29,11 @@ async function getFeaturedProducts(slugs: string[], legacy: string): Promise<Pro
 function resolvePreselect(products: Product[], raw: string | string[] | undefined): string | undefined {
   const q = (Array.isArray(raw) ? raw[0] : raw)?.trim().toLowerCase();
   if (!q) return undefined;
-  const norm = (s: string) => s.toLowerCase().replace(/[\s_]+/g, "-");
+  const norm = (s: string) => (s || "").toLowerCase().replace(/[\s_]+/g, "-").replace(/-+/g, "-");
   const key = norm(q);
+  // 1) exact slug match, 2) either-way partial slug match, 3) name contains the value.
   let m = products.find((p) => p.slug.toLowerCase() === q || norm(p.slug) === key);
-  if (!m) m = products.find((p) => norm(p.slug).includes(key));
+  if (!m) m = products.find((p) => { const s = norm(p.slug); return s && (s.includes(key) || key.includes(s)); });
   if (!m) m = products.find((p) => (p.name_bn ?? "").toLowerCase().includes(q) || (p.name_en ?? "").toLowerCase().includes(q));
   return m?.id;
 }
