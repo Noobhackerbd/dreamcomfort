@@ -13,6 +13,7 @@ import { Reveal } from "@/components/Reveal";
 import { LandingBodyClass } from "@/components/funnel/LandingBodyClass";
 import { StickyOrderButton } from "@/components/funnel/StickyOrderButton";
 import { ProductShowcase } from "@/components/funnel/ProductShowcase";
+import { toSlug } from "@/lib/slug";
 
 async function getFeaturedProducts(slugs: string[], legacy: string): Promise<Product[]> {
   const supabase = getServerSupabase();
@@ -27,13 +28,18 @@ async function getFeaturedProducts(slugs: string[], legacy: string): Promise<Pro
 }
 
 function resolvePreselect(products: Product[], raw: string | string[] | undefined): string | undefined {
-  const q = (Array.isArray(raw) ? raw[0] : raw)?.trim().toLowerCase();
-  if (!q) return undefined;
-  const norm = (s: string) => (s || "").toLowerCase().replace(/[\s_]+/g, "-").replace(/-+/g, "-");
-  const key = norm(q);
-  // 1) exact slug match, 2) either-way partial slug match, 3) name contains the value.
-  let m = products.find((p) => p.slug.toLowerCase() === q || norm(p.slug) === key);
-  if (!m) m = products.find((p) => { const s = norm(p.slug); return s && (s.includes(key) || key.includes(s)); });
+  const rawStr = (Array.isArray(raw) ? raw[0] : raw)?.trim();
+  if (!rawStr) return undefined;
+  const q = rawStr.toLowerCase();
+  // Transliterate BOTH sides to an English/ASCII key, so an English ?color= link matches
+  // even a product whose stored slug is still Bengali (no re-save needed).
+  const key = toSlug(rawStr);
+  let m = key ? products.find((p) => toSlug(p.slug) === key) : undefined;
+  // Also allow a raw match when the URL param is Bengali and equals the Bengali slug.
+  if (!m) m = products.find((p) => p.slug.toLowerCase() === q);
+  // Either-way partial match on the transliterated key.
+  if (!m && key) m = products.find((p) => { const s = toSlug(p.slug); return s && (s.includes(key) || key.includes(s)); });
+  // Last resort: the value appears in the product name.
   if (!m) m = products.find((p) => (p.name_bn ?? "").toLowerCase().includes(q) || (p.name_en ?? "").toLowerCase().includes(q));
   return m?.id;
 }
