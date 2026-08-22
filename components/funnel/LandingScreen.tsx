@@ -7,7 +7,6 @@ import { Product } from "@/lib/types";
 import type { LandingConfig } from "@/lib/landing";
 import { getShippingSettings } from "@/lib/settings";
 import { STORE } from "@/lib/config";
-import { taka } from "@/lib/format";
 import { ProductFunnel } from "@/components/funnel/ProductFunnel";
 import { Reveal } from "@/components/Reveal";
 import { LandingBodyClass } from "@/components/funnel/LandingBodyClass";
@@ -120,8 +119,6 @@ export async function LandingScreen({
       </>
     );
   }
-
-  const minPrice = Math.min(...products.map((p) => Number(p.price)));
 
   return (
     <div className="-mt-8 relative">
@@ -260,7 +257,7 @@ export async function LandingScreen({
         </section>
       </div>
 
-      <StickyOrderButton label={`${landing.ctaText} · ${taka(minPrice)}`} />
+      <StickyOrderButton />
       <div className="lg:hidden h-24" />
     </div>
   );

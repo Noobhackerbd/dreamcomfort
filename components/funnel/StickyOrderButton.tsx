@@ -7,9 +7,9 @@ import { playConfirm } from "@/lib/sound";
  * Mobile sticky order button. It actually SUBMITS the order form (not just scroll):
  * clicking it runs the same validation + placeOrder as the form's own button.
  * It also hides itself while the form is on screen, so the form's own order
- * button is never covered.
+ * button is never covered. Shows a fixed label (no price).
  */
-export function StickyOrderButton({ label }: { label: string }) {
+export function StickyOrderButton() {
   const [submitVisible, setSubmitVisible] = useState(false);
 
   useEffect(() => {
@@ -60,7 +60,7 @@ export function StickyOrderButton({ label }: { label: string }) {
       className="dc-btn lg:hidden fixed bottom-4 inset-x-3 z-50 flex items-center justify-center gap-2 rounded-2xl px-5 py-4 text-base font-bold"
     >
       <span className="text-xl">🛒</span>
-      {label}
+      এখনই অর্ডার করুন
     </button>
   );
 }
