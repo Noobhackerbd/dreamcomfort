@@ -43,6 +43,7 @@ export interface MetaSettings {
 export interface TikTokSettings {
   pixelId: string;
   accessToken: string;
+  testEventCode: string;
 }
 
 async function readSetting<T>(key: string, fallback: T): Promise<T> {
@@ -108,6 +109,7 @@ export function getTikTokSettings(): Promise<TikTokSettings> {
   return readSetting<TikTokSettings>("tiktok", {
     pixelId: process.env.NEXT_PUBLIC_TIKTOK_PIXEL_ID || "DA6Q9UBC77UES9741GT0",
     accessToken: process.env.TIKTOK_ACCESS_TOKEN || "",
+    testEventCode: process.env.TIKTOK_TEST_EVENT_CODE || "",
   });
 }
 

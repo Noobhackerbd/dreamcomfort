@@ -60,7 +60,7 @@ export interface SendTikTokInput {
 
 /** Send one event to the TikTok Events API. Best-effort; never throws. */
 export async function sendTikTokEvent(input: SendTikTokInput): Promise<{ ok: boolean; error?: string }> {
-  const { pixelId: pixel, accessToken: token } = await getTikTokSettings();
+  const { pixelId: pixel, accessToken: token, testEventCode } = await getTikTokSettings();
   if (!pixel || !token) return { ok: false, error: "TikTok Events API কনফিগার করা হয়নি (অ্যাডমিন সেটিংসে টোকেন দিন)।" };
 
   const u = input.user ?? {};
@@ -78,6 +78,9 @@ export async function sendTikTokEvent(input: SendTikTokInput): Promise<{ ok: boo
   const body = {
     event_source: "web",
     event_source_id: pixel,
+    // When set, events appear in TikTok Events Manager → Test Events (for verifying the
+    // server integration). Leave empty when live.
+    ...(testEventCode ? { test_event_code: testEventCode } : {}),
     data: [
       {
         event: input.eventName,

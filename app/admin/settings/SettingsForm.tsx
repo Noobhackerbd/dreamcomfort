@@ -306,6 +306,13 @@ export function SettingsForm({
             <input type="password" value={tt.accessToken} onChange={(e) => setTt({ ...tt, accessToken: e.target.value })} placeholder="TikTok Events Manager → Settings → Generate Access Token" autoComplete="new-password" className={cls} />
             <p className="mt-1 text-xs text-gray-400">TikTok Events Manager → তোমার pixel → Settings → Generate Access Token থেকে নিন।</p>
           </div>
+          <div>
+            <label className="block text-sm mb-1">Test Event Code (ঐচ্ছিক)</label>
+            <input value={tt.testEventCode} onChange={(e) => setTt({ ...tt, testEventCode: e.target.value })} placeholder="TEST12345" className={cls} />
+            <p className="mt-1 text-xs text-gray-400">
+              সার্ভার থেকে ডেটা আসছে কিনা যাচাই করতে দিন — TikTok Events Manager → Test Events থেকে কোডটি পাবেন, এখানে বসিয়ে সেভ করে সাইটে একটা টেস্ট অর্ডার/ইভেন্ট করুন, Test Events-এ দেখাবে। <b>লাইভে খালি রাখুন।</b>
+            </p>
+          </div>
         </div>
         <div className="mt-3 flex items-center">
           <button

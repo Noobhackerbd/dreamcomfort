@@ -55,12 +55,13 @@ export async function saveMetaSettings(meta: { pixelId: string; capiToken: strin
   return { ok: true };
 }
 
-export async function saveTikTokSettings(tt: { pixelId: string; accessToken: string }) {
+export async function saveTikTokSettings(tt: { pixelId: string; accessToken: string; testEventCode: string }) {
   await requireAdmin();
   try {
     await saveSetting("tiktok", {
       pixelId: (tt.pixelId || "").trim(),
       accessToken: (tt.accessToken || "").trim(),
+      testEventCode: (tt.testEventCode || "").trim(),
     });
   } catch (e: any) {
     return { ok: false, error: e?.message ?? "সেভ ব্যর্থ। settings টেবিল আছে কিনা দেখুন।" };
