@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { saveShippingSettings, saveStoreSettings, saveSmsTemplates, saveCarryBeeSettings, saveAiSettings, saveMetaSettings } from "./actions";
-import type { ShippingSettings, StoreSettings, CarryBeeSettings, AiSettings, MetaSettings } from "@/lib/settings";
+import { saveShippingSettings, saveStoreSettings, saveSmsTemplates, saveCarryBeeSettings, saveAiSettings, saveMetaSettings, saveTikTokSettings } from "./actions";
+import type { ShippingSettings, StoreSettings, CarryBeeSettings, AiSettings, MetaSettings, TikTokSettings } from "@/lib/settings";
 import type { SmsTemplates } from "@/lib/sms/templates";
 
 const cls = "w-full rounded-lg border px-4 py-2.5 text-sm outline-none focus:border-brand";
@@ -19,6 +19,7 @@ export function SettingsForm({
   carrybee,
   ai,
   meta,
+  tiktok,
 }: {
   shipping: ShippingSettings;
   store: StoreSettings;
@@ -26,6 +27,7 @@ export function SettingsForm({
   carrybee: CarryBeeSettings;
   ai: AiSettings;
   meta: MetaSettings;
+  tiktok: TikTokSettings;
 }) {
   const router = useRouter();
 
@@ -53,6 +55,11 @@ export function SettingsForm({
   const [mtSaved, setMtSaved] = useState(false);
   const [mtErr, setMtErr] = useState<string | null>(null);
   const [mtBusy, setMtBusy] = useState(false);
+
+  const [tt, setTt] = useState(tiktok);
+  const [ttSaved, setTtSaved] = useState(false);
+  const [ttErr, setTtErr] = useState<string | null>(null);
+  const [ttBusy, setTtBusy] = useState(false);
 
   return (
     <div className="space-y-8 max-w-2xl">
@@ -277,6 +284,50 @@ export function SettingsForm({
         <p className="mt-2 text-xs text-gray-400">
           অবস্থা:{" "}
           {mt.pixelId && mt.capiToken ? <span className="text-green-600">✓ কনফিগার করা আছে</span> : <span className="text-amber-600">✗ অসম্পূর্ণ</span>}
+        </p>
+      </section>
+
+      {/* TikTok Pixel + Events API */}
+      <section className="rounded-xl border bg-white p-5">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gray-900 text-white text-xs">🎵</span>
+          <h2 className="font-semibold">TikTok Pixel + Events API</h2>
+        </div>
+        <p className="text-xs text-gray-400 mb-3">
+          TikTok পিক্সেল আইডি ও Events API টোকেন দিন — ব্রাউজার ও সার্ভার দুই দিক থেকেই ইভেন্ট ট্র্যাক হবে (event_id দিয়ে dedup)।
+        </p>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-sm mb-1">Pixel ID</label>
+            <input value={tt.pixelId} onChange={(e) => setTt({ ...tt, pixelId: e.target.value.trim() })} placeholder="DA6Q9UBC77UES9741GT0" className={cls} />
+          </div>
+          <div>
+            <label className="block text-sm mb-1">Events API Access Token</label>
+            <input type="password" value={tt.accessToken} onChange={(e) => setTt({ ...tt, accessToken: e.target.value })} placeholder="TikTok Events Manager → Settings → Generate Access Token" autoComplete="new-password" className={cls} />
+            <p className="mt-1 text-xs text-gray-400">TikTok Events Manager → তোমার pixel → Settings → Generate Access Token থেকে নিন।</p>
+          </div>
+        </div>
+        <div className="mt-3 flex items-center">
+          <button
+            onClick={async () => {
+              setTtErr(null); setTtSaved(false); setTtBusy(true);
+              const res = await saveTikTokSettings(tt);
+              setTtBusy(false);
+              if (!res.ok) { setTtErr(res.error ?? "সেভ ব্যর্থ।"); return; }
+              setTtSaved(true);
+              router.refresh();
+            }}
+            disabled={ttBusy}
+            className="rounded-lg bg-brand text-white px-5 py-2 text-sm disabled:opacity-60"
+          >
+            {ttBusy ? "সেভ হচ্ছে..." : "সেভ করুন"}
+          </button>
+          <Saved show={ttSaved} />
+          {ttErr && <span className="text-sm text-red-600 ml-3">{ttErr}</span>}
+        </div>
+        <p className="mt-2 text-xs text-gray-400">
+          অবস্থা:{" "}
+          {tt.pixelId && tt.accessToken ? <span className="text-green-600">✓ কনফিগার করা আছে (browser + server)</span> : tt.pixelId ? <span className="text-amber-600">শুধু browser pixel — server-এর জন্য টোকেন দিন</span> : <span className="text-amber-600">✗ অসম্পূর্ণ</span>}
         </p>
       </section>
 

@@ -3,9 +3,10 @@ import Image from "next/image";
 import { Plus_Jakarta_Sans, Hind_Siliguri } from "next/font/google";
 import "./globals.css";
 import { MetaPixel } from "@/components/MetaPixel";
+import { TikTokPixel } from "@/components/TikTokPixel";
 import { VisitTracker } from "@/components/VisitTracker";
 import { ScrollTracker } from "@/components/ScrollTracker";
-import { getMetaSettings, getStoreSettings } from "@/lib/settings";
+import { getMetaSettings, getStoreSettings, getTikTokSettings } from "@/lib/settings";
 
 // Self-hosted via next/font — no render-blocking Google Fonts request, auto-preloaded.
 // Premium, serious type: geometric Jakarta for Latin/numbers, clean Hind Siliguri for
@@ -49,7 +50,7 @@ export const viewport: Viewport = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const [landing, meta, store] = await Promise.all([getLandingConfig(), getMetaSettings(), getStoreSettings()]);
+  const [landing, meta, store, tiktok] = await Promise.all([getLandingConfig(), getMetaSettings(), getStoreSettings(), getTikTokSettings()]);
   return (
     <html lang="bn" className={`${display.variable} ${notoBengali.variable}`}>
       <head>
@@ -111,6 +112,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             Pixel data clean, no admin noise). */}
         <HideOnAdmin>
           <MetaPixel pixelId={meta.pixelId || undefined} />
+          <TikTokPixel pixelId={tiktok.pixelId || undefined} />
           <VisitTracker />
           <ScrollTracker />
         </HideOnAdmin>

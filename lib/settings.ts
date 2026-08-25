@@ -40,6 +40,11 @@ export interface MetaSettings {
   testEventCode: string;
 }
 
+export interface TikTokSettings {
+  pixelId: string;
+  accessToken: string;
+}
+
 async function readSetting<T>(key: string, fallback: T): Promise<T> {
   try {
     const supabase = getServerSupabase();
@@ -95,6 +100,14 @@ export function getMetaSettings(): Promise<MetaSettings> {
     pixelId: process.env.NEXT_PUBLIC_META_PIXEL_ID || "",
     capiToken: process.env.META_CAPI_ACCESS_TOKEN || "",
     testEventCode: process.env.META_TEST_EVENT_CODE || "",
+  });
+}
+
+/** TikTok Pixel + Events API settings (editable from admin, env fallback). */
+export function getTikTokSettings(): Promise<TikTokSettings> {
+  return readSetting<TikTokSettings>("tiktok", {
+    pixelId: process.env.NEXT_PUBLIC_TIKTOK_PIXEL_ID || "DA6Q9UBC77UES9741GT0",
+    accessToken: process.env.TIKTOK_ACCESS_TOKEN || "",
   });
 }
 

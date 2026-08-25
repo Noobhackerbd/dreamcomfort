@@ -5,6 +5,8 @@ import { getServerMatchSignals, getExternalId } from "@/lib/meta/fb-cookies";
 import { headers } from "next/headers";
 import { newEventId } from "@/lib/meta/event-id";
 import { sendServerEvent } from "@/lib/meta/capi";
+import { sendTikTokEvent, toTikTokProps } from "@/lib/tiktok/events";
+import { getTikTokSignals } from "@/lib/tiktok/signals";
 import { logEvent } from "@/lib/meta/log";
 import { resolveShippingFee, getSmsTemplates, getMetaSettings } from "@/lib/settings";
 import { sendSmsAsync } from "@/lib/sms";
@@ -255,6 +257,24 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
           payload: { order_number: snap.order_number },
         });
       })().catch(() => {}); // swallow late rejections
+
+      // TikTok CompletePayment — backgrounded, same event_id as the browser copy (deduped).
+      // sendTikTokEvent no-ops if TikTok isn't configured in admin settings.
+      void (async () => {
+        await sendTikTokEvent({
+          eventName: "CompletePayment",
+          eventId,
+          url: `${origin}/order/${snap.order_number}`,
+          eventTime: Math.floor(new Date(snap.created_at).getTime() / 1000) || undefined,
+          user: { email: input.email, phone: input.phone, firstName: first, lastName: last, externalId },
+          signals: getTikTokSignals(),
+          properties: toTikTokProps({
+            currency: "BDT",
+            value: snap.total,
+            contents: contents.map((c) => ({ id: c.id, quantity: c.quantity, item_price: c.item_price })),
+          }),
+        });
+      })().catch(() => {});
 
       // Push — fire-and-forget, not awaited.
       void sendOrderPush({

@@ -55,6 +55,21 @@ export async function saveMetaSettings(meta: { pixelId: string; capiToken: strin
   return { ok: true };
 }
 
+export async function saveTikTokSettings(tt: { pixelId: string; accessToken: string }) {
+  await requireAdmin();
+  try {
+    await saveSetting("tiktok", {
+      pixelId: (tt.pixelId || "").trim(),
+      accessToken: (tt.accessToken || "").trim(),
+    });
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? "সেভ ব্যর্থ। settings টেবিল আছে কিনা দেখুন।" };
+  }
+  revalidatePath("/admin/settings");
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
 export async function saveAiSettings(ai: { apiKey: string; model: string }) {
   await requireAdmin();
   try {

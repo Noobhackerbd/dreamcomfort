@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { trackBrowser, setAdvancedMatching } from "@/components/MetaPixel";
+import { trackTikTok, identifyTikTok } from "@/components/TikTokPixel";
 import { playSuccess } from "@/lib/sound";
 
 export function PurchasePixel({
@@ -60,6 +61,19 @@ export function PurchasePixel({
       }),
       keepalive: true,
     }).catch(() => {});
+
+    // TikTok browser CompletePayment — same event_id as the server copy (deduped).
+    if (customer) identifyTikTok({ phone: customer.phone, email: customer.email });
+    trackTikTok(
+      "CompletePayment",
+      {
+        currency: "BDT",
+        value,
+        content_type: "product",
+        contents: contentIds.map((id) => ({ content_id: id, content_type: "product" })),
+      },
+      eventId
+    );
   }, [eventId, value, contentIds]);
   return null;
 }

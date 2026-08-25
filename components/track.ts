@@ -4,6 +4,7 @@
 // deduplicates the browser + server copies because the event_id is identical.
 
 import { trackBrowser } from "@/components/MetaPixel";
+import { trackTikTok } from "@/components/TikTokPixel";
 import { newBrowserEventId } from "@/lib/meta/event-id";
 import type { CustomData } from "@/lib/meta/capi";
 import type { RawUserData } from "@/lib/meta/hash";
@@ -11,6 +12,30 @@ import type { RawUserData } from "@/lib/meta/hash";
 function currentFbclid(): string | undefined {
   if (typeof window === "undefined") return undefined;
   return new URLSearchParams(window.location.search).get("fbclid") ?? undefined;
+}
+function currentTtclid(): string | undefined {
+  if (typeof window === "undefined") return undefined;
+  return new URLSearchParams(window.location.search).get("ttclid") ?? undefined;
+}
+
+// Our internal event names → TikTok standard events (conversion-relevant only).
+const TIKTOK_EVENT_MAP: Record<string, string> = {
+  ViewContent: "ViewContent",
+  AddToCart: "AddToCart",
+  InitiateCheckout: "InitiateCheckout",
+  Search: "Search",
+};
+
+/** Convert Meta customData → TikTok properties (contents[].content_id, value, currency). */
+function toTikTokProps(cd?: CustomData) {
+  const contents =
+    (cd?.contents as { id: string; quantity: number; item_price?: number }[] | undefined)?.map((c) => ({
+      content_id: c.id,
+      content_type: "product",
+      quantity: c.quantity,
+      price: c.item_price,
+    })) ?? (cd?.content_ids ?? []).map((id) => ({ content_id: id, content_type: "product" }));
+  return { currency: cd?.currency, value: cd?.value, content_type: "product", contents };
 }
 
 /**
@@ -45,6 +70,19 @@ export function fireEvent(
     body: JSON.stringify({ eventName, eventId, eventTime, url, fbclid: currentFbclid(), user, customData }),
     keepalive: true,
   }).catch(() => {});
+
+  // 4) TikTok — browser Pixel + server Events API with the SAME event_id (deduped).
+  const ttName = TIKTOK_EVENT_MAP[eventName];
+  if (ttName) {
+    const props = toTikTokProps(customData);
+    trackTikTok(ttName, props as Record<string, unknown>, eventId);
+    fetch("/api/tiktok", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ eventName: ttName, eventId, eventTime, url, ttclid: currentTtclid(), user, properties: props }),
+      keepalive: true,
+    }).catch(() => {});
+  }
 
   return eventId;
 }
