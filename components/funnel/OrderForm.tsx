@@ -66,6 +66,7 @@ export function OrderForm({
   const [shakeKey, setShakeKey] = useState(0);
   const [zoomIdx, setZoomIdx] = useState<number | null>(null);
   const initiated = useRef(false);
+  const addedToCart = useRef(false);
   const leadIdRef = useRef<string>("");
 
   const gallery = images.length ? images : baseImage ? [baseImage] : [];
@@ -127,6 +128,30 @@ export function OrderForm({
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [name, phone, address, qty, productId, productName, unitPrice]);
+
+  // AddToCart — fire ONCE when the customer first engages the order form. This single-page
+  // COD funnel has no separate cart step, so "starting the order" is the add-to-cart signal.
+  // Completes the funnel TikTok/Meta expect (ViewContent → AddToCart → InitiateCheckout → Purchase).
+  function markAddToCart() {
+    if (addedToCart.current) return;
+    try { if (sessionStorage.getItem("dc_atc_fired")) { addedToCart.current = true; return; } } catch {}
+    addedToCart.current = true;
+    try { sessionStorage.setItem("dc_atc_fired", "1"); } catch {}
+    fireEvent("AddToCart", {
+      currency: "BDT",
+      value: total,
+      num_items: qty,
+      content_ids: [productId],
+      content_type: "product",
+      contents: [{ id: productId, quantity: qty, item_price: unitPrice }],
+    });
+  }
+
+  // Called on first interaction with the form.
+  function onFormEngage() {
+    markAddToCart();
+    markInitiated();
+  }
 
   // InitiateCheckout — fire ONCE per session, only when the phone is valid, and
   // attach the phone so the server copy carries `ph` (higher match quality).
@@ -204,7 +229,7 @@ export function OrderForm({
     <form
       id="order-form"
       onSubmit={onSubmit}
-      onFocusCapture={markInitiated}
+      onFocusCapture={onFormEngage}
       className="rounded-[2rem] border border-white bg-white/80 backdrop-blur p-5 md:p-6 shadow-soft ring-1 ring-brand/10"
     >
       <div className="flex items-center gap-2 mb-4">
