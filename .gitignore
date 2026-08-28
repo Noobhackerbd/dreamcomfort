@@ -4,3 +4,8 @@ node_modules
 .env*.local
 .DS_Store
 npm-debug.log*
+
+# React Native admin app (separate project — keep out of the web build/deploy)
+dc-admin-app
+dc-admin-app.zip
+dc-admin-app-fixed.zip
