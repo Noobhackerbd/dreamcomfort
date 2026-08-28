@@ -41,6 +41,7 @@ const NAV = [
   { href: "/admin/print-station", label: "🖨️ প্রিন্ট স্টেশন" },
   { href: "/admin/abandoned", label: "🛒 অসম্পূর্ণ অর্ডার", badgeKey: "abandoned" },
   { href: "/admin/customers", label: "👥 গ্রাহক" },
+  { href: "/admin/workers", label: "🧑‍🏭 কর্মী" },
   { href: "/admin/sms", label: "✉️ এসএমএস" },
   { href: "/admin/tracking", label: "📊 ট্র্যাকিং হেলথ" },
   { href: "/admin/settings", label: "⚙️ সেটিংস" },

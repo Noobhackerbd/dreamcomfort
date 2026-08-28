@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "DreamComfort Admin",
+    "slug": "dreamcomfort-admin",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0d9488"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "android": {
+      "package": "com.dreamcomfort.adminapp",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0d9488"
+      }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "0b44da60-951b-4b35-bbf7-f53d4911d675"
+      }
+    },
+    "plugins": [
+      "expo-font"
+    ]
+  }
+}
