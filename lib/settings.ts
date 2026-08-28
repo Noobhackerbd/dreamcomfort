@@ -46,6 +46,10 @@ export interface TikTokSettings {
   testEventCode: string;
 }
 
+export interface MobileSettings {
+  apiKey: string; // access token the Android app uses (Bearer). Empty = mobile API disabled.
+}
+
 async function readSetting<T>(key: string, fallback: T): Promise<T> {
   try {
     const supabase = getServerSupabase();
@@ -101,6 +105,13 @@ export function getMetaSettings(): Promise<MetaSettings> {
     pixelId: process.env.NEXT_PUBLIC_META_PIXEL_ID || "",
     capiToken: process.env.META_CAPI_ACCESS_TOKEN || "",
     testEventCode: process.env.META_TEST_EVENT_CODE || "",
+  });
+}
+
+/** Android/mobile app API access token (editable from admin, env fallback). */
+export function getMobileSettings(): Promise<MobileSettings> {
+  return readSetting<MobileSettings>("mobile", {
+    apiKey: process.env.MOBILE_API_KEY || "",
   });
 }
 

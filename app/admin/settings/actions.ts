@@ -55,6 +55,17 @@ export async function saveMetaSettings(meta: { pixelId: string; capiToken: strin
   return { ok: true };
 }
 
+export async function saveMobileSettings(m: { apiKey: string }) {
+  await requireAdmin();
+  try {
+    await saveSetting("mobile", { apiKey: (m.apiKey || "").trim() });
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? "সেভ ব্যর্থ।" };
+  }
+  revalidatePath("/admin/settings");
+  return { ok: true };
+}
+
 export async function saveTikTokSettings(tt: { pixelId: string; accessToken: string; testEventCode: string }) {
   await requireAdmin();
   try {

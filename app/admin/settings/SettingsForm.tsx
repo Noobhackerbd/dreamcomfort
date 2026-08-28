@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { saveShippingSettings, saveStoreSettings, saveSmsTemplates, saveCarryBeeSettings, saveAiSettings, saveMetaSettings, saveTikTokSettings } from "./actions";
-import type { ShippingSettings, StoreSettings, CarryBeeSettings, AiSettings, MetaSettings, TikTokSettings } from "@/lib/settings";
+import { saveShippingSettings, saveStoreSettings, saveSmsTemplates, saveCarryBeeSettings, saveAiSettings, saveMetaSettings, saveTikTokSettings, saveMobileSettings } from "./actions";
+import type { ShippingSettings, StoreSettings, CarryBeeSettings, AiSettings, MetaSettings, TikTokSettings, MobileSettings } from "@/lib/settings";
 import type { SmsTemplates } from "@/lib/sms/templates";
 
 const cls = "w-full rounded-lg border px-4 py-2.5 text-sm outline-none focus:border-brand";
@@ -20,6 +20,7 @@ export function SettingsForm({
   ai,
   meta,
   tiktok,
+  mobile,
 }: {
   shipping: ShippingSettings;
   store: StoreSettings;
@@ -28,6 +29,7 @@ export function SettingsForm({
   ai: AiSettings;
   meta: MetaSettings;
   tiktok: TikTokSettings;
+  mobile: MobileSettings;
 }) {
   const router = useRouter();
 
@@ -60,6 +62,12 @@ export function SettingsForm({
   const [ttSaved, setTtSaved] = useState(false);
   const [ttErr, setTtErr] = useState<string | null>(null);
   const [ttBusy, setTtBusy] = useState(false);
+
+  const [mb, setMb] = useState(mobile);
+  const [mbSaved, setMbSaved] = useState(false);
+  const [mbErr, setMbErr] = useState<string | null>(null);
+  const [mbBusy, setMbBusy] = useState(false);
+  const apiBase = typeof window !== "undefined" ? window.location.origin : "";
 
   return (
     <div className="space-y-8 max-w-2xl">
@@ -335,6 +343,63 @@ export function SettingsForm({
         <p className="mt-2 text-xs text-gray-400">
           অবস্থা:{" "}
           {tt.pixelId && tt.accessToken ? <span className="text-green-600">✓ কনফিগার করা আছে (browser + server)</span> : tt.pixelId ? <span className="text-amber-600">শুধু browser pixel — server-এর জন্য টোকেন দিন</span> : <span className="text-amber-600">✗ অসম্পূর্ণ</span>}
+        </p>
+      </section>
+
+      {/* Android app — API access token */}
+      <section className="rounded-xl border bg-white p-5">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-green-100 text-green-700 text-xs">📱</span>
+          <h2 className="font-semibold">অ্যান্ড্রয়েড অ্যাপ (API টোকেন)</h2>
+        </div>
+        <p className="text-xs text-gray-400 mb-3">
+          অ্যাডমিন অ্যাপে লগইন করতে এই টোকেন লাগবে। অ্যাপে <b>API URL</b> ও <b>Access Token</b> বসান।
+        </p>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-sm mb-1">API URL</label>
+            <input readOnly value={apiBase} onFocus={(e) => e.currentTarget.select()} className={cls + " font-mono text-brand-dark"} />
+          </div>
+          <div>
+            <label className="block text-sm mb-1">Access Token</label>
+            <div className="flex gap-2">
+              <input value={mb.apiKey} onChange={(e) => setMb({ apiKey: e.target.value.trim() })} placeholder="একটি লম্বা গোপন টোকেন" className={cls + " font-mono"} />
+              <button
+                type="button"
+                onClick={() => {
+                  const gen = (typeof crypto !== "undefined" && "randomUUID" in crypto)
+                    ? crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "").slice(0, 8)
+                    : Math.random().toString(36).slice(2) + Date.now().toString(36);
+                  setMb({ apiKey: gen });
+                }}
+                className="shrink-0 rounded-lg border px-3 py-2 text-sm hover:bg-gray-50"
+              >
+                জেনারেট
+              </button>
+            </div>
+            <p className="mt-1 text-xs text-gray-400">এটি একটি পাসওয়ার্ডের মতো — কাউকে দেবেন না। বদলালে অ্যাপে আবার লগইন করতে হবে।</p>
+          </div>
+        </div>
+        <div className="mt-3 flex items-center">
+          <button
+            onClick={async () => {
+              setMbErr(null); setMbSaved(false); setMbBusy(true);
+              const res = await saveMobileSettings(mb);
+              setMbBusy(false);
+              if (!res.ok) { setMbErr(res.error ?? "সেভ ব্যর্থ।"); return; }
+              setMbSaved(true);
+              router.refresh();
+            }}
+            disabled={mbBusy}
+            className="rounded-lg bg-brand text-white px-5 py-2 text-sm disabled:opacity-60"
+          >
+            {mbBusy ? "সেভ হচ্ছে..." : "সেভ করুন"}
+          </button>
+          <Saved show={mbSaved} />
+          {mbErr && <span className="text-sm text-red-600 ml-3">{mbErr}</span>}
+        </div>
+        <p className="mt-2 text-xs text-gray-400">
+          অবস্থা: {mb.apiKey ? <span className="text-green-600">✓ অ্যাপ লগইন চালু</span> : <span className="text-amber-600">✗ টোকেন সেট করুন (নইলে অ্যাপ কাজ করবে না)</span>}
         </p>
       </section>
 
