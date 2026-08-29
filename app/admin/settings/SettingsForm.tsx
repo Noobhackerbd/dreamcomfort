@@ -2,14 +2,33 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { saveShippingSettings, saveStoreSettings, saveSmsTemplates, saveCarryBeeSettings, saveAiSettings, saveMetaSettings, saveTikTokSettings, saveMobileSettings } from "./actions";
-import type { ShippingSettings, StoreSettings, CarryBeeSettings, AiSettings, MetaSettings, TikTokSettings, MobileSettings } from "@/lib/settings";
+import { saveShippingSettings, saveStoreSettings, saveSmsTemplates, saveCarryBeeSettings, saveAiSettings, saveMetaSettings, saveTikTokSettings, saveMobileSettings, saveManualSettings } from "./actions";
+import type { ShippingSettings, StoreSettings, CarryBeeSettings, AiSettings, MetaSettings, TikTokSettings, MobileSettings, ManualSettings } from "@/lib/settings";
 import type { SmsTemplates } from "@/lib/sms/templates";
 
 const cls = "w-full rounded-lg border px-4 py-2.5 text-sm outline-none focus:border-brand";
 
 function Saved({ show }: { show: boolean }) {
   return show ? <span className="text-sm text-green-600 ml-3">সেভ হয়েছে ✓</span> : null;
+}
+
+function ToggleRow({ label, hint, on, onChange }: { label: string; hint?: string; on: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-3">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-gray-800">{label}</p>
+        {hint && <p className="text-xs text-gray-400 mt-0.5">{hint}</p>}
+      </div>
+      <button
+        type="button"
+        onClick={() => onChange(!on)}
+        className={"shrink-0 h-6 w-11 rounded-full transition relative " + (on ? "bg-brand" : "bg-gray-300")}
+        aria-pressed={on}
+      >
+        <span className={"absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all " + (on ? "left-[22px]" : "left-0.5")} />
+      </button>
+    </div>
+  );
 }
 
 export function SettingsForm({
@@ -21,6 +40,7 @@ export function SettingsForm({
   meta,
   tiktok,
   mobile,
+  manual,
 }: {
   shipping: ShippingSettings;
   store: StoreSettings;
@@ -30,6 +50,7 @@ export function SettingsForm({
   meta: MetaSettings;
   tiktok: TikTokSettings;
   mobile: MobileSettings;
+  manual: ManualSettings;
 }) {
   const router = useRouter();
 
@@ -68,6 +89,16 @@ export function SettingsForm({
   const [mbErr, setMbErr] = useState<string | null>(null);
   const [mbBusy, setMbBusy] = useState(false);
   const apiBase = typeof window !== "undefined" ? window.location.origin : "";
+
+  const [mo, setMo] = useState(manual);
+  const [moSaved, setMoSaved] = useState(false);
+  const [moBusy, setMoBusy] = useState(false);
+  async function saveMo(next: typeof mo) {
+    setMo(next); setMoBusy(true); setMoSaved(false);
+    const res = await saveManualSettings(next);
+    setMoBusy(false);
+    if (res.ok) { setMoSaved(true); router.refresh(); }
+  }
 
   return (
     <div className="space-y-8 max-w-2xl">
@@ -245,6 +276,82 @@ export function SettingsForm({
             <span className="text-amber-600">✗ অসম্পূর্ণ</span>
           )}
         </p>
+      </section>
+
+      {/* Manual / chat orders */}
+      <section className="rounded-xl border bg-white p-5">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-purple-100 text-purple-700 text-xs">🧾</span>
+          <h2 className="font-semibold">ম্যানুয়াল / চ্যাট অর্ডার</h2>
+          {moBusy && <span className="text-xs text-gray-400">সেভ হচ্ছে...</span>}
+          {moSaved && !moBusy && <span className="text-xs text-green-600">✓</span>}
+        </div>
+        <p className="text-xs text-gray-400 mb-3">
+          WhatsApp/Messenger থেকে হাতে যোগ করা অর্ডার — ফিচার চালু/বন্ধ, আর ঐ অর্ডারগুলো Meta/TikTok-এ (server) পাঠানো হবে কিনা।
+        </p>
+        <div className="divide-y">
+          <ToggleRow
+            label="ম্যানুয়াল অর্ডার ফিচার"
+            hint="অর্ডার পেজে “ম্যানুয়াল অর্ডার যোগ” বাটন দেখাবে।"
+            on={mo.enabled}
+            onChange={(v) => saveMo({ ...mo, enabled: v })}
+          />
+          <ToggleRow
+            label="Meta-তে পাঠান (CAPI)"
+            hint="চ্যাট/ম্যানুয়াল অর্ডার Meta Conversions API-তে Purchase হিসেবে যাবে — Meta আসল অর্ডারে অপটিমাইজ করবে।"
+            on={mo.sendMeta}
+            onChange={(v) => saveMo({ ...mo, sendMeta: v })}
+          />
+          <ToggleRow
+            label="TikTok-এ পাঠান (Events API)"
+            hint="চ্যাট/ম্যানুয়াল অর্ডার TikTok Events API-তে CompletePayment হিসেবে যাবে।"
+            on={mo.sendTiktok}
+            onChange={(v) => saveMo({ ...mo, sendTiktok: v })}
+          />
+        </div>
+
+        {(mo.sendMeta || mo.sendTiktok) && (
+          <div className="mt-4 rounded-lg bg-gray-50 border p-3">
+            <p className="text-sm font-medium mb-1">কখন পাঠাবে?</p>
+            <p className="text-xs text-gray-400 mb-2">ম্যানুয়াল অর্ডার Meta/TikTok-এ কোন সময়ে Purchase হিসেবে যাবে।</p>
+            <div className="space-y-2">
+              {[
+                { v: "on_create", t: "অর্ডার তৈরি হলেই পাঠাও", d: "প্রতিটি ম্যানুয়াল অর্ডার সাথে সাথে যাবে (confirm না করলেও)।" },
+                { v: "on_confirm", t: "শুধু confirmed হলে পাঠাও", d: "অর্ডার confirmed করলে তবেই যাবে — বাতিল/ভুয়া অর্ডার Meta-তে যাবে না। সবচেয়ে পরিষ্কার ডেটা।" },
+                { v: "on_confirm_or_24h", t: "confirmed হলে, নাহলে ২৪ ঘণ্টা পর অটো", d: "confirmed করলে তখনই যাবে; না করলে ২৪ ঘণ্টা পর নিজে থেকেই চলে যাবে (ঘুমিয়ে থাকলে/ব্যস্ত থাকলেও মিস হবে না)।" },
+              ].map((opt) => (
+                <label
+                  key={opt.v}
+                  className={
+                    "flex gap-2.5 cursor-pointer rounded-lg border p-2.5 " +
+                    (mo.mode === opt.v ? "border-brand bg-brand/5" : "hover:border-gray-300")
+                  }
+                >
+                  <input
+                    type="radio"
+                    name="manual-fire-mode"
+                    className="mt-0.5 accent-brand"
+                    checked={mo.mode === opt.v}
+                    onChange={() => saveMo({ ...mo, mode: opt.v as ManualSettings["mode"] })}
+                  />
+                  <span>
+                    <span className="block text-sm font-medium">{opt.t}</span>
+                    <span className="block text-xs text-gray-500">{opt.d}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            {mo.mode === "on_confirm_or_24h" && (
+              <p className="mt-2 rounded-md bg-amber-50 border border-amber-200 px-2.5 py-2 text-xs text-amber-800">
+                ⏰ ২৪ ঘণ্টার অটো-পাঠানো কাজ করতে ঘণ্টায় একবার এই লিংকটি হিট হতে হবে (cron):
+                <code className="mt-1 block bg-white/70 px-2 py-1 rounded break-all">/api/cron/manual-conversions?key=YOUR_SECRET</code>
+                Vercel Cron বা cron-job.org দিয়ে সেট করুন। <code className="bg-white/70 px-1 rounded">key</code> = CRON_SECRET অথবা Android অ্যাপ টোকেন।
+              </p>
+            )}
+          </div>
+        )}
+
+        <p className="mt-3 text-xs text-gray-400">💡 ওয়েবসাইটের অর্ডার এমনিতেই ট্র্যাক হয়; এটা শুধু হাতে-যোগ করা অর্ডারের জন্য। একই অর্ডার কখনো দুইবার যাবে না।</p>
       </section>
 
       {/* Meta Pixel + Conversions API */}

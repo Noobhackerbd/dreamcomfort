@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { carrybeeConfigured } from "@/lib/carrybee";
 import { aiConfigured } from "@/lib/ai";
+import { getManualSettings } from "@/lib/settings";
 import { OrdersList, type OrderRow } from "./OrdersList";
 import { ManualOrderModal, type PickProduct } from "./ManualOrderModal";
 
@@ -93,7 +94,7 @@ export default async function AdminOrders({
     const qs = sp.toString();
     return `/admin/orders${qs ? `?${qs}` : ""}`;
   };
-  const [cbReady, aiReady, productsRes] = await Promise.all([
+  const [cbReady, aiReady, productsRes, manualCfg] = await Promise.all([
     carrybeeConfigured(),
     aiConfigured(),
     supabase
@@ -101,6 +102,7 @@ export default async function AdminOrders({
       .select("id, name_bn, name_en, price, images")
       .eq("is_active", true)
       .order("created_at", { ascending: false }),
+    getManualSettings(),
   ]);
 
   const pickProducts: PickProduct[] = (productsRes.data ?? []).map((p: any) => ({
@@ -139,7 +141,7 @@ export default async function AdminOrders({
     <div>
       <div className="flex items-center justify-between gap-3 mb-6">
         <h1 className="text-2xl font-bold">অর্ডার</h1>
-        <ManualOrderModal products={pickProducts} aiReady={aiReady} />
+        {manualCfg.enabled && <ManualOrderModal products={pickProducts} aiReady={aiReady} />}
       </div>
 
       <form method="get" className="flex gap-2 mb-4">

@@ -2,7 +2,9 @@
 
 import { getServerSupabase } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/admin-auth";
-import { getSmsTemplates, getCarryBeeSettings } from "@/lib/settings";
+import { getSmsTemplates, getCarryBeeSettings, getManualSettings } from "@/lib/settings";
+import { headers } from "next/headers";
+import { fireOrderConversion } from "@/lib/manual-conversion";
 import { sendSmsAsync } from "@/lib/sms";
 import { fillTemplate, STATUS_SMS_MAP } from "@/lib/sms/templates";
 import { createParcel, getParcelStatus, carrybeeConfigured, listCities, listZones, listAreas } from "@/lib/carrybee";
@@ -59,6 +61,18 @@ export async function updateOrderStatus(orderId: string, status: string) {
       }
     } catch {
       /* never block a status change on courier errors */
+    }
+
+    // Manual/chat orders: forward the server Purchase to Meta CAPI / TikTok EAPI now
+    // that it's confirmed. fireOrderConversion only fires when the order is flagged
+    // is_manual (website orders are already tracked at checkout, so they're skipped)
+    // and is idempotent via capi_sent (an on_create order already sent won't re-send).
+    try {
+      const host = headers().get("host");
+      const origin = process.env.NEXT_PUBLIC_SITE_URL || (host ? `https://${host}` : "");
+      void fireOrderConversion(orderId, { origin });
+    } catch {
+      /* never block a status change on tracking */
     }
   }
 
@@ -586,6 +600,15 @@ export async function createManualOrder(input: ManualOrderInput) {
     .insert(lineItems.map((li) => ({ ...li, order_id: order.id })));
   if (iErr) return { ok: false, error: iErr.message };
 
+  // Flag this as a manual/chat order (best-effort — column may not be migrated yet).
+  // This is what lets the conversion-forwarder tell manual orders apart from website
+  // orders (which are already tracked at checkout) so nothing is ever double-counted.
+  try {
+    await supabase.from("orders").update({ is_manual: true }).eq("id", order.id);
+  } catch {
+    /* is_manual column not added yet — the on_create path still works via assumeManual */
+  }
+
   // If this order was created from an abandoned-cart lead, mark it converted.
   if (input.leadId) {
     void markLeadConverted(input.leadId, order.id, order.order_number);
@@ -622,6 +645,26 @@ export async function createManualOrder(input: ManualOrderInput) {
     } catch {
       /* never block */
     }
+  }
+
+  // Forward this chat/manual order to Meta CAPI / TikTok EAPI as a server Purchase.
+  // WHEN it fires depends on the firing mode chosen in Settings:
+  //   • on_create          → fire right now
+  //   • on_confirm         → fire now only if it's already confirmed; otherwise it
+  //                          fires later from updateOrderStatus when confirmed
+  //   • on_confirm_or_24h  → same as on_confirm, plus a 24h cron fallback
+  // fireOrderConversion is idempotent (capi_sent guard) so the later confirm/cron
+  // calls can never double-send. Backgrounded, best-effort.
+  try {
+    const manual = await getManualSettings();
+    const fireNow = manual.mode === "on_create" || status === "confirmed";
+    if (fireNow && (manual.sendMeta || manual.sendTiktok)) {
+      const host = headers().get("host");
+      const origin = process.env.NEXT_PUBLIC_SITE_URL || (host ? `https://${host}` : "");
+      void fireOrderConversion(order.id, { assumeManual: true, origin });
+    }
+  } catch {
+    /* never block order creation on tracking */
   }
 
   revalidatePath("/admin/orders");

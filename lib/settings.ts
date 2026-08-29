@@ -50,6 +50,14 @@ export interface MobileSettings {
   apiKey: string; // access token the Android app uses (Bearer). Empty = mobile API disabled.
 }
 
+export type ManualFireMode = "on_create" | "on_confirm" | "on_confirm_or_24h";
+export interface ManualSettings {
+  enabled: boolean;    // show the "add manual order" button in admin
+  sendMeta: boolean;   // send chat/manual (admin-created) orders to Meta CAPI
+  sendTiktok: boolean; // send chat/manual (admin-created) orders to TikTok EAPI
+  mode: ManualFireMode; // when to fire the server Purchase
+}
+
 async function readSetting<T>(key: string, fallback: T): Promise<T> {
   try {
     const supabase = getServerSupabase();
@@ -121,6 +129,16 @@ export function getTikTokSettings(): Promise<TikTokSettings> {
     pixelId: process.env.NEXT_PUBLIC_TIKTOK_PIXEL_ID || "DA6Q9UBC77UES9741GT0",
     accessToken: process.env.TIKTOK_ACCESS_TOKEN || "",
     testEventCode: process.env.TIKTOK_TEST_EVENT_CODE || "",
+  });
+}
+
+/** Manual/chat-order feature: on/off + whether to forward those orders to Meta / TikTok. */
+export function getManualSettings(): Promise<ManualSettings> {
+  return readSetting<ManualSettings>("manual", {
+    enabled: process.env.MANUAL_ORDERS_ENABLED !== "0", // default ON
+    sendMeta: process.env.MANUAL_SEND_META === "1",
+    sendTiktok: process.env.MANUAL_SEND_TIKTOK === "1",
+    mode: (process.env.MANUAL_FIRE_MODE as ManualFireMode) || "on_create",
   });
 }
 

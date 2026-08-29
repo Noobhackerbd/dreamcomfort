@@ -1,4 +1,4 @@
-import { getShippingSettings, getStoreSettings, getSmsTemplates, getCarryBeeSettings, getAiSettings, getMetaSettings, getTikTokSettings, getMobileSettings } from "@/lib/settings";
+import { getShippingSettings, getStoreSettings, getSmsTemplates, getCarryBeeSettings, getAiSettings, getMetaSettings, getTikTokSettings, getMobileSettings, getManualSettings } from "@/lib/settings";
 import { SettingsForm } from "./SettingsForm";
 import { NotificationSetup } from "./NotificationSetup";
 
@@ -9,7 +9,7 @@ function envState(v?: string) {
 }
 
 export default async function AdminSettings() {
-  const [shipping, store, templates, carrybee, ai, meta, tiktok, mobile] = await Promise.all([
+  const [shipping, store, templates, carrybee, ai, meta, tiktok, mobile, manual] = await Promise.all([
     getShippingSettings(),
     getStoreSettings(),
     getSmsTemplates(),
@@ -18,6 +18,7 @@ export default async function AdminSettings() {
     getMetaSettings(),
     getTikTokSettings(),
     getMobileSettings(),
+    getManualSettings(),
   ]);
 
   const sms = {
@@ -34,7 +35,7 @@ export default async function AdminSettings() {
         <NotificationSetup />
       </div>
 
-      <SettingsForm shipping={shipping} store={store} templates={templates} carrybee={carrybee} ai={ai} meta={meta} tiktok={tiktok} mobile={mobile} />
+      <SettingsForm shipping={shipping} store={store} templates={templates} carrybee={carrybee} ai={ai} meta={meta} tiktok={tiktok} mobile={mobile} manual={manual} />
 
       {/* Read-only env-configured integrations */}
       <div className="mt-8 max-w-2xl grid md:grid-cols-2 gap-4">

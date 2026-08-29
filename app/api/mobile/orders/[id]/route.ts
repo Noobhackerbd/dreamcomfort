@@ -6,6 +6,7 @@ import { getServerSupabase } from "@/lib/supabase/server";
 import { getSmsTemplates } from "@/lib/settings";
 import { sendSmsAsync } from "@/lib/sms";
 import { fillTemplate, STATUS_SMS_MAP } from "@/lib/sms/templates";
+import { fireOrderConversion } from "@/lib/manual-conversion";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -62,6 +63,18 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (!STATUSES.includes(status)) return Response.json({ ok: false, error: "invalid status" }, { status: 400 });
     const { error } = await supabase.from("orders").update({ status }).eq("id", params.id);
     if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
+
+    // Manual/chat orders: when confirmed from the Android app, forward the server
+    // Purchase too (same as the web admin path). Idempotent + only fires for is_manual
+    // orders, so website orders are never touched and nothing double-counts.
+    if (status === "confirmed") {
+      try {
+        const host = req.headers.get("host");
+        const origin = process.env.NEXT_PUBLIC_SITE_URL || (host ? `https://${host}` : "");
+        void fireOrderConversion(params.id, { origin });
+      } catch { /* never block a status change on tracking */ }
+    }
+
     // Status SMS (best-effort).
     const key = STATUS_SMS_MAP[status];
     if (key) {
