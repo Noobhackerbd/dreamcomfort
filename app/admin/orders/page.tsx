@@ -2,9 +2,9 @@ import Link from "next/link";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { carrybeeConfigured } from "@/lib/carrybee";
 import { aiConfigured } from "@/lib/ai";
-import { getManualSettings } from "@/lib/settings";
 import { OrdersList, type OrderRow } from "./OrdersList";
 import { ManualOrderModal, type PickProduct } from "./ManualOrderModal";
+import { OrderSearch } from "./OrderSearch";
 
 export const dynamic = "force-dynamic";
 
@@ -94,7 +94,7 @@ export default async function AdminOrders({
     const qs = sp.toString();
     return `/admin/orders${qs ? `?${qs}` : ""}`;
   };
-  const [cbReady, aiReady, productsRes, manualCfg] = await Promise.all([
+  const [cbReady, aiReady, productsRes] = await Promise.all([
     carrybeeConfigured(),
     aiConfigured(),
     supabase
@@ -102,7 +102,6 @@ export default async function AdminOrders({
       .select("id, name_bn, name_en, price, images")
       .eq("is_active", true)
       .order("created_at", { ascending: false }),
-    getManualSettings(),
   ]);
 
   const pickProducts: PickProduct[] = (productsRes.data ?? []).map((p: any) => ({
@@ -141,18 +140,10 @@ export default async function AdminOrders({
     <div>
       <div className="flex items-center justify-between gap-3 mb-6">
         <h1 className="text-2xl font-bold">অর্ডার</h1>
-        {manualCfg.enabled && <ManualOrderModal products={pickProducts} aiReady={aiReady} />}
+        <ManualOrderModal products={pickProducts} aiReady={aiReady} />
       </div>
 
-      <form method="get" className="flex gap-2 mb-4">
-        <input
-          name="q"
-          defaultValue={searchParams.q ?? ""}
-          placeholder="অর্ডার নম্বর / নাম / ফোন"
-          className="flex-1 rounded-lg border px-4 py-2.5 text-sm outline-none focus:border-brand"
-        />
-        <button className="rounded-lg bg-brand text-white px-5 py-2.5 text-sm">খুঁজুন</button>
-      </form>
+      <OrderSearch initialQuery={searchParams.q ?? ""} status={searchParams.status} />
 
       <div className="flex flex-wrap gap-2 mb-4">
         {STATUS_FILTERS.map((f) => (

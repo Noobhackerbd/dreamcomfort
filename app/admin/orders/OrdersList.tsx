@@ -1,12 +1,12 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { taka, bdDateTime } from "@/lib/format";
 import { StatusSelect } from "./StatusSelect";
 import { CarryBeeActions } from "./CarryBeeActions";
+import { OrderEditModal } from "./OrderEditModal";
 import { bulkTrashOrders, bulkRestoreOrders, bulkPurgeOrders, logCallAttempt, resetCallAttempts } from "./actions";
 
 export interface OrderRow {
@@ -31,10 +31,11 @@ export interface OrderRow {
 }
 
 const CALL_LIMIT = 3;
+const LAST_CALLED_KEY = "dc:lastCalledOrderId";
 
 /** Call button that logs an attempt (+1) and dials. Shows the attempt count; at the
  *  limit the order moves to the "📞 কল অ্যাটেম্পট" filter on refresh. */
-function CallButton({ id, phone, attempts }: { id: string; phone: string; attempts: number }) {
+function CallButton({ id, phone, attempts, onCalled }: { id: string; phone: string; attempts: number; onCalled: (id: string) => void }) {
   const router = useRouter();
   const [n, setN] = useState(attempts ?? 0);
   const [busy, setBusy] = useState(false);
@@ -42,6 +43,7 @@ function CallButton({ id, phone, attempts }: { id: string; phone: string; attemp
   async function onClick() {
     if (busy) return;
     setBusy(true);
+    onCalled(id); // remember this as the last-called order (persists) — instant, before the await
     const res = await logCallAttempt(id);
     setBusy(false);
     if ((res as any)?.needsMigration) {
@@ -61,7 +63,7 @@ function CallButton({ id, phone, attempts }: { id: string; phone: string; attemp
       onClick={onClick}
       disabled={busy}
       className={
-        "flex-1 sm:flex-none text-center rounded-lg px-3 py-1.5 text-xs font-medium disabled:opacity-60 " +
+        "flex-1 sm:flex-none text-center rounded-lg px-3 py-2 text-xs font-medium disabled:opacity-60 " +
         (reached ? "bg-red-600 text-white" : "bg-brand text-white")
       }
       title={`কল অ্যাটেম্পট: ${n}/${CALL_LIMIT}`}
@@ -83,9 +85,51 @@ function ResetAttemptButton({ id }: { id: string }) {
     router.refresh();
   }
   return (
-    <button onClick={onClick} disabled={busy} className="text-center rounded-lg border border-gray-300 text-gray-600 px-3 py-1.5 text-xs font-medium hover:bg-gray-50 disabled:opacity-60">
+    <button onClick={onClick} disabled={busy} className="text-center rounded-lg border border-gray-300 text-gray-600 px-3 py-2 text-xs font-medium hover:bg-gray-50 disabled:opacity-60">
       ↺ রিসেট
     </button>
+  );
+}
+
+/** CarryBee send controls, collapsed behind a toggle so each order row stays compact
+ *  (especially on mobile). Reveals the full Send / Direct-Send actions on tap. */
+function CarryBeeToggle({ cbReady, order }: { cbReady: boolean; order: OrderRow }) {
+  const sent = order.courier === "CarryBee" && !!order.tracking_id;
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="w-full sm:w-56">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={
+          "w-full flex items-center justify-between rounded-lg border px-3 py-2 text-xs font-medium " +
+          (sent ? "border-green-300 bg-green-50 text-green-700" : "border-gray-300 hover:border-brand text-gray-700")
+        }
+      >
+        <span>{sent ? `🚚 CarryBee ✓ ${order.tracking_id}` : "🚚 CarryBee পাঠান"}</span>
+        <span className={"transition-transform " + (open ? "rotate-180" : "")}>▾</span>
+      </button>
+      {open && (
+        <div className="mt-2">
+          <CarryBeeActions
+            configured={cbReady}
+            compact
+            order={{
+              id: order.id,
+              orderNumber: order.order_number,
+              name: order.customer_name,
+              phone: order.customer_phone,
+              address: [order.address_line, order.area, order.city, order.district].filter(Boolean).join(", "),
+              total: Number(order.total),
+              quantity: (order.items ?? []).reduce((n, it) => n + Number(it.quantity || 0), 0) || 1,
+              description: (order.items ?? []).map((it) => `${it.product_name} x${it.quantity}`).join(", "),
+              courier: order.courier ?? "",
+              trackingId: order.tracking_id ?? "",
+            }}
+          />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -96,6 +140,17 @@ export function OrdersList({ orders, cbReady, isTrash }: { orders: OrderRow[]; c
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [code, setCode] = useState("");
+  const [editId, setEditId] = useState<string | null>(null);
+  const [lastCalledId, setLastCalledId] = useState<string | null>(null);
+
+  // Remember the last-called order across refreshes/sessions (per device).
+  useEffect(() => {
+    try { setLastCalledId(localStorage.getItem(LAST_CALLED_KEY)); } catch {}
+  }, []);
+  function markCalled(id: string) {
+    setLastCalledId(id);
+    try { localStorage.setItem(LAST_CALLED_KEY, id); } catch {}
+  }
 
   const allSelected = orders.length > 0 && selected.size === orders.length;
   const someSelected = selected.size > 0;
@@ -170,9 +225,21 @@ export function OrdersList({ orders, cbReady, isTrash }: { orders: OrderRow[]; c
       <div className="space-y-3">
         {orders.map((o) => {
           const on = selected.has(o.id);
+          const lastCalled = !on && o.id === lastCalledId;
           return (
-            <div key={o.id} className={"rounded-xl border bg-white p-4 transition " + (on ? "ring-2 ring-red-300 border-red-200" : "") + (isTrash ? " opacity-90" : "")}>
-              <div className="flex items-start gap-3">
+            <div
+              key={o.id}
+              className={
+                "rounded-xl border p-3 sm:p-4 transition " +
+                (on
+                  ? "ring-2 ring-red-300 border-red-200 bg-white"
+                  : lastCalled
+                  ? "border-amber-300 bg-amber-50 ring-1 ring-amber-200"
+                  : "bg-white") +
+                (isTrash ? " opacity-90" : "")
+              }
+            >
+              <div className="flex items-start gap-2.5 sm:gap-3">
                 <input
                   type="checkbox"
                   checked={on}
@@ -182,74 +249,72 @@ export function OrdersList({ orders, cbReady, isTrash }: { orders: OrderRow[]; c
                 />
                 <OrderThumb items={o.items} />
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
+                  {/* Top: order no + time + price/status */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <Link href={`/admin/orders/${o.id}`} prefetch={false} className="font-bold text-brand hover:underline">
+                        <button
+                          onClick={() => setEditId(o.id)}
+                          className="font-bold text-brand hover:underline"
+                        >
                           {o.order_number}
-                        </Link>
-                        <span className="text-xs text-gray-400">🕒 {bdDateTime(o.created_at)}</span>
+                        </button>
+                        {lastCalled && (
+                          <span className="rounded-full bg-amber-200 text-amber-800 text-[10px] px-2 py-0.5 font-semibold">📞 শেষ কল</span>
+                        )}
                         {o.is_booked && (
                           <span className="rounded-full bg-amber-100 text-amber-700 text-[11px] px-2 py-0.5 font-medium">
                             📅 বুকড{o.booked_date ? ` · ${o.booked_date}` : ""}
                           </span>
                         )}
                       </div>
-                      <p className="text-sm mt-1 truncate">
-                        {o.customer_name} · {o.customer_phone}
-                      </p>
-                      <p className="text-sm text-gray-500 truncate">{o.address_line}</p>
-                      <p className="text-xs text-gray-400 mt-1 truncate">
-                        {(o.items ?? []).map((it) => `${it.product_name} ×${it.quantity}`).join("، ")}
-                      </p>
-                      {o.notes && o.notes.trim() && (
-                        <p className="mt-1.5 text-xs rounded-lg bg-amber-50 text-amber-800 border border-amber-100 px-2 py-1 whitespace-pre-wrap break-words">
-                          📝 {o.notes}
-                        </p>
-                      )}
+                      <p className="text-[11px] text-gray-400 mt-0.5">🕒 {bdDateTime(o.created_at)}</p>
                     </div>
                     <div className="text-right shrink-0">
                       <p className="font-bold text-base sm:text-lg whitespace-nowrap">{taka(Number(o.total))}</p>
-                      {!isTrash && (
-                        <div className="mt-2">
-                          <StatusSelect id={o.id} value={o.status} />
-                        </div>
-                      )}
-                      <Link href={`/admin/orders/${o.id}`} prefetch={false} className="text-xs text-brand hover:underline">
-                        বিস্তারিত →
-                      </Link>
                     </div>
                   </div>
 
+                  {/* Customer — full name & phone (phone NOT truncated) */}
+                  <p className="text-sm mt-1.5 font-medium text-gray-800 break-words">{o.customer_name}</p>
+                  {o.customer_phone && (
+                    <a href={telLink(o.customer_phone)} className="inline-block text-sm text-brand font-semibold tracking-wide tabular-nums break-all">
+                      📱 {toLocalDisplay(o.customer_phone)}
+                    </a>
+                  )}
+                  <p className="text-sm text-gray-500 break-words mt-0.5">{o.address_line}</p>
+                  <p className="text-xs text-gray-400 mt-1 break-words">
+                    {(o.items ?? []).map((it) => `${it.product_name} ×${it.quantity}`).join("، ")}
+                  </p>
+                  {o.notes && o.notes.trim() && (
+                    <p className="mt-1.5 text-xs rounded-lg bg-amber-50 text-amber-800 border border-amber-100 px-2 py-1 whitespace-pre-wrap break-words">
+                      📝 {o.notes}
+                    </p>
+                  )}
+
+                  {/* Status + edit */}
                   {!isTrash && (
-                    <div className="mt-3 pt-3 border-t flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="mt-2 flex items-center justify-between gap-2 flex-wrap">
+                      <StatusSelect id={o.id} value={o.status} />
+                      <button onClick={() => setEditId(o.id)} className="text-xs text-brand hover:underline font-medium">
+                        ✏️ এডিট / বিস্তারিত
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Action row: call / whatsapp / carrybee */}
+                  {!isTrash && (
+                    <div className="mt-3 pt-3 border-t flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                       <div className="flex items-center gap-2">
                         {o.customer_phone && (
-                          <CallButton id={o.id} phone={o.customer_phone} attempts={o.call_attempts ?? 0} />
+                          <CallButton id={o.id} phone={o.customer_phone} attempts={o.call_attempts ?? 0} onCalled={markCalled} />
                         )}
                         {o.customer_phone && (o.call_attempts ?? 0) > 0 && <ResetAttemptButton id={o.id} />}
                         {o.customer_phone && (
-                          <a href={waLink(o.customer_phone)} target="_blank" rel="noopener" className="flex-1 sm:flex-none text-center rounded-lg bg-green-600 text-white px-3 py-1.5 text-xs font-medium">💬 WhatsApp</a>
+                          <a href={waLink(o.customer_phone)} target="_blank" rel="noopener" className="flex-1 sm:flex-none text-center rounded-lg bg-green-600 text-white px-3 py-2 text-xs font-medium">💬 WhatsApp</a>
                         )}
                       </div>
-                      <div className="w-full sm:w-48">
-                        <CarryBeeActions
-                          configured={cbReady}
-                          compact
-                          order={{
-                            id: o.id,
-                            orderNumber: o.order_number,
-                            name: o.customer_name,
-                            phone: o.customer_phone,
-                            address: [o.address_line, o.area, o.city, o.district].filter(Boolean).join(", "),
-                            total: Number(o.total),
-                            quantity: (o.items ?? []).reduce((n, it) => n + Number(it.quantity || 0), 0) || 1,
-                            description: (o.items ?? []).map((it) => `${it.product_name} x${it.quantity}`).join(", "),
-                            courier: o.courier ?? "",
-                            trackingId: o.tracking_id ?? "",
-                          }}
-                        />
-                      </div>
+                      <CarryBeeToggle cbReady={cbReady} order={o} />
                     </div>
                   )}
                 </div>
@@ -258,6 +323,9 @@ export function OrdersList({ orders, cbReady, isTrash }: { orders: OrderRow[]; c
           );
         })}
       </div>
+
+      {/* Order edit popup (no page navigation) */}
+      <OrderEditModal orderId={editId} cbReady={cbReady} onClose={() => setEditId(null)} />
 
       {/* Sticky bulk-action bar (mobile-friendly) */}
       {someSelected && (
@@ -333,6 +401,12 @@ function bdIntl(phone: string): string {
   else if (!n.startsWith("880")) n = "880" + n;
   return n;
 }
+/** Human-readable local form (01XXXXXXXXX) for display — full, never truncated. */
+function toLocalDisplay(phone: string): string {
+  const n = bdIntl(phone); // 8801XXXXXXXXX
+  if (n.startsWith("880") && n.length === 13) return "0" + n.slice(3);
+  return (phone || "").trim();
+}
 function telLink(phone: string): string {
   return "tel:+" + bdIntl(phone);
 }
@@ -347,7 +421,7 @@ function OrderThumb({ items }: { items: OrderRow["items"] }) {
   const extra = Math.max(0, (items?.length || 0) - 1);
 
   return (
-    <div className="relative h-14 w-14 shrink-0 rounded-lg overflow-hidden bg-gray-100 ring-1 ring-black/5">
+    <div className="relative h-12 w-12 sm:h-14 sm:w-14 shrink-0 rounded-lg overflow-hidden bg-gray-100 ring-1 ring-black/5">
       {img ? (
         <Image src={img} alt={first?.product_name || ""} fill sizes="56px" className="object-cover" />
       ) : (

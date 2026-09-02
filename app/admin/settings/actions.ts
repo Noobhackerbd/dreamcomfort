@@ -55,20 +55,6 @@ export async function saveMetaSettings(meta: { pixelId: string; capiToken: strin
   return { ok: true };
 }
 
-export async function saveManualSettings(m: { enabled: boolean; sendMeta: boolean; sendTiktok: boolean; mode?: string }) {
-  await requireAdmin();
-  const allowed = ["on_create", "on_confirm", "on_confirm_or_24h"];
-  const mode = allowed.includes(m.mode || "") ? m.mode : "on_create";
-  try {
-    await saveSetting("manual", { enabled: !!m.enabled, sendMeta: !!m.sendMeta, sendTiktok: !!m.sendTiktok, mode });
-  } catch (e: any) {
-    return { ok: false, error: e?.message ?? "সেভ ব্যর্থ।" };
-  }
-  revalidatePath("/admin/settings");
-  revalidatePath("/admin/orders");
-  return { ok: true };
-}
-
 export async function saveMobileSettings(m: { apiKey: string }) {
   await requireAdmin();
   try {

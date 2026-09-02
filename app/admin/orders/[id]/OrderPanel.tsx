@@ -73,7 +73,7 @@ function rid() {
   return "new-" + Date.now().toString(36) + Math.floor(performance.now()).toString(36);
 }
 
-export function OrderPanel({ order, cbConfigured }: { order: PanelOrder; cbConfigured: boolean }) {
+export function OrderPanel({ order, cbConfigured, embedded, onClose }: { order: PanelOrder; cbConfigured: boolean; embedded?: boolean; onClose?: () => void }) {
   const router = useRouter();
 
   // ---- Customer / address / date ----
@@ -202,7 +202,8 @@ export function OrderPanel({ order, cbConfigured }: { order: PanelOrder; cbConfi
     setDelBusy(true);
     const res = await deleteOrder(order.id);
     if (!res.ok) { setDelBusy(false); return; }
-    router.push("/admin/orders");
+    if (embedded) { router.refresh(); onClose?.(); }
+    else router.push("/admin/orders");
   }
 
   // CarryBee order built from LIVE edited values so the modal prefills current data.
@@ -220,11 +221,11 @@ export function OrderPanel({ order, cbConfigured }: { order: PanelOrder; cbConfi
   };
 
   return (
-    <div className="max-w-5xl">
+    <div className={embedded ? "" : "max-w-5xl"}>
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
         <div>
-          <a href="/admin/orders" className="text-sm text-gray-400 hover:underline">← অর্ডার তালিকা</a>
+          {!embedded && <a href="/admin/orders" className="text-sm text-gray-400 hover:underline">← অর্ডার তালিকা</a>}
           <div className="flex items-center gap-3 mt-1">
             <h1 className="text-2xl font-bold">{order.order_number}</h1>
             <span className={"rounded-full px-3 py-1 text-xs font-semibold " + (STATUS_COLORS[order.status] ?? "bg-gray-100 text-gray-700")}>
