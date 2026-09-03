@@ -73,10 +73,10 @@ function TipBox({ title, rows }: { title: string; rows: { label: string; value: 
 }
 
 const STATUS = [
-  { key: "delivered", name: "ডেলিভার্ড", color: "#16a34a" },
-  { key: "confirmed", name: "কনফার্মড", color: "#3E9BD1" },
-  { key: "pending", name: "পেন্ডিং", color: "#f59e0b" },
-  { key: "cancelled", name: "বাতিল", color: "#ef4444" },
+  { key: "delivered", name: "Delivered", color: "#16a34a" },
+  { key: "confirmed", name: "Confirmed", color: "#3E9BD1" },
+  { key: "pending", name: "Pending", color: "#f59e0b" },
+  { key: "cancelled", name: "Cancelled", color: "#ef4444" },
 ];
 
 export function OrdersStatusChart({ data }: { data: DayRow[] }) {
@@ -99,7 +99,7 @@ export function OrdersStatusChart({ data }: { data: DayRow[] }) {
                     color: s.color,
                     value: String((payload.find((p) => p.dataKey === s.key)?.value as number) ?? 0),
                   })),
-                  { label: "বিক্রি", value: taka((payload[0]?.payload as DayRow)?.total || 0) },
+                  { label: "Sales", value: taka((payload[0]?.payload as DayRow)?.total || 0) },
                 ]}
               />
             ) : null
@@ -143,15 +143,15 @@ export function RevenueChart({ data }: { data: DayRow[] }) {
           cursor={{ stroke: "#3E9BD1", strokeWidth: 1, strokeDasharray: "3 3" }}
           content={({ active, payload, label }) =>
             active && payload && payload.length ? (
-              <TipBox title={fmtDay(String(label))} rows={[{ label: "বিক্রি", color: "#3E9BD1", value: taka(payload[0].value as number) }]} />
+              <TipBox title={fmtDay(String(label))} rows={[{ label: "Sales", color: "#3E9BD1", value: taka(payload[0].value as number) }]} />
             ) : null
           }
         />
         {avg > 0 && (
           <ReferenceLine y={avg} stroke="#cbd5e1" strokeDasharray="4 4" ifOverflow="extendDomain"
-            label={{ value: "গড় ৳" + compact(Math.round(avg)), position: "insideTopLeft", fontSize: 10, fill: "#94a3b8" }} />
+            label={{ value: "Avg ৳" + compact(Math.round(avg)), position: "insideTopLeft", fontSize: 10, fill: "#94a3b8" }} />
         )}
-        <Area type="monotone" dataKey="total" name="বিক্রি" stroke="#3E9BD1" strokeWidth={2} fill="url(#dc-rev)" dot={false} activeDot={{ r: 4 }}>
+        <Area type="monotone" dataKey="total" name="Sales" stroke="#3E9BD1" strokeWidth={2} fill="url(#dc-rev)" dot={false} activeDot={{ r: 4 }}>
           <LabelList dataKey="total" content={makeLabel(totals, (v) => compact(v))} />
         </Area>
       </AreaChart>
@@ -165,12 +165,8 @@ const hourAmPm = (h: number) => {
   if (x === 0) x = 12;
   return x + ap;
 };
-const hourRangeBn = (h: number) => {
-  const bn = (n: number) => String(n).replace(/\d/g, (d) => "০১২৩৪৫৬৭৮৯"[Number(d)]);
-  const p = (x: number) => (x < 4 ? "রাত" : x < 6 ? "ভোর" : x < 12 ? "সকাল" : x < 15 ? "দুপুর" : x < 18 ? "বিকেল" : x < 20 ? "সন্ধ্যা" : "রাত");
-  const lab = (x: number) => { let hr = x % 12; if (hr === 0) hr = 12; return `${p(x)} ${bn(hr)}টা`; };
-  return `${lab(h)}–${lab((h + 1) % 24)}`;
-};
+const hourLabel12 = (x: number) => { const ap = x < 12 ? "AM" : "PM"; let hr = x % 12; if (hr === 0) hr = 12; return `${hr} ${ap}`; };
+const hourRangeBn = (h: number) => `${hourLabel12(h)} – ${hourLabel12((h + 1) % 24)}`;
 
 /** Visitors by time of day — vertical "tower" bars; the peak hour is highlighted. */
 export function VisitorsByHourChart({ data, peakHour }: { data: { hour: number; visits: number }[]; peakHour: number }) {
@@ -187,12 +183,12 @@ export function VisitorsByHourChart({ data, peakHour }: { data: { hour: number; 
             active && payload && payload.length ? (
               <TipBox
                 title={hourRangeBn((payload[0].payload as { hour: number }).hour)}
-                rows={[{ label: "ভিজিট", color: "#6366f1", value: String(payload[0].value) }]}
+                rows={[{ label: "Visits", color: "#6366f1", value: String(payload[0].value) }]}
               />
             ) : null
           }
         />
-        <Bar dataKey="visits" name="ভিজিট" radius={[4, 4, 0, 0]} maxBarSize={26}>
+        <Bar dataKey="visits" name="Visits" radius={[4, 4, 0, 0]} maxBarSize={26}>
           {data.map((d) => (
             <Cell key={d.hour} fill={d.hour === peakHour ? "#16a34a" : "#6366f1"} />
           ))}
@@ -222,15 +218,15 @@ export function VisitorsChart({ data }: { data: VisitRow[] }) {
           cursor={{ stroke: "#E77BA6", strokeWidth: 1, strokeDasharray: "3 3" }}
           content={({ active, payload, label }) =>
             active && payload && payload.length ? (
-              <TipBox title={fmtDay(String(label))} rows={[{ label: "ভিজিটর", color: "#E77BA6", value: String(payload[0].value) }]} />
+              <TipBox title={fmtDay(String(label))} rows={[{ label: "Visitors", color: "#E77BA6", value: String(payload[0].value) }]} />
             ) : null
           }
         />
         {avg > 0 && (
           <ReferenceLine y={avg} stroke="#cbd5e1" strokeDasharray="4 4" ifOverflow="extendDomain"
-            label={{ value: "গড় " + Math.round(avg), position: "insideTopLeft", fontSize: 10, fill: "#94a3b8" }} />
+            label={{ value: "Avg " + Math.round(avg), position: "insideTopLeft", fontSize: 10, fill: "#94a3b8" }} />
         )}
-        <Area type="monotone" dataKey="visitors" name="ভিজিটর" stroke="#E77BA6" strokeWidth={2} fill="url(#dc-vis)" dot={false} activeDot={{ r: 4 }}>
+        <Area type="monotone" dataKey="visitors" name="Visitors" stroke="#E77BA6" strokeWidth={2} fill="url(#dc-vis)" dot={false} activeDot={{ r: 4 }}>
           <LabelList dataKey="visitors" content={makeLabel(vis)} />
         </Area>
       </AreaChart>

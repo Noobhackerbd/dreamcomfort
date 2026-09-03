@@ -20,7 +20,8 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  overflow-x: hidden;
+  /* overflow-x:hidden stays on <html> only — on <body> it makes body a scroll
+     container and breaks position:sticky (html is the real scroller). */
   width: 100%;
   max-width: 100%;
 }
@@ -284,5 +285,5 @@ img {
   color: transparent;
 }
 
-/* hide the global site header on the landing funnel */
+/* hide the global site header on the landing funnel + thank-you pages */
 body.dc-landing header.site-header { display: none; }

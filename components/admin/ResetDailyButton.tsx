@@ -19,7 +19,7 @@ export function ResetDailyButton() {
     const res = await resetDailyOrders(pin);
     setBusy(false);
     if (!res.ok) {
-      setErr(res.error ?? "রিসেট ব্যর্থ হয়েছে।");
+      setErr(res.error ?? "Reset failed.");
       setPin("");
       return;
     }
@@ -35,9 +35,9 @@ export function ResetDailyButton() {
           setOpen(true);
           setErr(null);
         }}
-        className="rounded-lg border border-black/10 text-gray-600 hover:text-brand-dark hover:border-brand/40 px-3 py-1.5 text-xs font-medium transition"
+        className="dc-btn"
       >
-        🔄 রিসেট
+        Reset
       </button>
 
       {open && (
@@ -48,9 +48,9 @@ export function ResetDailyButton() {
             className="relative w-full max-w-xs rounded-2xl bg-white p-5 shadow-2xl text-center"
           >
             <div className="text-3xl mb-1">🔄</div>
-            <h3 className="font-display font-bold">আজকের গণনা রিসেট</h3>
+            <h3 className="font-display font-bold">Reset today's counters</h3>
             <p className="text-xs text-gray-500 mt-1 mb-4">
-              আজকের অর্ডার সংখ্যা, আয় ও পণ্য-গণনা এখন থেকে নতুন করে শুরু হবে। চালিয়ে যেতে পিন দিন।
+              Today's order count, revenue and product tally will restart from now. Enter your PIN to continue.
             </p>
             <input
               type="password"
@@ -61,8 +61,8 @@ export function ResetDailyButton() {
                 setPin(e.target.value.replace(/\D/g, ""));
                 setErr(null);
               }}
-              placeholder="পিন"
-              className={"w-full rounded-xl border px-4 py-2.5 text-center tracking-[0.3em] outline-none focus:border-brand " + (err ? "border-red-300" : "border-black/10")}
+              placeholder="PIN"
+              className={"w-full rounded-xl border px-4 py-2.5 text-center tracking-[0.3em] outline-none focus:border-[color:var(--a-faint)] " + (err ? "border-red-300" : "border-black/10")}
             />
             {err && <p className="mt-2 text-sm text-red-600">{err}</p>}
             <div className="mt-4 flex gap-2">
@@ -71,14 +71,14 @@ export function ResetDailyButton() {
                 onClick={() => !busy && setOpen(false)}
                 className="flex-1 rounded-xl border border-black/10 px-4 py-2.5 text-sm"
               >
-                বাতিল
+                Cancel
               </button>
               <button
                 type="submit"
                 disabled={busy || pin.length === 0}
-                className="flex-1 rounded-xl bg-brand text-white px-4 py-2.5 text-sm font-medium hover:bg-brand-dark disabled:opacity-60"
+                className="flex-1 dc-btn dc-btn-solid justify-center py-2.5 disabled:opacity-60"
               >
-                {busy ? "রিসেট হচ্ছে..." : "রিসেট করুন"}
+                {busy ? "Resetting…" : "Reset"}
               </button>
             </div>
           </form>

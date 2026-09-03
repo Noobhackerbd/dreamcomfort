@@ -5,13 +5,13 @@ import { useRouter } from "next/navigation";
 import { updateOrderStatus } from "./actions";
 
 const OPTIONS: { value: string; label: string }[] = [
-  { value: "pending", label: "পেন্ডিং" },
-  { value: "confirmed", label: "কনফার্মড" },
-  { value: "processing", label: "প্রসেসিং" },
-  { value: "shipped", label: "শিপড" },
-  { value: "delivered", label: "ডেলিভার্ড" },
-  { value: "cancelled", label: "বাতিল" },
-  { value: "returned", label: "রিটার্ন" },
+  { value: "pending", label: "Pending" },
+  { value: "confirmed", label: "Confirmed" },
+  { value: "processing", label: "Processing" },
+  { value: "shipped", label: "Shipped" },
+  { value: "delivered", label: "Delivered" },
+  { value: "cancelled", label: "Cancelled" },
+  { value: "returned", label: "Returned" },
 ];
 
 export function StatusSelect({ id, value }: { id: string; value: string }) {
@@ -31,7 +31,7 @@ export function StatusSelect({ id, value }: { id: string; value: string }) {
           router.refresh();
         });
       }}
-      className="rounded-lg border px-2 py-1 text-sm bg-white"
+      className="dc-input !w-auto !py-1.5 !px-2.5 text-xs font-medium"
     >
       {OPTIONS.map((o) => (
         <option key={o.value} value={o.value}>

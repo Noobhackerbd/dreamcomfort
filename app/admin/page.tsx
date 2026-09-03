@@ -1,46 +1,63 @@
-// app/admin/page.tsx — premium admin dashboard with advanced analytics.
+// app/admin/page.tsx — admin dashboard (modern, English).
 import { getServerSupabase } from "@/lib/supabase/server";
+import { getSupabaseServerClient } from "@/lib/supabase/ssr-server";
 import { taka } from "@/lib/format";
+import { Icon } from "@/components/admin/icons";
 import { ResetDailyButton } from "@/components/admin/ResetDailyButton";
 import { AutoRefresh } from "@/components/admin/AutoRefresh";
+import { RangeTabs } from "@/components/admin/RangeTabs";
 import { OrdersStatusChart, RevenueChart, VisitorsChart, VisitorsByHourChart } from "@/components/admin/DashboardCharts";
 
 export const dynamic = "force-dynamic";
 
-const DHAKA_OFFSET_MS = 6 * 60 * 60 * 1000; // UTC+6
-
-function dhakaDayKey(iso: string): string {
-  return new Date(new Date(iso).getTime() + DHAKA_OFFSET_MS).toISOString().slice(0, 10);
-}
-function todayKey(): string {
-  return new Date(Date.now() + DHAKA_OFFSET_MS).toISOString().slice(0, 10);
-}
+const DHAKA_OFFSET_MS = 6 * 60 * 60 * 1000;
+function dhakaDayKey(iso: string): string { return new Date(new Date(iso).getTime() + DHAKA_OFFSET_MS).toISOString().slice(0, 10); }
+function todayKey(): string { return new Date(Date.now() + DHAKA_OFFSET_MS).toISOString().slice(0, 10); }
+function hour12(x: number): string { const ap = x < 12 ? "AM" : "PM"; let h = x % 12; if (h === 0) h = 12; return `${h} ${ap}`; }
+const isoRe = /^\d{4}-\d{2}-\d{2}$/;
 
 const CONFIRMED_SET = new Set(["confirmed", "processing", "shipped", "delivered"]);
 const isConfirmed = (s: string) => CONFIRMED_SET.has(s);
 const isCancelled = (s: string) => s === "cancelled" || s === "returned";
 const isDelivered = (s: string) => s === "delivered";
 
-async function getStats(rangeDays: number) {
+async function getStats(rangeDays: number, cFrom?: string, cTo?: string) {
   const supabase = getServerSupabase();
   const now = Date.now();
-  const winStart = new Date(now - rangeDays * 86400000).toISOString();
-  const prevStart = new Date(now - 2 * rangeDays * 86400000).toISOString();
-  const todayStartUtc = new Date(`${todayKey()}T00:00:00+06:00`).toISOString(); // Dhaka midnight → UTC
 
-  // PostgREST caps a single request at 1000 rows, so `.limit(100000)` silently
-  // returned only 1000 (and, with no ORDER BY, the OLDEST 1000 — dropping today's
-  // visits). Paginate newest-first to get the full window.
+  const todayStartMs = new Date(`${todayKey()}T00:00:00+06:00`).getTime();
+  let winStartMs: number, winEndMs: number, prevStartMs: number, prevEndMs: number;
+  const custom = !!(cFrom && cTo && isoRe.test(cFrom) && isoRe.test(cTo));
+  if (custom) {
+    winStartMs = new Date(`${cFrom}T00:00:00+06:00`).getTime();
+    winEndMs = Math.min(now, new Date(`${cTo}T23:59:59.999+06:00`).getTime());
+    rangeDays = Math.max(1, Math.round((winEndMs - winStartMs) / 86400000) + 1);
+    const span = Math.max(86400000, winEndMs - winStartMs);
+    prevStartMs = winStartMs - span; prevEndMs = winStartMs;
+  } else if (rangeDays === 1) {
+    // "Today" = the calendar day (since Bangladesh midnight). Compare with the same
+    // slice of yesterday (yesterday up to this same time) for a fair "vs yesterday".
+    winStartMs = todayStartMs; winEndMs = now;
+    const elapsed = Math.max(60000, now - todayStartMs);
+    prevStartMs = todayStartMs - 86400000; prevEndMs = prevStartMs + elapsed;
+  } else {
+    winEndMs = now; winStartMs = now - rangeDays * 86400000;
+    prevStartMs = winStartMs - (winEndMs - winStartMs); prevEndMs = winStartMs;
+  }
+  const winStart = new Date(winStartMs).toISOString();
+  const winEnd = new Date(winEndMs).toISOString();
+  const prevStart = new Date(prevStartMs).toISOString();
+  const prevEnd = new Date(prevEndMs).toISOString();
+  const todayStartUtc = new Date(todayStartMs).toISOString();
+
+  // Fetch visit rows in the window (capped so a very busy site can't stall the page).
   async function fetchAllVisits(sinceIso: string): Promise<any[]> {
     const out: any[] = [];
     const pageSize = 1000;
-    for (let from = 0; from < 200000; from += pageSize) {
-      const { data, error } = await supabase
-        .from("page_visits")
-        .select("visitor_id, created_at")
-        .gte("created_at", sinceIso)
-        .order("created_at", { ascending: false })
-        .range(from, from + pageSize - 1);
+    const MAX_PAGES = 40; // ~40k visits max scanned per load
+    for (let p = 0; p < MAX_PAGES; p++) {
+      const from = p * pageSize;
+      const { data, error } = await supabase.from("page_visits").select("visitor_id, created_at").gte("created_at", sinceIso).order("created_at", { ascending: false }).range(from, from + pageSize - 1);
       if (error || !data || data.length === 0) break;
       out.push(...data);
       if (data.length < pageSize) break;
@@ -48,26 +65,13 @@ async function getStats(rangeDays: number) {
     return out;
   }
 
-  // Soft-delete aware: if the orders table has a `deleted_at` column, EXCLUDE trashed
-  // orders from EVERY dashboard count, revenue figure, chart and top-product tally.
-  // Resilient — if the migration hasn't run yet the column is absent, so we simply skip
-  // the filter and nothing breaks.
   const delProbe = await supabase.from("orders").select("deleted_at").limit(1);
   const hasTrash = !(delProbe.error && (delProbe.error as any).code === "42703");
-  const ordersLive = (sel: string, opts?: any) => {
-    let q: any = supabase.from("orders").select(sel, opts);
-    if (hasTrash) q = q.is("deleted_at", null);
-    return q;
-  };
-  // Top products — exclude items that belong to trashed orders (via an inner join).
+  const ordersLive = (sel: string, opts?: any) => { let q: any = supabase.from("orders").select(sel, opts); if (hasTrash) q = q.is("deleted_at", null); return q; };
   const topItemsQuery = hasTrash
     ? supabase.from("order_items").select("product_name, quantity, orders!inner(deleted_at)").is("orders.deleted_at", null)
     : supabase.from("order_items").select("product_name, quantity");
-  // Today's ordered products (with image) — also skip trashed orders.
-  let todayItemsQuery: any = supabase
-    .from("order_items")
-    .select("order_id, product_id, product_name, quantity, products(images), orders!inner(created_at)")
-    .gte("orders.created_at", todayStartUtc);
+  let todayItemsQuery: any = supabase.from("order_items").select("order_id, product_id, product_name, quantity, unit_price, products(images), orders!inner(created_at)").gte("orders.created_at", todayStartUtc);
   if (hasTrash) todayItemsQuery = todayItemsQuery.is("orders.deleted_at", null);
 
   const [productsRes, ordersRes, pendingRes, twoWinRes, recentRes, lowStockRes, itemsRes, abandonedRes, bookedRes, visitsRes, prevVisitsRes, todayItemsRes, resetRes] =
@@ -82,29 +86,21 @@ async function getStats(rangeDays: number) {
       supabase.from("abandoned_carts").select("id", { count: "exact", head: true }).eq("status", "abandoned"),
       ordersLive("id, order_number, customer_name, customer_phone, booked_date, total, status").eq("is_booked", true).not("booked_date", "is", null).not("status", "in", "(delivered,cancelled,returned)").order("booked_date", { ascending: true }).limit(60),
       fetchAllVisits(winStart),
-      supabase.from("page_visits").select("visitor_id", { count: "exact", head: true }).gte("created_at", prevStart).lt("created_at", winStart),
+      supabase.from("page_visits").select("visitor_id", { count: "exact", head: true }).gte("created_at", prevStart).lt("created_at", prevEnd),
       todayItemsQuery,
-      // Optional daily-reset baseline (PIN-protected reset button in the dashboard).
       supabase.from("settings").select("value").eq("key", "dashboard_daily_reset").maybeSingle(),
     ]);
 
-  // Reset baseline: once the owner resets, the "order tally" counts from that moment
-  // and PERSISTS until the next manual reset (does NOT auto-clear at midnight) — so it
-  // reflects "parcels accumulated since the last courier handover". No reset yet → today.
   const resetAt = (resetRes as any)?.data?.value?.at as string | undefined;
   const resetActive = !!resetAt;
   const effectiveTodayStart = resetAt ? resetAt : todayStartUtc;
   const resetTimeLabel = resetAt
-    ? (() => {
-        const iso = new Date(new Date(resetAt).getTime() + DHAKA_OFFSET_MS).toISOString();
-        const hm = iso.slice(11, 16);
-        return iso.slice(0, 10) === todayKey() ? `আজ ${hm}` : `${iso.slice(8, 10)}/${iso.slice(5, 7)} ${hm}`;
-      })()
+    ? (() => { const iso = new Date(new Date(resetAt).getTime() + DHAKA_OFFSET_MS).toISOString(); const hm = iso.slice(11, 16); return iso.slice(0, 10) === todayKey() ? `today ${hm}` : `${iso.slice(8, 10)}/${iso.slice(5, 7)} ${hm}`; })()
     : null;
 
   const two = (twoWinRes.data ?? []) as any[];
-  const cur = two.filter((o) => o.created_at >= winStart);
-  const prev = two.filter((o) => o.created_at < winStart);
+  const cur = two.filter((o) => o.created_at >= winStart && o.created_at <= winEnd);
+  const prev = two.filter((o) => o.created_at >= prevStart && o.created_at < prevEnd);
 
   const sum = (arr: any[]) => arr.reduce((s, o) => s + Number(o.total || 0), 0);
   const revenueCur = sum(cur);
@@ -116,18 +112,16 @@ async function getStats(rangeDays: number) {
   const todayOrders = cur.filter((o) => o.created_at >= effectiveTodayStart);
   const todayRevenue = sum(todayOrders);
 
-  // Daily buckets for the selected range.
   type Day = { day: string; total: number; count: number; confirmed: number; cancelled: number; pending: number; delivered: number };
   const buckets = new Map<string, Day>();
-  for (let i = rangeDays - 1; i >= 0; i--) {
-    const key = new Date(now + DHAKA_OFFSET_MS - i * 86400000).toISOString().slice(0, 10);
-    buckets.set(key, { day: key, total: 0, count: 0, confirmed: 0, cancelled: 0, pending: 0, delivered: 0 });
+  for (let t = winStartMs; t <= winEndMs + 1000; t += 86400000) {
+    const key = new Date(t + DHAKA_OFFSET_MS).toISOString().slice(0, 10);
+    if (!buckets.has(key)) buckets.set(key, { day: key, total: 0, count: 0, confirmed: 0, cancelled: 0, pending: 0, delivered: 0 });
   }
   for (const o of cur) {
     const b = buckets.get(dhakaDayKey(o.created_at));
     if (!b) continue;
-    b.total += Number(o.total || 0);
-    b.count += 1;
+    b.total += Number(o.total || 0); b.count += 1;
     if (isDelivered(o.status)) b.delivered += 1;
     else if (isConfirmed(o.status)) b.confirmed += 1;
     else if (isCancelled(o.status)) b.cancelled += 1;
@@ -137,16 +131,18 @@ async function getStats(rangeDays: number) {
 
   const total = cur.length;
   const confirmed = cur.filter((o) => isConfirmed(o.status)).length;
+  const delivered = cur.filter((o) => isDelivered(o.status)).length;
   const cancelled = cur.filter((o) => isCancelled(o.status)).length;
   const salesConfirmed = cur.filter((o) => isConfirmed(o.status)).reduce((s, o) => s + Number(o.total || 0), 0);
   const confirmRate = total ? Math.round((confirmed / total) * 100) : 0;
   const cancelRate = total ? Math.round((cancelled / total) * 100) : 0;
+  const deliveryRate = confirmed ? Math.round((delivered / confirmed) * 100) : 0;
   const aov = confirmed ? Math.round(salesConfirmed / confirmed) : 0;
 
-  // Visitors + conversion.
   const visitDays = new Map<string, Set<string>>();
   const allVisitors = new Set<string>();
   for (const v of (visitsRes ?? []) as any[]) {
+    if (v.created_at > winEnd) continue;
     const id = v.visitor_id || v.created_at;
     allVisitors.add(id);
     const key = dhakaDayKey(v.created_at);
@@ -159,346 +155,260 @@ async function getStats(rangeDays: number) {
   const visitorsCur = allVisitors.size;
   const visitorsPrev = prevVisitsRes.count ?? 0;
   const visitorsDelta = visitorsPrev > 0 ? Math.round(((visitorsCur - visitorsPrev) / visitorsPrev) * 100) : visitorsCur > 0 ? 100 : 0;
-  const conversion = visitorsCur ? Math.round((total / visitorsCur) * 1000) / 10 : 0; // %
+  const conversion = visitorsCur ? Math.round((total / visitorsCur) * 1000) / 10 : 0;
 
-  // Visitors by time-of-day (Dhaka hour, 0–23) across the range → "most visited time".
   const hourCounts = new Array(24).fill(0);
   for (const v of (visitsRes ?? []) as any[]) {
-    const h = new Date(new Date(v.created_at).getTime() + DHAKA_OFFSET_MS).getUTCHours();
-    hourCounts[h] += 1;
+    if (v.created_at > winEnd) continue;
+    hourCounts[new Date(new Date(v.created_at).getTime() + DHAKA_OFFSET_MS).getUTCHours()] += 1;
   }
   const hourly = hourCounts.map((visits, hour) => ({ hour, visits }));
-  let peakHour = 0;
-  let peakVisits = 0;
+  let peakHour = 0, peakVisits = 0;
   hourCounts.forEach((c: number, h: number) => { if (c > peakVisits) { peakVisits = c; peakHour = h; } });
-  const bnNum = (n: number) => String(n).replace(/\d/g, (d) => "০১২৩৪৫৬৭৮৯"[Number(d)]);
-  const hourLabelBn = (h: number) => {
-    const period = h < 4 ? "রাত" : h < 6 ? "ভোর" : h < 12 ? "সকাল" : h < 15 ? "দুপুর" : h < 18 ? "বিকেল" : h < 20 ? "সন্ধ্যা" : "রাত";
-    let hr = h % 12; if (hr === 0) hr = 12;
-    return `${period} ${bnNum(hr)}টা`;
-  };
-  const peakLabel = peakVisits > 0 ? `${hourLabelBn(peakHour)}–${hourLabelBn((peakHour + 1) % 24)}` : "—";
+  const peakLabel = peakVisits > 0 ? `${hour12(peakHour)} – ${hour12((peakHour + 1) % 24)}` : "—";
 
-  // Top delivery areas (by order count) in the current window.
   const areaCount = new Map<string, { orders: number; revenue: number }>();
   for (const o of cur) {
-    const label = (o.area || o.city || o.district || "অজানা").toString().trim() || "অজানা";
+    const label = (o.area || o.city || o.district || "Unknown").toString().trim() || "Unknown";
     const cell = areaCount.get(label) || { orders: 0, revenue: 0 };
-    cell.orders += 1;
-    cell.revenue += Number(o.total || 0);
+    cell.orders += 1; cell.revenue += Number(o.total || 0);
     areaCount.set(label, cell);
   }
   const topAreas = Array.from(areaCount.entries()).map(([name, v]) => ({ name, ...v })).sort((a, b) => b.orders - a.orders).slice(0, 6);
 
-  // Booked reminders.
   const cutoff = new Date(now + DHAKA_OFFSET_MS + 3 * 86400000).toISOString().slice(0, 10);
   const bookedSoon = ((bookedRes.data ?? []) as any[])
     .filter((b: any) => b.booked_date && b.booked_date <= cutoff)
     .map((b: any) => ({ id: b.id as string, order_number: b.order_number as string, name: b.customer_name as string, phone: b.customer_phone as string, date: b.booked_date as string, total: Number(b.total || 0), overdue: b.booked_date < today }));
 
-  // Top products.
   const qtyByName = new Map<string, number>();
   for (const it of (itemsRes.data ?? []) as any[]) qtyByName.set(it.product_name, (qtyByName.get(it.product_name) || 0) + Number(it.quantity || 0));
   const topProducts = Array.from(qtyByName.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5);
 
-  // Today's ordered products — how many orders + units per product, with image.
-  const todayProdMap = new Map<string, { name: string; image: string | null; orders: Set<string>; qty: number }>();
+  const todayProdMap = new Map<string, { name: string; image: string | null; orders: Set<string>; qty: number; value: number }>();
   for (const it of (todayItemsRes.data ?? []) as any[]) {
     const created = it.orders?.created_at as string | undefined;
-    if (created && created < effectiveTodayStart) continue; // respect the daily reset baseline
+    if (created && created < effectiveTodayStart) continue;
     const key = it.product_id || it.product_name;
     const img = it.products?.images?.[0] ?? null;
-    const cell = todayProdMap.get(key) || { name: it.product_name, image: img, orders: new Set<string>(), qty: 0 };
+    const cell = todayProdMap.get(key) || { name: it.product_name, image: img, orders: new Set<string>(), qty: 0, value: 0 };
     if (it.order_id) cell.orders.add(it.order_id);
     cell.qty += Number(it.quantity || 0);
+    cell.value += Number(it.unit_price || 0) * Number(it.quantity || 0);
     if (!cell.image && img) cell.image = img;
     todayProdMap.set(key, cell);
   }
+  const todayTotalOrders = todayOrders.length;
   const todayProducts = Array.from(todayProdMap.values())
-    .map((p) => ({ name: p.name, image: p.image, orders: p.orders.size, qty: p.qty }))
+    .map((p) => ({ name: p.name, image: p.image, orders: p.orders.size, qty: p.qty, value: p.value, pct: todayTotalOrders ? Math.min(100, Math.round((p.orders.size / todayTotalOrders) * 100)) : 0 }))
     .sort((a, b) => b.orders - a.orders || b.qty - a.qty);
 
   return {
-    rangeDays,
-    resetTimeLabel,
-    resetActive,
-    todayProducts,
-    products: productsRes.count ?? 0,
-    orders: ordersRes.count ?? 0,
-    pending: pendingRes.count ?? 0,
-    abandoned: abandonedRes.count ?? 0,
-    revenueCur, revenueDelta, ordersDelta,
-    total, confirmed, cancelled, confirmRate, cancelRate, salesConfirmed, aov,
-    todayOrders: todayOrders.length, todayRevenue, todayVisitors,
-    visitorsCur, visitorsDelta, conversion,
-    hourly, peakHour, peakLabel, peakVisits,
-    bookedSoon, visitorsChart, chart, topProducts, topAreas,
-    recent: (recentRes.data ?? []) as any[],
-    lowStock: (lowStockRes.data ?? []) as any[],
+    rangeDays, custom, resetTimeLabel, resetActive, todayProducts,
+    products: productsRes.count ?? 0, orders: ordersRes.count ?? 0, pending: pendingRes.count ?? 0, abandoned: abandonedRes.count ?? 0,
+    revenueCur, revenueDelta, ordersDelta, total, confirmed, delivered, cancelled, confirmRate, cancelRate, deliveryRate, salesConfirmed, aov,
+    todayOrders: todayOrders.length, todayRevenue, todayVisitors, visitorsCur, visitorsDelta, conversion,
+    hourly, peakHour, peakLabel, peakVisits, bookedSoon, visitorsChart, chart, topProducts, topAreas,
+    recent: (recentRes.data ?? []) as any[], lowStock: (lowStockRes.data ?? []) as any[],
   };
 }
 
-const STATUS_LABELS: Record<string, string> = { pending: "পেন্ডিং", confirmed: "কনফার্মড", processing: "প্রসেসিং", shipped: "শিপড", delivered: "ডেলিভার্ড", cancelled: "বাতিল", returned: "রিটার্ন" };
-const STATUS_STYLE: Record<string, string> = {
-  pending: "bg-amber-100 text-amber-700", confirmed: "bg-brand-soft text-brand-dark", processing: "bg-indigo-100 text-indigo-700",
-  shipped: "bg-purple-100 text-purple-700", delivered: "bg-green-100 text-green-700", cancelled: "bg-red-100 text-red-700", returned: "bg-gray-200 text-gray-600",
+const STATUS_META: Record<string, { label: string; bg: string; fg: string }> = {
+  pending: { label: "Pending", bg: "#fef3e2", fg: "#b45309" }, confirmed: { label: "Confirmed", bg: "#e8eefc", fg: "#2563eb" },
+  processing: { label: "Processing", bg: "#f0e9fc", fg: "#7c3aed" }, shipped: { label: "Shipped", bg: "#e2f3f7", fg: "#0e7490" },
+  delivered: { label: "Delivered", bg: "#e7f6ec", fg: "#16a34a" }, cancelled: { label: "Cancelled", bg: "#fdeaea", fg: "#dc2626" },
+  returned: { label: "Returned", bg: "#fdeede", fg: "#ea580c" },
 };
-const RANGES = [
-  { v: 7, label: "৭ দিন" },
-  { v: 30, label: "৩০ দিন" },
-  { v: 90, label: "৯০ দিন" },
-];
 
-function Delta({ pct }: { pct: number }) {
-  if (pct === 0) return <span className="text-xs text-gray-400">—</span>;
-  const up = pct > 0;
+function Delta({ pct, suffix }: { pct: number; suffix: string }) {
+  const up = pct >= 0;
   return (
-    <span className={"text-xs font-medium inline-flex items-center gap-0.5 " + (up ? "text-green-600" : "text-red-500")}>
-      {up ? "▲" : "▼"} {Math.abs(pct)}%
-    </span>
+    <p className="text-[11px] font-bold mt-1.5" style={{ color: up ? "#16a34a" : "#dc2626" }}>
+      {up ? "▲" : "▼"} {Math.abs(pct)}% <span className="font-medium" style={{ color: "var(--a-faint)" }}>{suffix}</span>
+    </p>
   );
 }
 
-function Kpi({ icon, label, value, delta, href, tone = "brand", alert }: {
-  icon: string; label: string; value: string | number; delta?: number; href?: string;
-  tone?: "brand" | "accent" | "green" | "amber" | "indigo" | "violet"; alert?: boolean;
+function StatCard({ icon, iconBg, iconFg, num, label, delta, deltaSuffix, badge, badgeColor, tint, href }: {
+  icon: string; iconBg: string; iconFg: string; num: string | number; label: string;
+  delta?: number; deltaSuffix?: string; badge?: string; badgeColor?: string; tint?: string; href?: string;
 }) {
-  const toneMap: Record<string, string> = {
-    brand: "from-brand to-brand-dark", accent: "from-accent to-accent-dark", green: "from-green-400 to-green-600",
-    amber: "from-amber-400 to-amber-500", indigo: "from-indigo-400 to-indigo-600", violet: "from-violet-400 to-violet-600",
-  };
   const inner = (
     <>
-      <div className="flex items-center justify-between">
-        <span className={"h-9 w-9 rounded-xl bg-gradient-to-br text-white flex items-center justify-center text-base shadow-sm " + toneMap[tone]}>{icon}</span>
-        {delta !== undefined ? <Delta pct={delta} /> : alert && Number(value) > 0 ? <span className="h-2.5 w-2.5 rounded-full bg-amber-500 animate-pulse" /> : null}
+      <div className="flex items-center justify-between gap-2">
+        <span className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: iconBg, color: iconFg }}><Icon name={icon} className="h-[18px] w-[18px]" /></span>
+        <p className="text-[21px] font-extrabold tracking-tight tabular-nums leading-none">{num}</p>
       </div>
-      <p className="mt-3 text-2xl font-bold font-display tabular-nums">{value}</p>
-      <p className="text-[13px] text-gray-500">{label}</p>
+      <p className="text-[12px] dc-muted mt-2">{label}</p>
+      {delta !== undefined ? <Delta pct={delta} suffix={deltaSuffix || ""} /> : badge ? <p className="text-[11px] font-bold mt-1" style={{ color: badgeColor }}>{badge}</p> : null}
     </>
   );
-  const cls = "rounded-2xl border border-black/5 bg-white p-4 shadow-sm block transition " + (href ? "hover:shadow-soft hover:-translate-y-0.5 " : "") + (alert && Number(value) > 0 ? "ring-1 ring-amber-300 " : "");
-  return href ? <a href={href} className={cls}>{inner}</a> : <div className={cls}>{inner}</div>;
+  const cls = "rounded-2xl border p-3 block";
+  const style = { borderColor: tint ? "#d9f0e0" : "var(--a-border)", background: tint || "var(--a-surface)", boxShadow: "0 1px 2px rgba(20,20,40,.03)" };
+  return href ? <a href={href} className={cls} style={style}>{inner}</a> : <div className={cls} style={style}>{inner}</div>;
 }
 
-function Meter({ label, pct, tone }: { label: string; pct: number; tone: "green" | "red" | "brand" }) {
-  const bar = tone === "green" ? "bg-green-500" : tone === "red" ? "bg-red-500" : "bg-brand";
+function Meter({ label, pct, icon, fg, bg, track }: { label: string; pct: number; icon: string; fg: string; bg: string; track: string }) {
   return (
-    <div className="rounded-2xl border border-black/5 bg-white p-4 shadow-sm">
-      <div className="flex items-baseline justify-between">
-        <p className="text-[13px] text-gray-500">{label}</p>
-        <p className="text-2xl font-bold font-display tabular-nums">{pct}%</p>
+    <div className="dc-card p-4">
+      <div className="flex items-center justify-between gap-2">
+        <span className="h-9 w-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: bg, color: fg }}><Icon name={icon} className="h-[18px] w-[18px]" /></span>
+        <p className="text-2xl font-extrabold font-display tabular-nums" style={{ color: fg }}>{pct}%</p>
       </div>
-      <div className="mt-2 h-2 rounded-full bg-gray-100 overflow-hidden">
-        <div className={"h-full rounded-full " + bar} style={{ width: `${Math.min(100, pct)}%` }} />
-      </div>
+      <p className="text-[12px] dc-muted mt-2 mb-2">{label}</p>
+      <div className="h-2 rounded-full overflow-hidden" style={{ background: track }}><div className="h-full rounded-full" style={{ width: `${Math.min(100, pct)}%`, background: fg }} /></div>
     </div>
   );
 }
 
 function ChartCard({ title, right, children, note }: { title: string; right?: React.ReactNode; children: React.ReactNode; note?: string }) {
   return (
-    <div className="rounded-2xl border border-black/5 bg-white p-5 shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-        <h2 className="font-display text-base font-bold">{title}</h2>
-        {right}
-      </div>
+    <div className="dc-card p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4"><h2 className="font-display text-base font-bold">{title}</h2>{right}</div>
       {children}
-      {note && <p className="text-xs text-gray-400 mt-2">{note}</p>}
+      {note && <p className="text-xs dc-muted mt-2">{note}</p>}
     </div>
   );
 }
 
-export default async function AdminDashboard({ searchParams }: { searchParams?: { range?: string } }) {
-  const rangeDays = [7, 30, 90].includes(Number(searchParams?.range)) ? Number(searchParams?.range) : 30;
-  const stats = await getStats(rangeDays);
-  const rangeLabel = RANGES.find((r) => r.v === rangeDays)!.label;
+function greeting(): string {
+  const h = new Date(Date.now() + DHAKA_OFFSET_MS).getUTCHours();
+  return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+}
 
+export default async function AdminDashboard({ searchParams }: { searchParams?: { range?: string; from?: string; to?: string } }) {
+  const custom = !!(searchParams?.from && searchParams?.to);
+  const rangeDays = custom ? 30 : [1, 7, 30].includes(Number(searchParams?.range)) ? Number(searchParams?.range) : 1;
+  const stats = await getStats(rangeDays, searchParams?.from, searchParams?.to);
+  const activeTab = (custom ? "custom" : String(rangeDays)) as "1" | "7" | "30" | "custom";
+
+  // Owner name from the signed-in email local part (if it looks like a name).
+  let name = "";
+  try {
+    const sb = getSupabaseServerClient();
+    const { data: { user } } = await sb.auth.getUser();
+    const lp = (user?.email || "").split("@")[0];
+    if (lp && /^[a-zA-Z][a-zA-Z._-]{1,20}$/.test(lp) && !/\d/.test(lp)) name = lp.split(/[._-]/)[0].replace(/^\w/, (c) => c.toUpperCase());
+  } catch {}
+
+  const rangeSuffix = custom ? "vs prev period" : rangeDays === 1 ? "vs yesterday" : `vs prev ${rangeDays}d`;
   const maxArea = Math.max(1, ...stats.topAreas.map((a) => a.orders));
 
   return (
     <div>
-      <AutoRefresh seconds={12} />
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-        <div className="flex items-center gap-2">
-          <h1 className="font-display text-2xl font-bold">ড্যাশবোর্ড</h1>
-          <span className="inline-flex items-center gap-1.5 text-xs text-green-600 bg-green-50 rounded-full px-2.5 py-1">
-            <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" /> লাইভ
-          </span>
-        </div>
-        <div className="inline-flex rounded-xl border border-black/5 bg-white p-1 shadow-sm">
-          {RANGES.map((r) => (
-            <a key={r.v} href={`/admin?range=${r.v}`} className={"rounded-lg px-3 py-1.5 text-sm font-medium transition " + (r.v === rangeDays ? "bg-gradient-to-r from-brand to-brand-dark text-white shadow-sm" : "text-gray-500 hover:text-brand-dark")}>{r.label}</a>
-          ))}
-        </div>
+      <AutoRefresh seconds={30} />
+
+      {/* Desktop-only greeting (mobile uses the sticky top bar) */}
+      <div className="hidden md:block mb-4">
+        <h1 className="font-display text-2xl font-bold tracking-tight">{greeting()}{name ? `, ${name}` : ""} 👋</h1>
+        <p className="text-[13px] dc-muted mt-0.5">Here&apos;s what&apos;s happening today</p>
       </div>
 
-      {stats.bookedSoon.length > 0 && (
-        <div className="mb-6 rounded-2xl border border-amber-300 bg-amber-50 p-4">
-          <h2 className="font-bold text-amber-800 mb-2">📅 বুকড অর্ডার রিমাইন্ডার ({stats.bookedSoon.length})</h2>
-          <div className="space-y-2">
-            {stats.bookedSoon.map((b) => (
-              <div key={b.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white px-3 py-2 text-sm">
-                <div className="min-w-0">
-                  <a href={`/admin/orders/${b.id}`} className="font-semibold text-brand-dark hover:underline">{b.order_number}</a>
-                  <span className="text-gray-600"> · {b.name} · {b.phone}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className={"rounded-full px-2 py-0.5 text-xs font-medium " + (b.overdue ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700")}>{b.overdue ? "⏰ পার হয়েছে" : "📅"} {b.date}</span>
-                  <a href={`tel:+${(b.phone || "").replace(/\D/g, "")}`} className="rounded-lg bg-brand text-white px-3 py-1 text-xs">📞 কল</a>
-                </div>
-              </div>
-            ))}
+      <RangeTabs active={activeTab} from={searchParams?.from} to={searchParams?.to} />
+
+      {/* KPI grid */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2.5 sm:gap-3">
+        <StatCard icon="eye" iconBg="#e9eefe" iconFg="#3f6fe0" num={stats.visitorsCur} label="Visitors" delta={stats.visitorsDelta} deltaSuffix={rangeSuffix} />
+        <StatCard icon="orders" iconBg="#e6f4fb" iconFg="#2f80b4" num={stats.total} label="Orders" delta={stats.ordersDelta} deltaSuffix={rangeSuffix} />
+        <StatCard icon="money" iconBg="#dff3e6" iconFg="#16a34a" num={taka(stats.revenueCur)} label="Revenue" delta={stats.revenueDelta} deltaSuffix={rangeSuffix} tint="#effaf2" />
+        <StatCard icon="clock" iconBg="#fdeede" iconFg="#e08a2b" num={stats.pending} label="Pending Orders" badge={stats.pending > 0 ? "⚠ Needs attention" : "✓ All clear"} badgeColor={stats.pending > 0 ? "#e08a2b" : "#16a34a"} href="/admin/orders?status=pending" />
+        <StatCard icon="abandoned" iconBg="#fdeef4" iconFg="#d6558a" num={stats.abandoned} label="Abandoned Leads" badge={stats.abandoned > 0 ? "Follow up" : "None"} badgeColor={stats.abandoned > 0 ? "#d6558a" : "#16a34a"} href="/admin/abandoned" />
+        <StatCard icon="box" iconBg="#efeafc" iconFg="#6d5ae6" num={stats.products} label="Total Products" badge="● Active" badgeColor="#16a34a" href="/admin/products" />
+      </div>
+
+      {/* Orders (since reset) — product cards with progress */}
+      <div className="mt-5 dc-card p-4">
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <h2 className="font-display text-base font-bold">Orders <span className="text-xs dc-muted font-medium">{stats.resetActive ? `(since ${stats.resetTimeLabel})` : "(today)"}</span></h2>
+          <div className="flex items-center gap-2">
+            <a href="/admin/orders" className="text-[13px] font-semibold" style={{ color: "var(--a-violet)" }}>View all</a>
+            <ResetDailyButton />
           </div>
         </div>
-      )}
-
-      {/* Today */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi icon="👥" label="আজকের ভিজিটর" value={stats.todayVisitors} tone="indigo" />
-        <Kpi icon="🛍️" label={stats.resetActive ? "অর্ডার (রিসেটের পর)" : "আজকের অর্ডার"} value={stats.todayOrders} tone="brand" />
-        <Kpi icon="💰" label={stats.resetActive ? "আয় (রিসেটের পর)" : "আজকের আয়"} value={taka(stats.todayRevenue)} tone="green" />
-        <Kpi icon="⏳" label="পেন্ডিং অর্ডার" value={stats.pending} href="/admin/orders?status=pending" tone="amber" alert />
-        <Kpi icon="🛒" label="অসম্পূর্ণ লিড" value={stats.abandoned} href="/admin/abandoned" tone="accent" alert />
-        <Kpi icon="📦" label="মোট পণ্য" value={stats.products} tone="violet" />
-      </div>
-
-      {/* Today's ordered products — image + order count only, horizontal slider */}
-      <div className="mt-4 rounded-2xl border border-black/5 bg-white p-5 shadow-sm">
-        <div className="flex items-center justify-between gap-2 mb-3">
-          <h2 className="font-display text-base font-bold">
-            🛍️ {stats.resetActive ? "অর্ডার (রিসেটের পর)" : "আজকের অর্ডার"}
-            {stats.resetTimeLabel && <span className="ml-2 text-xs font-normal text-gray-400">({stats.resetTimeLabel} থেকে)</span>}
-          </h2>
-          <ResetDailyButton />
-        </div>
         {stats.todayProducts.length === 0 ? (
-          <p className="text-sm text-gray-400">আজ এখনও কোনো অর্ডার আসেনি।</p>
+          <p className="text-sm dc-muted">No orders yet today.</p>
         ) : (
-          <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1 snap-x snap-mandatory [scrollbar-width:thin]">
+          <div className="flex gap-3 overflow-x-auto pb-1 dc-scroll-x">
             {stats.todayProducts.map((p) => (
-              <div key={p.name} className="snap-start shrink-0 w-28 sm:w-32">
-                <div className="relative aspect-square w-full rounded-2xl overflow-hidden bg-gray-100 border border-black/5">
+              <div key={p.name} className="flex-none w-32 rounded-2xl border overflow-hidden" style={{ borderColor: "var(--a-border)" }}>
+                <div className="relative h-24" style={{ background: "var(--a-surface-2)" }}>
                   {p.image ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={p.image} alt="" className="h-full w-full object-cover" />
                   ) : (
-                    <span className="absolute inset-0 flex items-center justify-center text-[10px] text-gray-400">ছবি নেই</span>
+                    <span className="absolute inset-0 flex items-center justify-center text-[10px] dc-muted">No image</span>
                   )}
-                  <span className="absolute bottom-1.5 right-1.5 rounded-full bg-brand text-white text-sm font-bold px-2.5 py-0.5 shadow-md tabular-nums">
-                    {p.orders}
-                  </span>
+                  <span className="absolute top-1.5 right-1.5 h-6 min-w-6 px-1.5 rounded-full text-white text-xs font-extrabold flex items-center justify-center tabular-nums" style={{ background: "var(--a-violet)" }}>{p.orders}</span>
                 </div>
-                <p className="mt-1.5 text-center text-xs text-gray-500">অর্ডার</p>
+                <div className="p-2.5">
+                  <p className="text-xs font-bold truncate">{p.name}</p>
+                  <p className="text-xs dc-muted mb-1.5">{taka(p.value)}</p>
+                  <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--a-surface-2)" }}>
+                    <div className="h-full rounded-full" style={{ width: `${p.pct}%`, background: "linear-gradient(90deg, var(--a-violet), #9b8ff0)" }} />
+                  </div>
+                </div>
               </div>
             ))}
           </div>
         )}
       </div>
 
-      {/* Range performance with deltas */}
-      <div className="mt-8 mb-3 flex items-center gap-2">
-        <h2 className="font-display text-lg font-bold">{rangeLabel}ের পারফরম্যান্স</h2>
-        <span className="text-xs text-gray-400">(আগের {rangeLabel}ের সাথে তুলনা)</span>
-      </div>
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi icon="💵" label={`${rangeLabel}ের আয়`} value={taka(stats.revenueCur)} delta={stats.revenueDelta} tone="green" />
-        <Kpi icon="🧾" label="মোট অর্ডার" value={stats.total} delta={stats.ordersDelta} tone="brand" />
-        <Kpi icon="👣" label="ভিজিটর" value={stats.visitorsCur} delta={stats.visitorsDelta} tone="indigo" />
-        <Kpi icon="🎯" label="কনভার্সন রেট" value={`${stats.conversion}%`} tone="violet" />
-        <Kpi icon="🏷️" label="গড় অর্ডার (AOV)" value={taka(stats.aov)} tone="brand" />
-        <Kpi icon="✅" label="কনফার্মড" value={stats.confirmed} tone="green" />
-      </div>
-      <div className="mt-3 grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Meter label="কনফার্ম রেট" pct={stats.confirmRate} tone="green" />
-        <Meter label="বাতিল রেট" pct={stats.cancelRate} tone="red" />
-        <Kpi icon="❌" label="বাতিল/রিটার্ন" value={stats.cancelled} tone="accent" />
-        <Kpi icon="💳" label="কনফার্মড বিক্রি" value={taka(stats.salesConfirmed)} tone="brand" />
+      {/* Rates */}
+      <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+        <Meter label="Confirm rate" pct={stats.confirmRate} icon="check" fg="#16a34a" bg="#e7f6ec" track="#e7f6ec" />
+        <Meter label="Delivery rate" pct={stats.deliveryRate} icon="truck" fg="#2f80b4" bg="#e6f4fb" track="#e6f4fb" />
+        <Meter label="Cancel rate" pct={stats.cancelRate} icon="close" fg="#dc2626" bg="#fdeaea" track="#fdeaea" />
+        <StatCard icon="tag" iconBg="#f0e9fc" iconFg="#7c3aed" num={taka(stats.aov)} label="Avg order (AOV)" />
       </div>
 
       {/* Charts */}
-      <div className="mt-8 grid gap-4 lg:grid-cols-2">
-        <ChartCard title="দৈনিক অর্ডার (স্ট্যাটাস)" note="প্রতিদিন কোন স্ট্যাটাসে কত অর্ডার। বার/লেজেন্ডে হোভার করলে বিস্তারিত।">
-          <OrdersStatusChart data={stats.chart} />
-        </ChartCard>
-
-        <ChartCard title="দৈনিক বিক্রি (৳)" right={<span className="text-sm text-gray-500">{rangeLabel}: <b>{taka(stats.revenueCur)}</b></span>} note="লাইনে হোভার করলে ঐ দিনের বিক্রি।">
-          <RevenueChart data={stats.chart} />
-        </ChartCard>
+      <div className="mt-6 grid gap-4 lg:grid-cols-2">
+        <ChartCard title="Daily orders (by status)" note="Orders per day by status. Hover a bar for details."><OrdersStatusChart data={stats.chart} /></ChartCard>
+        <ChartCard title="Daily sales (৳)" right={<span className="text-sm dc-muted"><b>{taka(stats.revenueCur)}</b></span>} note="Hover the line for that day's sales."><RevenueChart data={stats.chart} /></ChartCard>
       </div>
-
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <ChartCard title="দৈনিক ভিজিটর" right={<span className="text-sm text-gray-500">{rangeLabel}: <b>{stats.visitorsCur}</b></span>} note="প্রতিদিনের ইউনিক ভিজিটর।">
-          <VisitorsChart data={stats.visitorsChart} />
-        </ChartCard>
-
-        <ChartCard title="🗺️ টপ এরিয়া (অর্ডার)" note="এই সময়ে সবচেয়ে বেশি অর্ডার আসা এলাকা।">
-          {stats.topAreas.length === 0 ? (
-            <p className="text-sm text-gray-400">এখনও কোনো ডেটা নেই।</p>
-          ) : (
+        <ChartCard title="Daily visitors" right={<span className="text-sm dc-muted"><b>{stats.visitorsCur}</b></span>} note="Unique visitors per day."><VisitorsChart data={stats.visitorsChart} /></ChartCard>
+        <ChartCard title="Top areas (orders)" note="Areas with the most orders in this range.">
+          {stats.topAreas.length === 0 ? <p className="text-sm dc-muted">No data yet.</p> : (
             <ul className="space-y-2.5 text-sm">
               {stats.topAreas.map((a) => (
                 <li key={a.name}>
-                  <div className="flex justify-between mb-1">
-                    <span className="truncate pr-2">{a.name}</span>
-                    <span className="text-gray-500 shrink-0">{a.orders} অর্ডার · {taka(a.revenue)}</span>
-                  </div>
-                  <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                    <div className="h-full rounded-full bg-gradient-to-r from-brand to-accent" style={{ width: `${Math.round((a.orders / maxArea) * 100)}%` }} />
-                  </div>
+                  <div className="flex justify-between mb-1"><span className="truncate pr-2">{a.name}</span><span className="dc-muted shrink-0">{a.orders} orders · {taka(a.revenue)}</span></div>
+                  <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--a-surface-2)" }}><div className="h-full rounded-full" style={{ width: `${Math.round((a.orders / maxArea) * 100)}%`, background: "var(--a-brand)" }} /></div>
                 </li>
               ))}
             </ul>
           )}
         </ChartCard>
       </div>
-
-      {/* Visitors by time of day (tower/column bars) */}
       <div className="mt-4">
-        <ChartCard
-          title="⏰ সময় অনুযায়ী ভিজিটর"
-          right={
-            <span className="text-sm">
-              <span className="text-gray-500">সবচেয়ে বেশি: </span>
-              <b className="text-green-600">{stats.peakLabel}</b>
-              {stats.peakVisits > 0 && <span className="text-gray-400"> ({stats.peakVisits})</span>}
-            </span>
-          }
-          note="দিনের কোন সময়ে সবচেয়ে বেশি ভিজিটর আসে (সবুজ = পিক টাইম)। বারে হোভার করলে বিস্তারিত।"
-        >
+        <ChartCard title="Visitors by time of day" right={<span className="text-sm"><span className="dc-muted">Peak: </span><b className="text-green-600">{stats.peakLabel}</b>{stats.peakVisits > 0 && <span className="dc-muted"> ({stats.peakVisits})</span>}</span>} note="When most visitors arrive (green = peak hour). Hover a bar for details.">
           <VisitorsByHourChart data={stats.hourly} peakHour={stats.peakHour} />
         </ChartCard>
       </div>
 
       {/* Low stock + top products */}
       <div className="mt-4 grid md:grid-cols-2 gap-4">
-        <div className="rounded-2xl border border-black/5 bg-white p-5 shadow-sm">
-          <h2 className="font-display text-base font-bold mb-3">কম স্টকের পণ্য</h2>
-          {stats.lowStock.length === 0 ? (
-            <p className="text-sm text-gray-400">সব পণ্যের স্টক ঠিক আছে।</p>
-          ) : (
+        <div className="dc-card p-5">
+          <h2 className="font-display text-base font-bold mb-3">Low stock products</h2>
+          {stats.lowStock.length === 0 ? <p className="text-sm dc-muted">All products are well stocked.</p> : (
             <ul className="space-y-2 text-sm">
               {stats.lowStock.map((p: any) => (
-                <li key={p.id} className="flex justify-between items-center">
-                  <span className="truncate pr-2">{p.name_bn || p.name_en}</span>
-                  <span className={"rounded-full px-2 py-0.5 text-xs font-medium " + (p.stock === 0 ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700")}>{p.stock} টি</span>
-                </li>
+                <li key={p.id} className="flex justify-between items-center"><span className="truncate pr-2">{p.name_bn || p.name_en}</span><span className={"rounded-full px-2 py-0.5 text-xs font-medium " + (p.stock === 0 ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700")}>{p.stock} left</span></li>
               ))}
             </ul>
           )}
         </div>
-        <div className="rounded-2xl border border-black/5 bg-white p-5 shadow-sm">
-          <h2 className="font-display text-base font-bold mb-3">টপ পণ্য (বিক্রি)</h2>
-          {stats.topProducts.length === 0 ? (
-            <p className="text-sm text-gray-400">এখনও কোনো বিক্রি নেই।</p>
-          ) : (
+        <div className="dc-card p-5">
+          <h2 className="font-display text-base font-bold mb-3">Top products (sold)</h2>
+          {stats.topProducts.length === 0 ? <p className="text-sm dc-muted">No sales yet.</p> : (
             <ul className="space-y-2.5 text-sm">
-              {stats.topProducts.map(([name, qty], i) => {
+              {stats.topProducts.map(([nm, qty], i) => {
                 const max = stats.topProducts[0][1] || 1;
                 return (
-                  <li key={name}>
-                    <div className="flex justify-between mb-1"><span className="truncate pr-2">{i + 1}. {name}</span><span className="text-gray-500 shrink-0">{qty} টি</span></div>
-                    <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden"><div className="h-full rounded-full bg-gradient-to-r from-brand to-accent" style={{ width: `${Math.round((qty / max) * 100)}%` }} /></div>
+                  <li key={nm}>
+                    <div className="flex justify-between mb-1"><span className="truncate pr-2">{i + 1}. {nm}</span><span className="dc-muted shrink-0">{qty} pcs</span></div>
+                    <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--a-surface-2)" }}><div className="h-full rounded-full" style={{ width: `${Math.round((qty / max) * 100)}%`, background: "var(--a-brand)" }} /></div>
                   </li>
                 );
               })}
@@ -508,30 +418,28 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
       </div>
 
       {/* Recent orders */}
-      <div className="mt-8 flex items-center justify-between mb-3">
-        <h2 className="font-display text-base font-bold">সাম্প্রতিক অর্ডার</h2>
-        <a href="/admin/orders" className="text-sm text-brand-dark hover:underline">সব অর্ডার →</a>
+      <div className="mt-6 flex items-center justify-between mb-3">
+        <h2 className="font-display text-base font-bold">Recent orders</h2>
+        <a href="/admin/orders" className="text-sm font-medium hover:underline" style={{ color: "var(--a-brand)" }}>All orders →</a>
       </div>
-      <div className="overflow-x-auto rounded-2xl border border-black/5 bg-white shadow-sm">
+      <div className="overflow-x-auto dc-card">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-left text-gray-500">
-            <tr>
-              <th className="px-4 py-3 font-medium">অর্ডার নম্বর</th>
-              <th className="px-4 py-3 font-medium">গ্রাহক</th>
-              <th className="px-4 py-3 font-medium">অবস্থা</th>
-              <th className="px-4 py-3 font-medium text-right">মোট</th>
-            </tr>
+          <thead className="text-left dc-muted" style={{ background: "var(--a-surface-2)" }}>
+            <tr><th className="px-4 py-3 font-medium">Order no</th><th className="px-4 py-3 font-medium">Customer</th><th className="px-4 py-3 font-medium">Status</th><th className="px-4 py-3 font-medium text-right">Total</th></tr>
           </thead>
           <tbody>
-            {stats.recent.map((o) => (
-              <tr key={o.id} className="border-t border-black/5 hover:bg-brand-soft/40 transition-colors">
-                <td className="px-4 py-3"><a href={`/admin/orders/${o.id}`} className="font-medium text-brand-dark hover:underline">{o.order_number}</a></td>
-                <td className="px-4 py-3">{o.customer_name}</td>
-                <td className="px-4 py-3"><span className={"rounded-full px-2 py-0.5 text-xs font-medium " + (STATUS_STYLE[o.status] ?? "bg-gray-100 text-gray-600")}>{STATUS_LABELS[o.status] ?? o.status}</span></td>
-                <td className="px-4 py-3 text-right font-medium tabular-nums">{taka(Number(o.total))}</td>
-              </tr>
-            ))}
-            {stats.recent.length === 0 && (<tr><td colSpan={4} className="px-4 py-8 text-center text-gray-400">এখনও কোনো অর্ডার নেই।</td></tr>)}
+            {stats.recent.map((o) => {
+              const m = STATUS_META[o.status] ?? { label: o.status, bg: "var(--a-surface-2)", fg: "var(--a-muted)" };
+              return (
+                <tr key={o.id} className="border-t" style={{ borderColor: "var(--a-border)" }}>
+                  <td className="px-4 py-3"><a href={`/admin/orders/${o.id}`} className="font-medium hover:underline" style={{ color: "var(--a-brand)" }}>{o.order_number}</a></td>
+                  <td className="px-4 py-3">{o.customer_name}</td>
+                  <td className="px-4 py-3"><span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: m.bg, color: m.fg }}>{m.label}</span></td>
+                  <td className="px-4 py-3 text-right font-medium tabular-nums">{taka(Number(o.total))}</td>
+                </tr>
+              );
+            })}
+            {stats.recent.length === 0 && (<tr><td colSpan={4} className="px-4 py-8 text-center dc-muted">No orders yet.</td></tr>)}
           </tbody>
         </table>
       </div>

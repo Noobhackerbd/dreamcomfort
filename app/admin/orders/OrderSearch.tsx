@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Icon } from "@/components/admin/icons";
 
 /** Live (debounced) order search — updates the URL as you type, no search button. */
-export function OrderSearch({ initialQuery, status }: { initialQuery: string; status?: string }) {
+export function OrderSearch({ initialQuery, status, from, to }: { initialQuery: string; status?: string; from?: string; to?: string }) {
   const router = useRouter();
   const [q, setQ] = useState(initialQuery);
   const [pending, startTransition] = useTransition();
@@ -16,6 +17,8 @@ export function OrderSearch({ initialQuery, status }: { initialQuery: string; st
     const t = setTimeout(() => {
       const sp = new URLSearchParams();
       if (status) sp.set("status", status);
+      if (from) sp.set("from", from);
+      if (to) sp.set("to", to);
       const s = q.trim();
       if (s) sp.set("q", s);
       const qs = sp.toString();
@@ -23,17 +26,17 @@ export function OrderSearch({ initialQuery, status }: { initialQuery: string; st
     }, 350);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, status]);
+  }, [q, status, from, to]);
 
   return (
     <div className="relative mb-4">
-      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+      <span className="absolute left-3 top-1/2 -translate-y-1/2 dc-muted"><Icon name="search" className="h-4 w-4" /></span>
       <input
         value={q}
         onChange={(e) => setQ(e.target.value)}
-        placeholder="অর্ডার নম্বর / নাম / ফোন — টাইপ করলেই খুঁজবে"
+        placeholder="Search order no, name or phone…"
         inputMode="search"
-        className="w-full rounded-lg border pl-9 pr-10 py-2.5 text-sm outline-none focus:border-brand"
+        className="dc-input !pl-9 !pr-10"
       />
       {q && (
         <button

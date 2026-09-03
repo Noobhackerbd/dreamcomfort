@@ -1,13 +1,75 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { taka, bdDateTime } from "@/lib/format";
-import { StatusSelect } from "./StatusSelect";
+import { Icon } from "@/components/admin/icons";
 import { CarryBeeActions } from "./CarryBeeActions";
 import { OrderEditModal } from "./OrderEditModal";
-import { bulkTrashOrders, bulkRestoreOrders, bulkPurgeOrders, logCallAttempt, resetCallAttempts } from "./actions";
+import { bulkTrashOrders, bulkRestoreOrders, bulkPurgeOrders, logCallAttempt, resetCallAttempts, refreshCarryBeeStatus, updateOrderStatus } from "./actions";
+
+// Soft pastel status pills (matches the storefront's gentle palette).
+const STATUS_META: Record<string, { label: string; icon: string; bg: string; fg: string }> = {
+  pending: { label: "Pending", icon: "clock", bg: "#fef3e2", fg: "#b45309" },
+  confirmed: { label: "Confirmed", icon: "check", bg: "#e8eefc", fg: "#2563eb" },
+  processing: { label: "Processing", icon: "refresh", bg: "#f0e9fc", fg: "#7c3aed" },
+  shipped: { label: "Shipped", icon: "truck", bg: "#e2f3f7", fg: "#0e7490" },
+  delivered: { label: "Delivered", icon: "check", bg: "#e7f6ec", fg: "#16a34a" },
+  cancelled: { label: "Cancelled", icon: "close", bg: "#fdeaea", fg: "#dc2626" },
+  returned: { label: "Returned", icon: "refresh", bg: "#fdeede", fg: "#ea580c" },
+};
+const STATUS_ORDER = ["pending", "confirmed", "processing", "shipped", "delivered", "cancelled", "returned"];
+
+function StatusPill({ id, value, compact }: { id: string; value: string; compact?: boolean }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [current, setCurrent] = useState(value);
+  const [pending, start] = useTransition();
+  const meta = STATUS_META[current] ?? { label: current, icon: "clock", bg: "var(--a-surface-2)", fg: "var(--a-text)" };
+
+  function pick(next: string) {
+    setCurrent(next);
+    setOpen(false);
+    start(async () => { await updateOrderStatus(id, next); router.refresh(); });
+  }
+
+  return (
+    <div className="relative inline-flex">
+      {compact ? (
+        <button onClick={() => setOpen((o) => !o)} disabled={pending} className="inline-flex items-center gap-1 text-[11px] font-bold disabled:opacity-60" style={{ color: meta.fg }}>
+          <Icon name={meta.icon} className={"h-3 w-3 " + (pending ? "animate-spin" : "")} />
+          {meta.label}
+          <Icon name="chevronDown" className="h-3 w-3 opacity-60" />
+        </button>
+      ) : (
+        <button onClick={() => setOpen((o) => !o)} disabled={pending} className="dc-softpill disabled:opacity-60" style={{ background: meta.bg, color: meta.fg }}>
+          <Icon name={meta.icon} className={"h-3.5 w-3.5 " + (pending ? "animate-spin" : "")} />
+          {meta.label}
+          <Icon name="chevronDown" className="h-3 w-3 opacity-70" />
+        </button>
+      )}
+      {open && (
+        <>
+          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-9 z-30 w-44 dc-card p-1" style={{ boxShadow: "var(--a-shadow-lg)" }}>
+            {STATUS_ORDER.map((s) => {
+              const m = STATUS_META[s];
+              const on = s === current;
+              return (
+                <button key={s} onClick={() => pick(s)} className="w-full flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm hover:bg-[var(--a-surface-2)]">
+                  <span className="h-2 w-2 rounded-full shrink-0" style={{ background: m.fg }} />
+                  <span className={on ? "font-semibold" : ""}>{m.label}</span>
+                  {on && <Icon name="check" className="h-3.5 w-3.5 ml-auto opacity-60" />}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 export interface OrderRow {
   id: string;
@@ -33,8 +95,6 @@ export interface OrderRow {
 const CALL_LIMIT = 3;
 const LAST_CALLED_KEY = "dc:lastCalledOrderId";
 
-/** Call button that logs an attempt (+1) and dials. Shows the attempt count; at the
- *  limit the order moves to the "📞 কল অ্যাটেম্পট" filter on refresh. */
 function CallButton({ id, phone, attempts, onCalled }: { id: string; phone: string; attempts: number; onCalled: (id: string) => void }) {
   const router = useRouter();
   const [n, setN] = useState(attempts ?? 0);
@@ -43,17 +103,15 @@ function CallButton({ id, phone, attempts, onCalled }: { id: string; phone: stri
   async function onClick() {
     if (busy) return;
     setBusy(true);
-    onCalled(id); // remember this as the last-called order (persists) — instant, before the await
+    onCalled(id);
     const res = await logCallAttempt(id);
     setBusy(false);
     if ((res as any)?.needsMigration) {
-      alert("কল-অ্যাটেম্পট চালু করতে orders টেবিলে call_attempts কলাম যোগ করুন (Settings/DB migration)।");
+      alert("To enable call attempts, add the call_attempts column to the orders table (DB migration).");
     } else if (res.ok && typeof res.count === "number") {
       setN(res.count);
     }
-    // Dial after logging.
     try { window.location.href = telLink(phone); } catch {}
-    // Refresh so a limit-reached order moves out of pending.
     setTimeout(() => router.refresh(), 400);
   }
 
@@ -62,18 +120,18 @@ function CallButton({ id, phone, attempts, onCalled }: { id: string; phone: stri
     <button
       onClick={onClick}
       disabled={busy}
-      className={
-        "flex-1 sm:flex-none text-center rounded-lg px-3 py-2 text-xs font-medium disabled:opacity-60 " +
-        (reached ? "bg-red-600 text-white" : "bg-brand text-white")
-      }
-      title={`কল অ্যাটেম্পট: ${n}/${CALL_LIMIT}`}
+      className="dc-act dc-act-sm"
+      style={reached ? { color: "#c23636" } : undefined}
+      title={`Call${n > 0 ? ` — ${n}/${CALL_LIMIT} attempts` : ""}`}
     >
-      📞 কল{n > 0 ? ` (${n}/${CALL_LIMIT})` : ""}
+      <Icon name="phone" className="h-4 w-4" />
+      {n > 0 && (
+        <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] px-1 rounded-full text-[9px] font-bold flex items-center justify-center text-white" style={{ background: reached ? "#dc2626" : "var(--a-brand)" }}>{n}</span>
+      )}
     </button>
   );
 }
 
-/** Reset the attempt counter (e.g. after reaching the customer). */
 function ResetAttemptButton({ id }: { id: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -85,52 +143,110 @@ function ResetAttemptButton({ id }: { id: string }) {
     router.refresh();
   }
   return (
-    <button onClick={onClick} disabled={busy} className="text-center rounded-lg border border-gray-300 text-gray-600 px-3 py-2 text-xs font-medium hover:bg-gray-50 disabled:opacity-60">
-      ↺ রিসেট
+    <button onClick={onClick} disabled={busy} className="dc-act dc-act-sm" title="Reset call attempts">
+      <Icon name="refresh" className="h-4 w-4" />
     </button>
   );
 }
 
-/** CarryBee send controls, collapsed behind a toggle so each order row stays compact
- *  (especially on mobile). Reveals the full Send / Direct-Send actions on tap. */
-function CarryBeeToggle({ cbReady, order }: { cbReady: boolean; order: OrderRow }) {
-  const sent = order.courier === "CarryBee" && !!order.tracking_id;
+// ---- CarryBee: auto status (cached + hourly re-check) ----
+const CB_REFRESH_MS = 60 * 60 * 1000;
+const cbCacheKey = (t: string) => `dc:cbstatus:${t}`;
+function readCbCache(t: string): { status: string; ts: number } | null {
+  try { const raw = localStorage.getItem(cbCacheKey(t)); if (raw) { const o = JSON.parse(raw); if (o && typeof o.status === "string" && typeof o.ts === "number") return o; } } catch {}
+  return null;
+}
+function writeCbCache(t: string, status: string, ts: number) {
+  try { localStorage.setItem(cbCacheKey(t), JSON.stringify({ status, ts })); } catch {}
+}
+function agoLabel(ts: number): string {
+  const m = Math.max(0, Math.round((Date.now() - ts) / 60000));
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  return `${Math.round(m / 60)}h ago`;
+}
+
+function CarryBeeStatusChip({ orderId, tracking }: { orderId: string; tracking: string }) {
+  const [status, setStatus] = useState<string | null>(null);
+  const [checkedAt, setCheckedAt] = useState<number | null>(null);
+  const [busy, setBusy] = useState(true);
+  const [err, setErr] = useState(false);
+
+  async function load(force?: boolean) {
+    if (!force) {
+      const c = readCbCache(tracking);
+      if (c && Date.now() - c.ts < CB_REFRESH_MS) { setStatus(c.status); setCheckedAt(c.ts); setErr(false); setBusy(false); return; }
+      if (c) { setStatus(c.status); setCheckedAt(c.ts); }
+    }
+    setBusy(true); setErr(false);
+    try {
+      const res = await refreshCarryBeeStatus(tracking);
+      if ((res as any)?.ok) { const s = (res as any).status ?? "—"; const now = Date.now(); setStatus(s); setCheckedAt(now); writeCbCache(tracking, s, now); }
+      else setErr(!readCbCache(tracking));
+    } catch { setErr(!readCbCache(tracking)); }
+    setBusy(false);
+  }
+
+  useEffect(() => {
+    load();
+    const iv = setInterval(() => load(true), CB_REFRESH_MS);
+    return () => clearInterval(iv);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tracking]);
+
+  return (
+    <span className="inline-flex items-center gap-1">
+      <button
+        onClick={() => load(true)}
+        disabled={busy}
+        className="inline-flex items-center gap-1 text-[11px] font-semibold px-1.5"
+        title={`CarryBee${checkedAt ? ` · checked ${agoLabel(checkedAt)}` : ""} · click to refresh`}
+        style={{ color: "#1f7a4d" }}
+      >
+        <Icon name="truck" className={"h-3.5 w-3.5 " + (busy ? "animate-spin" : "")} />
+        <span className="truncate max-w-[120px]">{status ? status : busy ? "Loading…" : err ? "No status" : "—"}</span>
+        {checkedAt && <span style={{ opacity: 0.55, fontWeight: 500 }}>· {agoLabel(checkedAt)}</span>}
+      </button>
+      <a href={`/admin/orders/${orderId}/label`} target="_blank" rel="noopener" className="dc-act dc-act-sm" title="Print sticker / label">
+        <Icon name="print" className="h-4 w-4" />
+      </a>
+    </span>
+  );
+}
+
+function CarryBeeSendToggle({ cbReady, order }: { cbReady: boolean; order: OrderRow }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="w-full sm:w-56">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className={
-          "w-full flex items-center justify-between rounded-lg border px-3 py-2 text-xs font-medium " +
-          (sent ? "border-green-300 bg-green-50 text-green-700" : "border-gray-300 hover:border-brand text-gray-700")
-        }
-      >
-        <span>{sent ? `🚚 CarryBee ✓ ${order.tracking_id}` : "🚚 CarryBee পাঠান"}</span>
-        <span className={"transition-transform " + (open ? "rotate-180" : "")}>▾</span>
+    <span className="relative inline-flex">
+      <button type="button" onClick={() => setOpen((v) => !v)} className="dc-act dc-act-sm" title="Send to CarryBee">
+        <Icon name="truck" className="h-4 w-4" />
       </button>
       {open && (
-        <div className="mt-2">
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-10 z-40 w-56 dc-card p-2" style={{ boxShadow: "var(--a-shadow-lg)" }}>
           <CarryBeeActions
             configured={cbReady}
             compact
             order={{
-              id: order.id,
-              orderNumber: order.order_number,
-              name: order.customer_name,
-              phone: order.customer_phone,
+              id: order.id, orderNumber: order.order_number, name: order.customer_name, phone: order.customer_phone,
               address: [order.address_line, order.area, order.city, order.district].filter(Boolean).join(", "),
               total: Number(order.total),
               quantity: (order.items ?? []).reduce((n, it) => n + Number(it.quantity || 0), 0) || 1,
               description: (order.items ?? []).map((it) => `${it.product_name} x${it.quantity}`).join(", "),
-              courier: order.courier ?? "",
-              trackingId: order.tracking_id ?? "",
+              courier: order.courier ?? "", trackingId: order.tracking_id ?? "",
             }}
           />
-        </div>
+          </div>
+        </>
       )}
-    </div>
+    </span>
   );
+}
+
+function CarryBeeCell({ cbReady, order }: { cbReady: boolean; order: OrderRow }) {
+  const sent = order.courier === "CarryBee" && !!order.tracking_id;
+  return sent ? <CarryBeeStatusChip orderId={order.id} tracking={order.tracking_id} /> : <CarryBeeSendToggle cbReady={cbReady} order={order} />;
 }
 
 export function OrdersList({ orders, cbReady, isTrash }: { orders: OrderRow[]; cbReady: boolean; isTrash?: boolean }) {
@@ -143,10 +259,7 @@ export function OrdersList({ orders, cbReady, isTrash }: { orders: OrderRow[]; c
   const [editId, setEditId] = useState<string | null>(null);
   const [lastCalledId, setLastCalledId] = useState<string | null>(null);
 
-  // Remember the last-called order across refreshes/sessions (per device).
-  useEffect(() => {
-    try { setLastCalledId(localStorage.getItem(LAST_CALLED_KEY)); } catch {}
-  }, []);
+  useEffect(() => { try { setLastCalledId(localStorage.getItem(LAST_CALLED_KEY)); } catch {} }, []);
   function markCalled(id: string) {
     setLastCalledId(id);
     try { localStorage.setItem(LAST_CALLED_KEY, id); } catch {}
@@ -156,38 +269,31 @@ export function OrdersList({ orders, cbReady, isTrash }: { orders: OrderRow[]; c
   const someSelected = selected.size > 0;
 
   function toggle(id: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
+    setSelected((prev) => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
   }
-  function toggleAll() {
-    setSelected(allSelected ? new Set() : new Set(orders.map((o) => o.id)));
-  }
-
+  function toggleAll() { setSelected(allSelected ? new Set() : new Set(orders.map((o) => o.id))); }
   const ids = () => Array.from(selected);
 
   async function doTrash() {
     setBusy(true); setErr(null);
     const res = await bulkTrashOrders(ids());
     setBusy(false);
-    if (!res.ok) return setErr(res.error ?? "ব্যর্থ হয়েছে।");
+    if (!res.ok) return setErr(res.error ?? "Failed.");
     setConfirmMode(null); setSelected(new Set()); router.refresh();
   }
   async function doRestore() {
     setBusy(true); setErr(null);
     const res = await bulkRestoreOrders(ids());
     setBusy(false);
-    if (!res.ok) return setErr(res.error ?? "ব্যর্থ হয়েছে।");
+    if (!res.ok) return setErr(res.error ?? "Failed.");
     setSelected(new Set()); router.refresh();
   }
   async function doPurge() {
-    if (!code.trim()) return setErr("ডিলিট কোড দিন।");
+    if (!code.trim()) return setErr("Enter the delete code.");
     setBusy(true); setErr(null);
     const res = await bulkPurgeOrders(ids(), code.trim());
     setBusy(false);
-    if (!res.ok) return setErr(res.error ?? "ডিলিট ব্যর্থ।");
+    if (!res.ok) return setErr(res.error ?? "Delete failed.");
     setConfirmMode(null); setCode(""); setSelected(new Set()); router.refresh();
   }
 
@@ -198,123 +304,92 @@ export function OrdersList({ orders, cbReady, isTrash }: { orders: OrderRow[]; c
   );
 
   if (orders.length === 0) {
-    return <p className="text-center text-gray-400 py-10">{isTrash ? "ট্রাশ খালি।" : "কোনো অর্ডার নেই।"}</p>;
+    return <p className="text-center dc-muted py-12">{isTrash ? "Trash is empty." : "No orders."}</p>;
   }
 
   return (
     <div>
       {/* Select-all + bulk toolbar */}
-      <div className="flex items-center justify-between gap-3 mb-3 rounded-xl border bg-white px-4 py-2.5">
+      <div className="flex items-center justify-between gap-3 mb-3 dc-card px-4 py-2.5">
         <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
-          <input type="checkbox" checked={allSelected} onChange={toggleAll} className="h-4 w-4 accent-brand" />
-          সব নির্বাচন করুন
-          {someSelected && <span className="text-gray-400">({selectedCount} নির্বাচিত)</span>}
+          <input type="checkbox" checked={allSelected} onChange={toggleAll} className="h-4 w-4 accent-gray-900" />
+          Select all
+          {someSelected && <span className="dc-muted">({selectedCount} selected)</span>}
         </label>
         {someSelected && (
           isTrash ? (
             <div className="flex items-center gap-2">
-              <button onClick={doRestore} disabled={busy} className="rounded-lg bg-green-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-green-700 disabled:opacity-60">♻️ রিস্টোর</button>
-              <button onClick={() => { setErr(null); setCode(""); setConfirmMode("purge"); }} className="rounded-lg bg-red-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-red-700">❌ স্থায়ী ডিলিট</button>
+              <button onClick={doRestore} disabled={busy} className="dc-btn disabled:opacity-60"><Icon name="refresh" className="h-3.5 w-3.5" /> Restore</button>
+              <button onClick={() => { setErr(null); setCode(""); setConfirmMode("purge"); }} className="dc-btn" style={{ color: "#b91c1c", borderColor: "#f0c9c9" }}>Delete permanently</button>
             </div>
           ) : (
-            <button onClick={() => { setErr(null); setConfirmMode("trash"); }} className="rounded-lg bg-red-600 text-white px-4 py-1.5 text-sm font-medium hover:bg-red-700">🗑️ {selectedCount}টি ট্রাশে পাঠান</button>
+            <button onClick={() => { setErr(null); setConfirmMode("trash"); }} className="dc-btn" style={{ color: "#b91c1c", borderColor: "#f0c9c9" }}>Move {selectedCount} to trash</button>
           )
         )}
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-2">
         {orders.map((o) => {
           const on = selected.has(o.id);
           const lastCalled = !on && o.id === lastCalledId;
+          const sMeta = STATUS_META[o.status] ?? { fg: "var(--a-faint)" };
+          const stripColor = lastCalled ? "#e0a52e" : (sMeta.fg as string);
           return (
             <div
               key={o.id}
-              className={
-                "rounded-xl border p-3 sm:p-4 transition " +
-                (on
-                  ? "ring-2 ring-red-300 border-red-200 bg-white"
-                  : lastCalled
-                  ? "border-amber-300 bg-amber-50 ring-1 ring-amber-200"
-                  : "bg-white") +
-                (isTrash ? " opacity-90" : "")
-              }
+              className={"dc-card relative transition " + (isTrash ? "opacity-90 " : "")}
+              style={{
+                paddingLeft: 13, paddingRight: 10, paddingTop: 8, paddingBottom: 8,
+                background: lastCalled && !on ? "#fffdf6" : undefined,
+                boxShadow: [
+                  `inset 3px 0 0 ${stripColor}`,
+                  "0 1px 2px rgba(17,24,39,.04)",
+                  on ? "0 0 0 2px rgba(17,24,39,.16)" : "",
+                ].filter(Boolean).join(", "),
+              }}
             >
-              <div className="flex items-start gap-2.5 sm:gap-3">
-                <input
-                  type="checkbox"
-                  checked={on}
-                  onChange={() => toggle(o.id)}
-                  className="mt-1 h-4 w-4 accent-brand shrink-0"
-                  aria-label={`নির্বাচন ${o.order_number}`}
-                />
+              <div className="flex items-start gap-2">
+                <input type="checkbox" checked={on} onChange={() => toggle(o.id)} className="mt-0.5 h-4 w-4 accent-gray-900 shrink-0" aria-label={`Select ${o.order_number}`} />
                 <OrderThumb items={o.items} />
                 <div className="flex-1 min-w-0">
-                  {/* Top: order no + time + price/status */}
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <button
-                          onClick={() => setEditId(o.id)}
-                          className="font-bold text-brand hover:underline"
-                        >
-                          {o.order_number}
-                        </button>
-                        {lastCalled && (
-                          <span className="rounded-full bg-amber-200 text-amber-800 text-[10px] px-2 py-0.5 font-semibold">📞 শেষ কল</span>
-                        )}
-                        {o.is_booked && (
-                          <span className="rounded-full bg-amber-100 text-amber-700 text-[11px] px-2 py-0.5 font-medium">
-                            📅 বুকড{o.booked_date ? ` · ${o.booked_date}` : ""}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-[11px] text-gray-400 mt-0.5">🕒 {bdDateTime(o.created_at)}</p>
+                  {/* Row 1: order no + status + time + price */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-x-1.5 gap-y-0.5 flex-wrap min-w-0">
+                      <button onClick={() => setEditId(o.id)} className="text-[13px] font-bold hover:underline">{o.order_number}</button>
+                      {!isTrash && <StatusPill id={o.id} value={o.status} compact />}
+                      <span className="text-[10px] font-medium whitespace-nowrap" style={{ color: "var(--a-faint)" }}>· {bdDateTime(o.created_at)}</span>
+                      {lastCalled && <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: "#fbf1dd", color: "#a5710f" }}>Last call</span>}
+                      {o.is_booked && <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: "var(--a-warn-soft)", color: "var(--a-warn)" }}>Booked</span>}
                     </div>
-                    <div className="text-right shrink-0">
-                      <p className="font-bold text-base sm:text-lg whitespace-nowrap">{taka(Number(o.total))}</p>
-                    </div>
+                    <p className="font-bold text-[14px] whitespace-nowrap shrink-0">{taka(Number(o.total))}</p>
                   </div>
 
-                  {/* Customer — full name & phone (phone NOT truncated) */}
-                  <p className="text-sm mt-1.5 font-medium text-gray-800 break-words">{o.customer_name}</p>
-                  {o.customer_phone && (
-                    <a href={telLink(o.customer_phone)} className="inline-block text-sm text-brand font-semibold tracking-wide tabular-nums break-all">
-                      📱 {toLocalDisplay(o.customer_phone)}
-                    </a>
-                  )}
-                  <p className="text-sm text-gray-500 break-words mt-0.5">{o.address_line}</p>
-                  <p className="text-xs text-gray-400 mt-1 break-words">
-                    {(o.items ?? []).map((it) => `${it.product_name} ×${it.quantity}`).join("، ")}
+                  {/* Row 2: name + phone on one line */}
+                  <div className="text-[12.5px] mt-0.5 truncate">
+                    <span className="font-semibold">{o.customer_name}</span>
+                    {o.customer_phone && <a href={telLink(o.customer_phone)} className="ml-1.5 font-semibold tabular-nums" style={{ color: "var(--a-brand)" }}>{toLocalDisplay(o.customer_phone)}</a>}
+                  </div>
+
+                  {/* Row 3: address · items on one line */}
+                  <p className="text-[11.5px] truncate" style={{ color: "var(--a-faint)" }}>
+                    {[o.address_line, (o.items ?? []).map((it) => `${it.product_name} ×${it.quantity}`).join(", ")].filter(Boolean).join(" · ")}
                   </p>
                   {o.notes && o.notes.trim() && (
-                    <p className="mt-1.5 text-xs rounded-lg bg-amber-50 text-amber-800 border border-amber-100 px-2 py-1 whitespace-pre-wrap break-words">
-                      📝 {o.notes}
-                    </p>
+                    <p className="mt-1 text-[11px] rounded px-1.5 py-0.5 inline-block truncate max-w-full" style={{ color: "#9a6a12", background: "#fdf6e6" }}>{o.notes}</p>
                   )}
 
-                  {/* Status + edit */}
+                  {/* Action row — compact icons */}
                   {!isTrash && (
-                    <div className="mt-2 flex items-center justify-between gap-2 flex-wrap">
-                      <StatusSelect id={o.id} value={o.status} />
-                      <button onClick={() => setEditId(o.id)} className="text-xs text-brand hover:underline font-medium">
-                        ✏️ এডিট / বিস্তারিত
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Action row: call / whatsapp / carrybee */}
-                  {!isTrash && (
-                    <div className="mt-3 pt-3 border-t flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                      <div className="flex items-center gap-2">
-                        {o.customer_phone && (
-                          <CallButton id={o.id} phone={o.customer_phone} attempts={o.call_attempts ?? 0} onCalled={markCalled} />
-                        )}
-                        {o.customer_phone && (o.call_attempts ?? 0) > 0 && <ResetAttemptButton id={o.id} />}
-                        {o.customer_phone && (
-                          <a href={waLink(o.customer_phone)} target="_blank" rel="noopener" className="flex-1 sm:flex-none text-center rounded-lg bg-green-600 text-white px-3 py-2 text-xs font-medium">💬 WhatsApp</a>
-                        )}
-                      </div>
-                      <CarryBeeToggle cbReady={cbReady} order={o} />
+                    <div className="mt-1.5 flex items-center gap-0.5 flex-wrap">
+                      {o.customer_phone && <CallButton id={o.id} phone={o.customer_phone} attempts={o.call_attempts ?? 0} onCalled={markCalled} />}
+                      {o.customer_phone && (o.call_attempts ?? 0) > 0 && <ResetAttemptButton id={o.id} />}
+                      {o.customer_phone && (
+                        <a href={waLink(o.customer_phone)} target="_blank" rel="noopener" className="dc-act dc-act-sm" title="WhatsApp">
+                          <Icon name="chat" className="h-4 w-4" />
+                        </a>
+                      )}
+                      <CarryBeeCell cbReady={cbReady} order={o} />
+                      <button onClick={() => setEditId(o.id)} className="dc-act dc-act-sm ml-auto" title="Edit order"><Icon name="edit" className="h-4 w-4" /></button>
                     </div>
                   )}
                 </div>
@@ -324,66 +399,60 @@ export function OrdersList({ orders, cbReady, isTrash }: { orders: OrderRow[]; c
         })}
       </div>
 
-      {/* Order edit popup (no page navigation) */}
+      {/* Order edit popup */}
       <OrderEditModal orderId={editId} cbReady={cbReady} onClose={() => setEditId(null)} />
 
-      {/* Sticky bulk-action bar (mobile-friendly) */}
+      {/* Sticky bulk-action bar */}
       {someSelected && (
-        <div className="fixed bottom-4 inset-x-3 z-40 mx-auto max-w-md rounded-2xl bg-gray-900 text-white shadow-2xl px-4 py-3 flex items-center justify-between gap-3">
-          <span className="text-sm">{selectedCount}টি · {taka(selectedTotal)}</span>
+        <div className="fixed bottom-4 inset-x-3 z-40 mx-auto max-w-md rounded-2xl text-white shadow-2xl px-4 py-3 flex items-center justify-between gap-3" style={{ background: "var(--a-text)" }}>
+          <span className="text-sm">{selectedCount} · {taka(selectedTotal)}</span>
           <div className="flex items-center gap-2">
-            <button onClick={() => setSelected(new Set())} className="rounded-lg bg-white/15 px-3 py-1.5 text-sm">বাতিল</button>
+            <button onClick={() => setSelected(new Set())} className="rounded-lg bg-white/15 px-3 py-1.5 text-sm">Cancel</button>
             {isTrash ? (
               <>
-                <button onClick={doRestore} disabled={busy} className="rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium">♻️ রিস্টোর</button>
-                <button onClick={() => { setErr(null); setCode(""); setConfirmMode("purge"); }} className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium">❌ ডিলিট</button>
+                <button onClick={doRestore} disabled={busy} className="rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium">Restore</button>
+                <button onClick={() => { setErr(null); setCode(""); setConfirmMode("purge"); }} className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium">Delete</button>
               </>
             ) : (
-              <button onClick={() => { setErr(null); setConfirmMode("trash"); }} className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium">🗑️ ট্রাশে</button>
+              <button onClick={() => { setErr(null); setConfirmMode("trash"); }} className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium">Trash</button>
             )}
           </div>
         </div>
       )}
 
-      {/* Trash confirm (no code — reversible) */}
+      {/* Trash confirm */}
       {confirmMode === "trash" && (
         <div className="fixed inset-0 z-[90] bg-black/50 flex items-center justify-center p-4" onClick={() => !busy && setConfirmMode(null)}>
-          <div className="bg-white rounded-2xl w-full max-w-sm p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="font-bold text-lg mb-1">{selectedCount}টি অর্ডার ট্রাশে পাঠাবেন?</h3>
-            <p className="text-sm text-gray-500 mb-4">এগুলো ট্রাশে চলে যাবে — পরে <b>রিস্টোর</b> করা যাবে বা স্থায়ীভাবে ডিলিট করা যাবে।</p>
+          <div className="dc-card w-full max-w-sm p-5" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-bold text-lg mb-1">Move {selectedCount} orders to trash?</h3>
+            <p className="text-sm dc-muted mb-4">They move to Trash — you can <b>restore</b> them later or delete permanently.</p>
             {err && <p className="text-sm text-red-600 mb-3">{err}</p>}
             <div className="flex justify-end gap-2">
-              <button onClick={() => setConfirmMode(null)} disabled={busy} className="rounded-lg border px-4 py-2 text-sm">বাতিল</button>
-              <button onClick={doTrash} disabled={busy} className="rounded-lg bg-red-600 text-white px-4 py-2 text-sm disabled:opacity-60">
-                {busy ? "..." : `হ্যাঁ, ট্রাশে পাঠান`}
-              </button>
+              <button onClick={() => setConfirmMode(null)} disabled={busy} className="dc-btn">Cancel</button>
+              <button onClick={doTrash} disabled={busy} className="dc-btn-solid dc-btn disabled:opacity-60">{busy ? "…" : "Yes, move to trash"}</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Purge confirm (permanent — needs code) */}
+      {/* Purge confirm */}
       {confirmMode === "purge" && (
         <div className="fixed inset-0 z-[90] bg-black/50 flex items-center justify-center p-4" onClick={() => !busy && setConfirmMode(null)}>
-          <div className="bg-white rounded-2xl w-full max-w-sm p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="font-bold text-lg mb-1">{selectedCount}টি অর্ডার স্থায়ীভাবে ডিলিট?</h3>
-            <p className="text-sm text-gray-500 mb-3">এটি আর ফেরানো যাবে না। নিশ্চিত করতে সিকিউরিটি কোড দিন।</p>
-            <label className="block text-xs font-medium mb-1">সিকিউরিটি কোড</label>
+          <div className="dc-card w-full max-w-sm p-5" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-bold text-lg mb-1">Delete {selectedCount} orders permanently?</h3>
+            <p className="text-sm dc-muted mb-3">This cannot be undone. Enter the security code to confirm.</p>
+            <label className="block text-xs font-medium mb-1">Security code</label>
             <input
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
               onKeyDown={(e) => { if (e.key === "Enter" && !busy) doPurge(); }}
-              inputMode="numeric"
-              autoFocus
-              placeholder="কোড লিখুন"
-              className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-red-400 tracking-widest mb-3"
+              inputMode="numeric" autoFocus placeholder="Enter code"
+              className="dc-input tracking-widest mb-3"
             />
             {err && <p className="text-sm text-red-600 mb-3">{err}</p>}
             <div className="flex justify-end gap-2">
-              <button onClick={() => setConfirmMode(null)} disabled={busy} className="rounded-lg border px-4 py-2 text-sm">বাতিল</button>
-              <button onClick={doPurge} disabled={busy || !code.trim()} className="rounded-lg bg-red-600 text-white px-4 py-2 text-sm disabled:opacity-60">
-                {busy ? "ডিলিট হচ্ছে..." : `স্থায়ীভাবে ডিলিট`}
-              </button>
+              <button onClick={() => setConfirmMode(null)} disabled={busy} className="dc-btn">Cancel</button>
+              <button onClick={doPurge} disabled={busy || !code.trim()} className="dc-btn disabled:opacity-60" style={{ background: "#dc2626", borderColor: "#dc2626", color: "#fff" }}>{busy ? "Deleting…" : "Delete permanently"}</button>
             </div>
           </div>
         </div>
@@ -401,39 +470,28 @@ function bdIntl(phone: string): string {
   else if (!n.startsWith("880")) n = "880" + n;
   return n;
 }
-/** Human-readable local form (01XXXXXXXXX) for display — full, never truncated. */
 function toLocalDisplay(phone: string): string {
-  const n = bdIntl(phone); // 8801XXXXXXXXX
+  const n = bdIntl(phone);
   if (n.startsWith("880") && n.length === 13) return "0" + n.slice(3);
   return (phone || "").trim();
 }
-function telLink(phone: string): string {
-  return "tel:+" + bdIntl(phone);
-}
-function waLink(phone: string): string {
-  return "https://wa.me/" + bdIntl(phone);
-}
+function telLink(phone: string): string { return "tel:+" + bdIntl(phone); }
+function waLink(phone: string): string { return "https://wa.me/" + bdIntl(phone); }
 
-/** Small product thumbnail for an order row — first item's image + a "+N" badge for extra items. */
 function OrderThumb({ items }: { items: OrderRow["items"] }) {
   const first = items?.[0];
   const img = first?.image || null;
   const extra = Math.max(0, (items?.length || 0) - 1);
-
   return (
-    <div className="relative h-12 w-12 sm:h-14 sm:w-14 shrink-0 rounded-lg overflow-hidden bg-gray-100 ring-1 ring-black/5">
+    <div className="relative h-9 w-9 shrink-0 rounded-lg overflow-hidden" style={{ background: "var(--a-surface-2)", boxShadow: "inset 0 0 0 1px var(--a-border)" }}>
       {img ? (
-        <Image src={img} alt={first?.product_name || ""} fill sizes="56px" className="object-cover" />
+        <Image src={img} alt={first?.product_name || ""} fill sizes="40px" className="object-cover" />
       ) : (
-        <span className="flex h-full w-full items-center justify-center text-[10px] text-gray-400 text-center px-1">
-          {first?.product_name?.slice(0, 12) || "—"}
+        <span className="flex h-full w-full items-center justify-center text-[10px] text-center px-1" style={{ color: "var(--a-faint)" }}>
+          {first?.product_name?.slice(0, 10) || "—"}
         </span>
       )}
-      {extra > 0 && (
-        <span className="absolute bottom-0 right-0 rounded-tl-md bg-black/65 text-white text-[10px] px-1 leading-4">
-          +{extra}
-        </span>
-      )}
+      {extra > 0 && <span className="absolute bottom-0 right-0 rounded-tl-md bg-black/65 text-white text-[10px] px-1 leading-4">+{extra}</span>}
     </div>
   );
 }

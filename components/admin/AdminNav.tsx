@@ -1,12 +1,14 @@
 "use client";
 
-// components/admin/AdminNav.tsx — admin sidebar navigation with active highlight.
+// components/admin/AdminNav.tsx — admin sidebar navigation with active highlight + icons.
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Icon } from "./icons";
 
 export interface NavItem {
   href: string;
   label: string;
+  icon?: string;
   badge?: number;
 }
 
@@ -19,8 +21,8 @@ export function AdminNav({ items, vertical }: { items: NavItem[]; vertical?: boo
     <nav
       className={
         vertical
-          ? "flex flex-col gap-1.5"
-          : "flex md:flex-col gap-1.5 overflow-x-auto md:overflow-visible -mx-1 px-1 md:mx-0 md:px-0"
+          ? "flex flex-col gap-0.5"
+          : "flex md:flex-col gap-0.5 overflow-x-auto md:overflow-visible -mx-1 px-1 md:mx-0 md:px-0"
       }
     >
       {items.map((n) => {
@@ -30,23 +32,14 @@ export function AdminNav({ items, vertical }: { items: NavItem[]; vertical?: boo
             key={n.href}
             href={n.href}
             prefetch
-            className={
-              "shrink-0 md:shrink rounded-xl px-3 py-2 text-sm flex items-center justify-between gap-2 transition " +
-              (active
-                ? "bg-gradient-to-r from-brand to-brand-dark text-white shadow-sm font-medium"
-                : "text-gray-600 hover:bg-brand-soft hover:text-brand-dark")
-            }
+            className={"dc-navlink" + (active ? " dc-navlink-active" : "")}
           >
-            <span className="whitespace-nowrap">{n.label}</span>
+            <span className="flex items-center gap-2.5 min-w-0">
+              <Icon name={n.icon ?? "dashboard"} className="h-[18px] w-[18px] shrink-0 opacity-90" />
+              <span className="whitespace-nowrap truncate">{n.label}</span>
+            </span>
             {n.badge != null && n.badge > 0 && (
-              <span
-                className={
-                  "inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-bold " +
-                  (active ? "bg-white/25 text-white" : "bg-amber-500 text-white")
-                }
-              >
-                {n.badge}
-              </span>
+              <span className={"dc-navbadge" + (active ? " dc-navbadge-active" : "")}>{n.badge}</span>
             )}
           </Link>
         );
