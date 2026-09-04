@@ -18,10 +18,13 @@ export function HideOnAdmin({ children }: { children: React.ReactNode }) {
 // it via the `body.dc-landing header.site-header` CSS rule (LandingBodyClass).
 export function HeaderGate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() || "";
+  // The store homepage ("/") now shows the header. It's hidden on admin, on the
+  // thank-you pages, and on the landing funnel (/landing, /landing2, …) — those also
+  // hide it via the body.dc-landing CSS rule (belt and suspenders).
   const hide =
     pathname.startsWith("/admin") ||
     pathname.startsWith("/order") ||
-    pathname === "/";
+    pathname.startsWith("/landing");
   if (hide) return null;
   return <>{children}</>;
 }

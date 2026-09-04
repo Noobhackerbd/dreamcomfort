@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Store Homepage Preview</title>
+<style>
+  :root{
+    --cream:#FBF3EA; --cream-deep:#F6E9DA;
+    --brand:#5FB4E4; --brand-dark:#3E9BD1; --brand-soft:#E7F4FC;
+    --accent:#F0A0C0; --accent-dark:#E77BA6; --accent-soft:#FDEDF3;
+    --ink:#2b2b33; --muted:#7b7480;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--cream);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Hind Siliguri",Roboto,sans-serif;}
+  .wrap{max-width:1024px;margin:0 auto;padding:0 16px}
+  a{color:inherit;text-decoration:none}
+  /* Header */
+  header{background:#fff;border-bottom:1px solid rgba(0,0,0,.05);position:sticky;top:0;z-index:20}
+  .hd{display:flex;align-items:center;gap:16px;height:60px}
+  .logo{font-weight:800;font-size:20px;letter-spacing:-.02em}
+  .logo .b{color:var(--brand-dark)} .logo .p{color:var(--accent-dark)}
+  .nav{display:flex;gap:18px;margin-left:8px;font-size:14px;color:var(--muted)}
+  .nav a:hover{color:var(--brand-dark)}
+  .hd .right{margin-left:auto;display:flex;align-items:center;gap:14px}
+  .callbtn{background:var(--brand);color:#fff;font-size:13px;font-weight:600;padding:8px 14px;border-radius:999px}
+  @media(max-width:640px){.nav{display:none}}
+  /* Hero */
+  .hero{margin:20px 0;border-radius:24px;overflow:hidden;position:relative;
+    background:linear-gradient(120deg,#E7F4FC 0%,#FBF3EA 45%,#FDEDF3 100%);
+    padding:38px 28px;display:grid;grid-template-columns:1.2fr .8fr;gap:20px;align-items:center}
+  .hero .pill{display:inline-block;background:#fff;color:var(--accent-dark);font-size:12px;font-weight:700;
+    padding:5px 12px;border-radius:999px;box-shadow:0 4px 14px rgba(240,160,192,.25)}
+  .hero h1{font-size:33px;line-height:1.15;margin:12px 0 8px;font-weight:800;letter-spacing:-.02em}
+  .hero p{color:var(--muted);font-size:15px;margin:0 0 18px;max-width:34ch}
+  .cta{display:flex;gap:10px;flex-wrap:wrap}
+  .btn{padding:12px 22px;border-radius:14px;font-weight:700;font-size:14px;display:inline-flex;align-items:center;gap:6px}
+  .btn-primary{background:var(--brand);color:#fff;box-shadow:0 10px 26px -10px rgba(95,180,228,.7)}
+  .btn-ghost{background:#fff;color:var(--ink);border:1px solid rgba(0,0,0,.08)}
+  .hero-img{aspect-ratio:1;border-radius:20px;background:#fff url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg"/>') center/cover;
+    display:flex;align-items:center;justify-content:center;font-size:60px;box-shadow:0 20px 50px -20px rgba(95,180,228,.5)}
+  @media(max-width:640px){.hero{grid-template-columns:1fr;padding:26px 20px}.hero h1{font-size:26px}.hero-img{display:none}}
+  /* Trust badges */
+  .trust{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:8px 0 26px}
+  .trust .t{background:#fff;border:1px solid rgba(0,0,0,.05);border-radius:16px;padding:14px;text-align:center}
+  .trust .t .ic{font-size:22px} .trust .t b{display:block;font-size:13.5px;margin-top:4px}
+  .trust .t span{font-size:11.5px;color:var(--muted)}
+  /* Section head */
+  .sh{display:flex;align-items:center;justify-content:space-between;margin:26px 0 14px}
+  .sh h2{font-size:20px;font-weight:800;margin:0}
+  .sh a{font-size:13px;color:var(--brand-dark);font-weight:600}
+  /* Categories */
+  .cats{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px}
+  .cat{flex:0 0 auto;background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:14px;padding:12px 16px;
+    display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600}
+  .cat .e{font-size:18px}
+  /* Product grid */
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  @media(max-width:900px){.grid{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:640px){.grid{grid-template-columns:repeat(2,1fr)}}
+  .card{background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:16px;overflow:hidden;transition:box-shadow .15s}
+  .card:hover{box-shadow:0 14px 34px -18px rgba(95,180,228,.6)}
+  .card .ph{aspect-ratio:1;background:linear-gradient(135deg,#E7F4FC,#FDEDF3);display:flex;align-items:center;justify-content:center;font-size:38px;position:relative}
+  .card .off{position:absolute;top:8px;left:8px;background:var(--accent-dark);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px}
+  .card .bd{padding:11px}
+  .card .nm{font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .card .pr{margin-top:5px;display:flex;align-items:center;gap:7px}
+  .card .pr b{color:var(--brand-dark);font-size:15px} .card .pr s{color:#b3aeb8;font-size:12px}
+  .center{text-align:center;margin:22px 0 40px}
+  .viewall{display:inline-block;background:#fff;border:1px solid var(--brand);color:var(--brand-dark);
+    font-weight:700;font-size:14px;padding:11px 26px;border-radius:14px}
+  /* Footer */
+  footer{background:rgba(255,255,255,.6);border-top:1px solid rgba(0,0,0,.05);margin-top:10px;padding:24px 0;color:var(--muted);font-size:13px}
+  .note{background:#fff;border:1px dashed var(--brand);border-radius:12px;padding:10px 14px;margin:16px 0;font-size:12.5px;color:var(--muted)}
+</style>
+</head>
+<body>
+  <header>
+    <div class="wrap hd">
+      <span class="logo"><span class="b">Dream</span> <span class="p">Comfort</span></span>
+      <nav class="nav"><a>হোম</a><a>সব পণ্য</a><a>অর্ডার ট্র্যাক</a><a>যোগাযোগ</a></nav>
+      <div class="right"><a class="callbtn">📞 কল করুন</a></div>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <div class="note">Preview — root <b>dreamcomfortbd.com</b> এখন এই স্টোর হোমপেজ। বিক্রির ফানেলটা <b>/landing</b> এ থাকবে।</div>
+
+    <!-- Hero -->
+    <section class="hero">
+      <div>
+        <span class="pill">৫০০০+ সন্তুষ্ট মা 💛</span>
+        <h1>মা ও শিশুর প্রতিটি<br>মুহূর্তে আরাম</h1>
+        <p>প্রিমিয়াম প্রেগনেন্সি পিলো, বেবি প্রোডাক্ট ও আরামদায়ক বিছানাপত্র — সারা দেশে ক্যাশ অন ডেলিভারি।</p>
+        <div class="cta">
+          <a class="btn btn-primary">সব পণ্য দেখুন →</a>
+          <a class="btn btn-ghost">🔥 আজকের অফার</a>
+        </div>
+      </div>
+      <div class="hero-img">🛏️</div>
+    </section>
+
+    <!-- Trust -->
+    <div class="trust">
+      <div class="t"><div class="ic">🚚</div><b>দ্রুত ডেলিভারি</b><span>সারা দেশে ২-৩ দিনে</span></div>
+      <div class="t"><div class="ic">💵</div><b>ক্যাশ অন ডেলিভারি</b><span>হাতে পেয়ে টাকা দিন</span></div>
+      <div class="t"><div class="ic">↩️</div><b>সহজ রিটার্ন</b><span>সমস্যা হলে বদলে নিন</span></div>
+    </div>
+
+    <!-- Categories -->
+    <div class="sh"><h2>ক্যাটাগরি</h2><a>সব দেখুন →</a></div>
+    <div class="cats">
+      <span class="cat"><span class="e">🛏️</span> বিছানাপত্র</span>
+      <span class="cat"><span class="e">🤰</span> প্রেগনেন্সি পিলো</span>
+      <span class="cat"><span class="e">👶</span> বেবি প্রোডাক্ট</span>
+      <span class="cat"><span class="e">🧸</span> খেলনা</span>
+      <span class="cat"><span class="e">🍼</span> ফিডিং</span>
+    </div>
+
+    <!-- Featured -->
+    <div class="sh"><h2>ফিচার্ড পণ্য</h2><a>সব পণ্য →</a></div>
+    <div class="grid">
+      <a class="card"><div class="ph">🤰<span class="off">২৫% ছাড়</span></div><div class="bd"><div class="nm">প্রিমিয়াম প্রেগনেন্সি পিলো</div><div class="pr"><b>৳১,২৯০</b><s>৳১,৭৫০</s></div></div></a>
+      <a class="card"><div class="ph">🛏️</div><div class="bd"><div class="nm">কমফোর্ট বেড কুশন</div><div class="pr"><b>৳৮৯০</b></div></div></a>
+      <a class="card"><div class="ph">👶<span class="off">১৫% ছাড়</span></div><div class="bd"><div class="nm">বেবি নেস্ট বেড</div><div class="pr"><b>৳১,১৫০</b><s>৳১,৩৫০</s></div></div></a>
+      <a class="card"><div class="ph">🧸</div><div class="bd"><div class="nm">সফট টয় সেট</div><div class="pr"><b>৳৫৫০</b></div></div></a>
+    </div>
+
+    <!-- All products -->
+    <div class="sh"><h2>সব পণ্য</h2><a>সব দেখুন →</a></div>
+    <div class="grid">
+      <a class="card"><div class="ph">🍼</div><div class="bd"><div class="nm">ফিডিং পিলো</div><div class="pr"><b>৳৬৯০</b></div></div></a>
+      <a class="card"><div class="ph">🛌</div><div class="bd"><div class="nm">কটন বেডশিট সেট</div><div class="pr"><b>৳১,৪৫০</b></div></div></a>
+      <a class="card"><div class="ph">🧷</div><div class="bd"><div class="nm">বেবি কেয়ার কিট</div><div class="pr"><b>৳৮৫০</b></div></div></a>
+      <a class="card"><div class="ph">🪆</div><div class="bd"><div class="nm">নার্সিং কুশন</div><div class="pr"><b>৳৯৯০</b></div></div></a>
+    </div>
+
+    <div class="center"><a class="viewall">সব পণ্য দেখুন (৩২টি) →</a></div>
+  </div>
+
+  <footer><div class="wrap">© Dream Comfort · সকল অধিকার সংরক্ষিত · 📞 01887864604 · সিরাজগঞ্জ, বাংলাদেশ</div></footer>
+</body>
+</html>

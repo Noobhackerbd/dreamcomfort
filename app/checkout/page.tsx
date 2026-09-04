@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCart } from "@/lib/cart/store";
 import { taka } from "@/lib/format";
 import { SHIPPING, type DeliveryArea } from "@/lib/config";
-import { placeOrder } from "./actions";
+import { placeOrder, checkCoupon } from "./actions";
 import { fireEvent } from "@/components/track";
 
 export default function CheckoutPage() {
@@ -15,27 +15,28 @@ export default function CheckoutPage() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
-  const [city, setCity] = useState("");
   const [notes, setNotes] = useState("");
   const [deliveryArea, setDeliveryArea] = useState<DeliveryArea>("inside");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Coupon
+  const [couponInput, setCouponInput] = useState("");
+  const [coupon, setCoupon] = useState<{ code: string; discount: number; label: string } | null>(null);
+  const [couponMsg, setCouponMsg] = useState<string | null>(null);
+  const [couponBusy, setCouponBusy] = useState(false);
+
   useEffect(() => setMounted(true), []);
 
   const shippingFee = deliveryArea === "outside" ? SHIPPING.outsideDhaka : SHIPPING.insideDhaka;
 
-  // Fire InitiateCheckout (browser + server) once per session when checkout loads.
   useEffect(() => {
     if (!mounted || items.length === 0) return;
     try { if (sessionStorage.getItem("dc_ic_fired")) return; } catch {}
     try { sessionStorage.setItem("dc_ic_fired", "1"); } catch {}
     fireEvent("InitiateCheckout", {
-      currency: "BDT",
-      value: subtotal() + shippingFee,
-      num_items: items.length,
-      content_ids: items.map((i) => i.id),
-      content_type: "product",
+      currency: "BDT", value: subtotal() + shippingFee, num_items: items.length,
+      content_ids: items.map((i) => i.id), content_type: "product",
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mounted]);
@@ -46,145 +47,137 @@ export default function CheckoutPage() {
     return (
       <div className="text-center py-20">
         <p className="text-lg text-gray-500">আপনার কার্ট খালি।</p>
-        <a href="/" className="inline-block mt-5 rounded-lg bg-brand text-white px-6 py-3">
-          কেনাকাটা শুরু করুন
-        </a>
+        <a href="/" className="inline-block mt-5 rounded-xl bg-brand text-white px-6 py-3 font-medium">কেনাকাটা শুরু করুন</a>
       </div>
     );
   }
 
   const sub = subtotal();
-  const total = sub + shippingFee;
+  const discount = coupon?.discount ?? 0;
+  const total = Math.max(0, sub + shippingFee - discount);
+
+  async function applyCoupon() {
+    const code = couponInput.trim();
+    if (!code) return;
+    setCouponBusy(true); setCouponMsg(null);
+    const res = await checkCoupon(code, sub);
+    setCouponBusy(false);
+    if (res.ok) { setCoupon({ code: res.code, discount: res.discount, label: res.label }); setCouponMsg(null); }
+    else { setCoupon(null); setCouponMsg(res.error); }
+  }
+  function removeCoupon() { setCoupon(null); setCouponInput(""); setCouponMsg(null); }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-
     const phoneDigits = phone.replace(/\D/g, "");
     if (!name.trim()) return setError("নাম লিখুন।");
     if (!/^01\d{9}$/.test(phoneDigits)) return setError("সঠিক মোবাইল নম্বর লিখুন (০১XXXXXXXXX)।");
     if (address.trim().length < 5) return setError("সম্পূর্ণ ঠিকানা লিখুন।");
 
-    const fbclid =
-      typeof window !== "undefined"
-        ? new URLSearchParams(window.location.search).get("fbclid") ?? undefined
-        : undefined;
+    const fbclid = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("fbclid") ?? undefined : undefined;
 
     setSubmitting(true);
     const res = await placeOrder({
-      name,
-      phone,
-      address,
-      city,
-      deliveryArea,
-      notes,
+      name, phone, address, deliveryArea, notes,
       items: items.map((i) => ({ id: i.id, qty: i.qty })),
+      couponCode: coupon?.code,
       fbclid,
     });
     setSubmitting(false);
-
-    if (!res.ok) {
-      setError(res.error ?? "অর্ডার ব্যর্থ হয়েছে।");
-      return;
-    }
+    if (!res.ok) { setError(res.error ?? "অর্ডার ব্যর্থ হয়েছে।"); return; }
     clear();
     router.push(`/order/${res.orderNumber}`);
   }
 
-  const inputCls = "w-full rounded-lg border px-4 py-3 outline-none focus:border-brand";
+  const inputCls = "w-full rounded-xl border border-black/10 bg-white px-4 py-3 outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft transition";
 
   return (
-    <div className="max-w-2xl">
-      <h1 className="text-2xl font-bold mb-6">চেকআউট</h1>
+    <div className="max-w-4xl mx-auto">
+      <h1 className="text-2xl font-bold font-display mb-6">চেকআউট</h1>
 
-      <form onSubmit={onSubmit} className="space-y-4">
-        <div>
-          <label className="block text-sm mb-1">আপনার নাম *</label>
-          <input name="name" type="text" autoComplete="name" autoCapitalize="words" value={name} onChange={(e) => setName(e.target.value)} placeholder="আপনার নাম লিখুন" className={inputCls} />
-        </div>
-
-        <div>
-          <label className="block text-sm mb-1">মোবাইল নম্বর *</label>
-          <input name="phone" type="tel" autoComplete="tel" inputMode="numeric" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="০১XXXXXXXXX" className={inputCls} />
-        </div>
-
-        <div>
-          <label className="block text-sm mb-1">সম্পূর্ণ ঠিকানা *</label>
-          <input name="address" type="text" autoComplete="street-address" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="বাসা/হোল্ডিং, রোড, এলাকা, থানা" className={inputCls} />
-        </div>
-
-        <div>
-          <label className="block text-sm mb-1">এলাকা / জেলা</label>
-          <input name="city" type="text" autoComplete="address-level2" value={city} onChange={(e) => setCity(e.target.value)} placeholder="যেমন: ঢাকা, চট্টগ্রাম" className={inputCls} />
-        </div>
-
-        <div>
-          <label className="block text-sm mb-1">ডেলিভারি এলাকা</label>
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              type="button"
-              onClick={() => setDeliveryArea("inside")}
-              className={
-                "rounded-lg border px-4 py-3 text-sm " +
-                (deliveryArea === "inside" ? "border-brand bg-brand/5 text-brand font-medium" : "")
-              }
-            >
-              ঢাকার ভিতরে · {taka(SHIPPING.insideDhaka)}
-            </button>
-            <button
-              type="button"
-              onClick={() => setDeliveryArea("outside")}
-              className={
-                "rounded-lg border px-4 py-3 text-sm " +
-                (deliveryArea === "outside" ? "border-brand bg-brand/5 text-brand font-medium" : "")
-              }
-            >
-              ঢাকার বাইরে · {taka(SHIPPING.outsideDhaka)}
-            </button>
+      <form onSubmit={onSubmit} className="grid md:grid-cols-[1.1fr_.9fr] gap-6 items-start">
+        {/* Left — details */}
+        <div className="rounded-2xl border border-black/5 bg-white p-5 space-y-4 shadow-sm">
+          <h2 className="font-bold text-lg">ডেলিভারি তথ্য</h2>
+          <div>
+            <label className="block text-sm font-medium mb-1">আপনার নাম *</label>
+            <input autoComplete="name" autoCapitalize="words" value={name} onChange={(e) => setName(e.target.value)} placeholder="আপনার নাম" className={inputCls} />
           </div>
-        </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">মোবাইল নম্বর *</label>
+            <input type="tel" autoComplete="tel" inputMode="numeric" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="০১XXXXXXXXX" className={inputCls} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">সম্পূর্ণ ঠিকানা *</label>
+            <input autoComplete="street-address" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="বাসা/হোল্ডিং, রোড, এলাকা, থানা, জেলা" className={inputCls} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">অর্ডার নোট (ঐচ্ছিক)</label>
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="বিশেষ কোনো নির্দেশনা" className={inputCls} />
+          </div>
 
-        <div>
-          <label className="block text-sm mb-1">অর্ডার নোট (ঐচ্ছিক)</label>
-          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="বিশেষ কোনো নির্দেশনা থাকলে লিখুন" className={inputCls} />
-        </div>
-
-        {/* Order summary */}
-        <div className="rounded-xl border bg-white p-4 space-y-2">
-          {items.map((i) => (
-            <div key={i.id} className="flex justify-between text-sm">
-              <span className="truncate pr-2">
-                {i.name} × {i.qty}
-              </span>
-              <span>{taka(i.price * i.qty)}</span>
+          <div>
+            <label className="block text-sm font-medium mb-1.5">ডেলিভারি এলাকা</label>
+            <div className="grid grid-cols-2 gap-3">
+              {(["inside", "outside"] as const).map((area) => (
+                <button key={area} type="button" onClick={() => setDeliveryArea(area)}
+                  className={"rounded-xl border px-3 py-3 text-sm font-medium transition " + (deliveryArea === area ? "border-brand bg-brand-soft text-brand-dark" : "border-black/10 hover:border-brand/40")}>
+                  {area === "inside" ? "ঢাকার ভিতরে" : "ঢাকার বাইরে"} · {taka(area === "inside" ? SHIPPING.insideDhaka : SHIPPING.outsideDhaka)}
+                </button>
+              ))}
             </div>
-          ))}
-          <div className="flex justify-between text-sm border-t pt-2">
-            <span>ডেলিভারি চার্জ</span>
-            <span>{taka(shippingFee)}</span>
-          </div>
-          <div className="flex justify-between font-bold text-lg border-t pt-2">
-            <span>সর্বমোট</span>
-            <span className="text-brand">{taka(total)}</span>
           </div>
         </div>
 
-        {error && (
-          <p className="rounded-lg bg-red-50 border border-red-200 text-red-700 px-4 py-2 text-sm">
-            {error}
-          </p>
-        )}
+        {/* Right — summary */}
+        <div className="rounded-2xl border border-black/5 bg-white p-5 shadow-sm md:sticky md:top-24">
+          <h2 className="font-bold text-lg mb-3">অর্ডার সারাংশ</h2>
+          <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+            {items.map((i) => (
+              <div key={i.id} className="flex justify-between text-sm gap-2">
+                <span className="truncate">{i.name} × {i.qty}</span>
+                <span className="shrink-0 tabular-nums">{taka(i.price * i.qty)}</span>
+              </div>
+            ))}
+          </div>
 
-        <button
-          type="submit"
-          disabled={submitting}
-          className="w-full rounded-lg bg-brand text-white px-6 py-3 font-medium hover:bg-brand-dark disabled:opacity-60"
-        >
-          {submitting ? "অর্ডার হচ্ছে..." : "অর্ডার নিশ্চিত করুন (ক্যাশ অন ডেলিভারি)"}
-        </button>
-        <p className="text-center text-xs text-gray-400">
-          অর্ডার করার পর আমরা কল করে নিশ্চিত করব।
-        </p>
+          {/* Coupon */}
+          <div className="mt-4 pt-4 border-t border-black/5">
+            {coupon ? (
+              <div className="flex items-center justify-between rounded-xl bg-green-50 border border-green-200 px-3 py-2">
+                <span className="text-sm text-green-700 font-medium">🎟️ {coupon.code} · {coupon.label}</span>
+                <button type="button" onClick={removeCoupon} className="text-xs text-red-500 font-medium">বাতিল</button>
+              </div>
+            ) : (
+              <>
+                <label className="block text-sm font-medium mb-1.5">কুপন কোড</label>
+                <div className="flex gap-2">
+                  <input value={couponInput} onChange={(e) => setCouponInput(e.target.value.toUpperCase())} placeholder="কোড লিখুন" className={inputCls + " flex-1 font-mono"} />
+                  <button type="button" onClick={applyCoupon} disabled={couponBusy || !couponInput.trim()} className="shrink-0 rounded-xl bg-accent text-white px-5 font-medium disabled:opacity-50">
+                    {couponBusy ? "…" : "Apply"}
+                  </button>
+                </div>
+                {couponMsg && <p className="mt-1.5 text-xs text-red-500">{couponMsg}</p>}
+              </>
+            )}
+          </div>
+
+          {/* Totals */}
+          <div className="mt-4 pt-4 border-t border-black/5 space-y-2 text-sm">
+            <div className="flex justify-between"><span className="text-gray-500">সাবটোটাল</span><span className="tabular-nums">{taka(sub)}</span></div>
+            <div className="flex justify-between"><span className="text-gray-500">ডেলিভারি চার্জ</span><span className="tabular-nums">{taka(shippingFee)}</span></div>
+            {discount > 0 && <div className="flex justify-between text-green-600"><span>কুপন ছাড়</span><span className="tabular-nums">− {taka(discount)}</span></div>}
+            <div className="flex justify-between font-bold text-lg pt-2 border-t border-black/5"><span>সর্বমোট</span><span className="text-accent-dark tabular-nums">{taka(total)}</span></div>
+          </div>
+
+          {error && <p className="mt-3 rounded-xl bg-red-50 border border-red-200 text-red-700 px-4 py-2 text-sm">{error}</p>}
+
+          <button type="submit" disabled={submitting} className="mt-4 w-full rounded-xl bg-brand text-white px-6 py-3.5 font-bold hover:bg-brand-dark disabled:opacity-60">
+            {submitting ? "অর্ডার হচ্ছে..." : "অর্ডার নিশ্চিত করুন"}
+          </button>
+          <p className="mt-2 text-center text-xs text-gray-400">ক্যাশ অন ডেলিভারি · অর্ডারের পর আমরা কল করে নিশ্চিত করব।</p>
+        </div>
       </form>
     </div>
   );

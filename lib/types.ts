@@ -26,6 +26,8 @@ export interface Product {
   is_active: boolean;
   meta_title?: string | null;
   meta_description?: string | null;
+  rating?: number | null;        // 0–5 (shown as stars on the card)
+  review_count?: number | null;  // e.g. 250
 }
 
 export interface Category {

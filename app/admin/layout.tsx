@@ -104,9 +104,11 @@ const ADMIN_CSS = `
 
 const NAV = [
   { href: "/admin", label: "Dashboard", icon: "dashboard" },
-  { href: "/admin/landing", label: "Landing Page", icon: "landing" },
+  { href: "/admin/home", label: "Home Page", icon: "image" },
+  { href: "/admin/landing", label: "Landing (funnel)", icon: "landing" },
   { href: "/admin/products", label: "Products", icon: "products" },
   { href: "/admin/categories", label: "Categories", icon: "categories" },
+  { href: "/admin/coupons", label: "Coupons", icon: "tag" },
   { href: "/admin/orders", label: "Orders", icon: "orders", badgeKey: "bookedDue" },
   { href: "/admin/print-station", label: "Print Station", icon: "print" },
   { href: "/admin/abandoned", label: "Abandoned Carts", icon: "abandoned", badgeKey: "abandoned" },

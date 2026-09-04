@@ -14,6 +14,7 @@ import { fillTemplate } from "@/lib/sms/templates";
 import { markLeadConverted } from "./lead-actions";
 import { refreshAndCacheCourierRatio } from "@/lib/bdcourier";
 import { sendOrderPush } from "@/lib/push";
+import { validateCoupon, redeemCoupon, type CouponResult } from "@/lib/coupons";
 import type { DeliveryArea } from "@/lib/config";
 
 export interface PlaceOrderInput {
@@ -28,6 +29,12 @@ export interface PlaceOrderInput {
   items: { id: string; qty: number; variantId?: string }[];
   fbclid?: string;
   leadId?: string; // abandoned-cart lead to mark converted
+  couponCode?: string; // store checkout only — never on the landing funnel
+}
+
+/** Server action: check a coupon against a subtotal (used by the checkout page). */
+export async function checkCoupon(code: string, subtotal: number): Promise<CouponResult> {
+  return validateCoupon(code, subtotal);
 }
 
 export interface PlaceOrderResult {
@@ -120,7 +127,15 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
       .filter(Boolean) as any[];
 
     const shippingFee = await shippingP;
-    const total = subtotal + shippingFee;
+
+    // Coupon (store checkout only) — re-validated server-side against the real subtotal.
+    let discount = 0;
+    let couponCode: string | null = null;
+    if (input.couponCode && input.couponCode.trim()) {
+      const c = await validateCoupon(input.couponCode, subtotal);
+      if (c.ok) { discount = c.discount; couponCode = c.code; }
+    }
+    const total = Math.max(0, subtotal + shippingFee - discount);
 
     // Meta matching signals + shared event_id (used later for CAPI Purchase dedup).
     const eventId = newEventId();
@@ -128,33 +143,40 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
     const phone = normalizePhone(input.phone);
 
     // Create the order.
-    const { data: order, error: oErr } = await supabase
-      .from("orders")
-      .insert({
-        status: "pending",
-        customer_name: name,
-        customer_phone: phone,
-        customer_email: input.email?.trim() || null,
-        address_line: address,
-        area: input.area?.trim() || null,
-        city: input.city?.trim() || null,
-        district: input.city?.trim() || null,
-        payment_method: "cod",
-        subtotal,
-        shipping_fee: shippingFee,
-        discount: 0,
-        total,
-        notes: input.notes?.trim() || null,
-        event_id: eventId,
-        fbp: signals.fbp ?? null,
-        fbc: signals.fbc ?? null,
-        client_ip: signals.client_ip_address ?? null,
-        client_user_agent: signals.client_user_agent ?? null,
-      })
-      .select("id, order_number, total, created_at")
-      .single();
+    const orderRow: Record<string, unknown> = {
+      status: "pending",
+      customer_name: name,
+      customer_phone: phone,
+      customer_email: input.email?.trim() || null,
+      address_line: address,
+      area: input.area?.trim() || null,
+      city: input.city?.trim() || null,
+      district: input.city?.trim() || null,
+      payment_method: "cod",
+      subtotal,
+      shipping_fee: shippingFee,
+      discount,
+      total,
+      notes: input.notes?.trim() || null,
+      coupon_code: couponCode,
+      event_id: eventId,
+      fbp: signals.fbp ?? null,
+      fbc: signals.fbc ?? null,
+      client_ip: signals.client_ip_address ?? null,
+      client_user_agent: signals.client_user_agent ?? null,
+    };
+    let { data: order, error: oErr } = await supabase
+      .from("orders").insert(orderRow).select("id, order_number, total, created_at").single();
+    if (oErr && ((oErr as any).code === "42703" || /coupon_code/i.test(oErr.message || ""))) {
+      // coupon_code column not migrated yet — save the order without it.
+      delete orderRow.coupon_code;
+      ({ data: order, error: oErr } = await supabase.from("orders").insert(orderRow).select("id, order_number, total, created_at").single());
+    }
 
     if (oErr || !order) return { ok: false, error: oErr?.message ?? "অর্ডার তৈরি ব্যর্থ।" };
+
+    // Count the coupon use (best-effort, after the order exists).
+    if (couponCode) void redeemCoupon(couponCode);
 
     // Insert items.
     const { error: iErr } = await supabase

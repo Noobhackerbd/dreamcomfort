@@ -33,6 +33,8 @@ export function ProductForm({ initial, categories, landings = [] }: Props) {
   const [metaTitle, setMetaTitle] = useState(initial?.meta_title ?? "");
   const [metaDesc, setMetaDesc] = useState(initial?.meta_description ?? "");
   const [active, setActive] = useState(initial?.is_active ?? true);
+  const [rating, setRating] = useState(initial?.rating != null ? String(initial.rating) : "");
+  const [reviewCount, setReviewCount] = useState(initial?.review_count != null ? String(initial.review_count) : "");
   const [images, setImages] = useState<string[]>(initial?.images ?? []);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -44,9 +46,9 @@ export function ProductForm({ initial, categories, landings = [] }: Props) {
     (process.env.NEXT_PUBLIC_SITE_URL && process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "")) ||
     (typeof window !== "undefined" ? window.location.origin : "https://dreamcomfortbd.com");
   const landingLinks = [
-    { key: "", label: "Homepage" },
+    { key: "landing", label: "Main funnel (/landing)" },
     ...landings.map((l) => ({ key: l.key, label: l.name || l.key })),
-  ].map((l) => ({ ...l, url: effectiveSlug ? `${origin}${l.key ? "/" + l.key : ""}/?color=${effectiveSlug}` : "" }));
+  ].map((l) => ({ ...l, url: effectiveSlug ? `${origin}/${l.key}/?color=${effectiveSlug}` : "" }));
 
   async function copyLink(url: string, key: string) {
     if (!url) return;
@@ -98,6 +100,8 @@ export function ProductForm({ initial, categories, landings = [] }: Props) {
       compare_at_price: compare ? Number(compare) : null, stock: Number(stock), sku,
       category_id: categoryId || null, description_bn: descBn, description_en: descEn,
       meta_title: metaTitle, meta_description: metaDesc, is_active: active, images,
+      rating: rating.trim() === "" ? null : Number(rating),
+      review_count: reviewCount.trim() === "" ? null : Number(reviewCount),
     });
     setSaving(false);
     if (!res.ok) return setError(res.error ?? "Save failed.");
@@ -150,6 +154,11 @@ export function ProductForm({ initial, categories, landings = [] }: Props) {
         <div><label className={lbl}>Compare-at price (৳)</label><input value={compare} onChange={(e) => setCompare(e.target.value)} inputMode="numeric" className={cls} /></div>
         <div><label className={lbl}>Stock</label><input value={stock} onChange={(e) => setStock(e.target.value)} inputMode="numeric" className={cls} /></div>
         <div><label className={lbl}>SKU</label><input value={sku} onChange={(e) => setSku(e.target.value)} className={cls} /></div>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-4">
+        <div><label className={lbl}>Rating (0–5, shown on card)</label><input value={rating} onChange={(e) => setRating(e.target.value.replace(/[^\d.]/g, ""))} inputMode="decimal" placeholder="e.g. 4.8" className={cls} /></div>
+        <div><label className={lbl}>Review count</label><input value={reviewCount} onChange={(e) => setReviewCount(e.target.value.replace(/\D/g, ""))} inputMode="numeric" placeholder="e.g. 250" className={cls} /></div>
       </div>
 
       <div><label className={lbl}>Description (Bangla)</label><textarea value={descBn} onChange={(e) => setDescBn(e.target.value)} rows={3} className={cls} /></div>

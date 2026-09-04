@@ -54,6 +54,15 @@ export interface BdCourierSettings {
   apiToken: string; // bdcourier.com API token for the customer courier-ratio (fraud) check
 }
 
+export interface HomeBanner {
+  image: string;
+  link?: string; // optional destination when the banner is tapped
+}
+export interface HomeBannersSettings {
+  hero: HomeBanner[];   // top auto-slider
+  offers: HomeBanner[]; // "special offer" slider lower down
+}
+
 async function readSetting<T>(key: string, fallback: T): Promise<T> {
   try {
     const supabase = getServerSupabase();
@@ -133,6 +142,11 @@ export function getBdCourierSettings(): Promise<BdCourierSettings> {
   return readSetting<BdCourierSettings>("bdcourier", {
     apiToken: process.env.BDCOURIER_API_TOKEN || "",
   });
+}
+
+/** Store-homepage banner images (hero slider + offer slider). Editable from admin. */
+export function getHomeBanners(): Promise<HomeBannersSettings> {
+  return readSetting<HomeBannersSettings>("home_banners", { hero: [], offers: [] });
 }
 
 /** Anthropic API settings for the AI order-screenshot reader. */

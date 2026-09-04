@@ -27,6 +27,7 @@ import { Header } from "@/components/Header";
 import { HideOnAdmin, HeaderGate, SiteMain } from "@/components/SiteChrome";
 import { STORE, STORE_NAME } from "@/lib/config";
 import { getLandingConfig } from "@/lib/landing";
+import { StorefrontTabBar } from "@/components/store/StorefrontTabBar";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://dreamcomfortbd.com";
 
@@ -107,6 +108,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           </div>
         </footer>
         </HideOnAdmin>
+
+        {/* Mobile bottom tab bar — storefront only (self-hides on admin/order/landing). */}
+        <StorefrontTabBar />
 
         {/* Trackers only on the storefront — never on /admin (keeps visitor &
             Pixel data clean, no admin noise). */}

@@ -26,13 +26,23 @@ export interface ProductInput {
   meta_description?: string;
   is_active: boolean;
   images: string[];
+  rating?: number | null;
+  review_count?: number | null;
+}
+
+/** True when the error is a "column doesn't exist" (rating/review_count migration not run yet). */
+function isMissingRatingCol(error: any): boolean {
+  return !!error && (error.code === "42703" || /rating|review_count/i.test(error.message || ""));
 }
 
 export async function saveProduct(input: ProductInput) {
   await requireAdmin();
   const supabase = getServerSupabase();
 
-  const row = {
+  const rating = input.rating == null || input.rating === ("" as any) ? null : Math.min(5, Math.max(0, Number(input.rating)));
+  const reviewCount = input.review_count == null || input.review_count === ("" as any) ? null : Math.max(0, Math.floor(Number(input.review_count)));
+
+  const row: Record<string, unknown> = {
     name_bn: input.name_bn?.trim() || null,
     name_en: input.name_en?.trim() || input.name_bn?.trim() || "Product",
     price: Number(input.price) || 0,
@@ -46,16 +56,27 @@ export async function saveProduct(input: ProductInput) {
     meta_description: input.meta_description?.trim() || null,
     is_active: !!input.is_active,
     images: input.images ?? [],
+    rating,
+    review_count: reviewCount,
   };
 
   if (input.id) {
     const update: Record<string, unknown> = { ...row };
     if (input.slug?.trim()) update.slug = slugify(input.slug);
-    const { error } = await supabase.from("products").update(update).eq("id", input.id);
+    let { error } = await supabase.from("products").update(update).eq("id", input.id);
+    if (error && isMissingRatingCol(error)) {
+      // Rating columns not migrated yet — save the rest so the product still updates.
+      delete update.rating; delete update.review_count;
+      ({ error } = await supabase.from("products").update(update).eq("id", input.id));
+    }
     if (error) return { ok: false, error: error.message };
   } else {
     const slug = slugify(input.slug || input.name_en || input.name_bn || "");
-    const { error } = await supabase.from("products").insert({ ...row, slug });
+    let { error } = await supabase.from("products").insert({ ...row, slug });
+    if (error && isMissingRatingCol(error)) {
+      const { rating: _r, review_count: _rc, ...rest } = row;
+      ({ error } = await supabase.from("products").insert({ ...rest, slug }));
+    }
     if (error) return { ok: false, error: error.message };
   }
 
