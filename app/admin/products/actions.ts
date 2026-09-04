@@ -34,7 +34,7 @@ export async function saveProduct(input: ProductInput) {
 
   const row = {
     name_bn: input.name_bn?.trim() || null,
-    name_en: input.name_en?.trim() || input.name_bn?.trim() || "পণ্য",
+    name_en: input.name_en?.trim() || input.name_bn?.trim() || "Product",
     price: Number(input.price) || 0,
     compare_at_price: input.compare_at_price ? Number(input.compare_at_price) : null,
     stock: Math.max(0, Math.floor(Number(input.stock) || 0)),

@@ -7,6 +7,8 @@ import { sendSmsAsync } from "@/lib/sms";
 import { fillTemplate, STATUS_SMS_MAP } from "@/lib/sms/templates";
 import { createParcel, getParcelStatus, carrybeeConfigured, listCities, listZones, listAreas } from "@/lib/carrybee";
 import { extractOrderFromImage } from "@/lib/ai";
+import { fetchCourierRatio, type CourierRatio } from "@/lib/bdcourier";
+import { toLocalBdPhone } from "@/lib/carrybee";
 import { markLeadConverted } from "@/app/checkout/lead-actions";
 import { revalidatePath } from "next/cache";
 
@@ -314,6 +316,65 @@ export async function sendToCarryBeeCustom(orderId: string, form: CarryBeeForm) 
   revalidatePath(`/admin/orders/${orderId}`);
   revalidatePath("/admin/orders");
   return { ok: true, consignmentId: res.consignmentId, deliveryFee: res.deliveryFee, status: res.status };
+}
+
+/**
+ * Customer courier success-ratio (BD Courier fraud check) for the order list.
+ *
+ * Looks the phone up on bdcourier.com and returns { total, success, cancelled, ratio,
+ * couriers[] }. Results are cached in the optional `courier_ratio_cache` table (keyed by
+ * the local phone) so a repeat view — or the same customer on another device — is free
+ * and doesn't burn API quota. The cache is entirely optional: if the table hasn't been
+ * created the action still works, it just always fetches live.
+ *
+ * @param force  skip the cache and re-check live (the chip's refresh button).
+ */
+const RATIO_CACHE_FRESH_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
+
+export async function getCourierRatio(
+  rawPhone: string,
+  force?: boolean
+): Promise<{ ok: true; data: CourierRatio; checkedAt: number; cached: boolean } | { ok: false; error: string }> {
+  await requireAdmin();
+  const phone = toLocalBdPhone(rawPhone || "");
+  if (!/^01\d{9}$/.test(phone)) return { ok: false, error: "সঠিক মোবাইল নম্বর নয়।" };
+
+  const supabase = getServerSupabase();
+
+  // 1) Try the cache (best-effort — table may not exist).
+  if (!force) {
+    try {
+      const { data, error } = await supabase
+        .from("courier_ratio_cache")
+        .select("data, checked_at")
+        .eq("phone", phone)
+        .maybeSingle();
+      if (!error && data?.data) {
+        const checkedAt = new Date(data.checked_at as string).getTime() || 0;
+        if (Date.now() - checkedAt < RATIO_CACHE_FRESH_MS) {
+          return { ok: true, data: data.data as CourierRatio, checkedAt, cached: true };
+        }
+      }
+    } catch {
+      /* no cache table — fetch live */
+    }
+  }
+
+  // 2) Fetch live from BD Courier.
+  const res = await fetchCourierRatio(phone);
+  if (!res.ok) return { ok: false, error: res.error };
+  const checkedAt = Date.now();
+
+  // 3) Store in the cache (best-effort).
+  try {
+    await supabase
+      .from("courier_ratio_cache")
+      .upsert({ phone, data: res.data, checked_at: new Date(checkedAt).toISOString() });
+  } catch {
+    /* ignore — cache is optional */
+  }
+
+  return { ok: true, data: res.data, checkedAt, cached: false };
 }
 
 /** Fetch the latest CarryBee status for an order's consignment. */

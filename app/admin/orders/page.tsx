@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { carrybeeConfigured } from "@/lib/carrybee";
+import { bdcourierConfigured } from "@/lib/bdcourier";
 import { aiConfigured } from "@/lib/ai";
 import { OrdersList, type OrderRow } from "./OrdersList";
 import { ManualOrderModal, type PickProduct } from "./ManualOrderModal";
@@ -123,8 +124,9 @@ export default async function AdminOrders({
     const qs = sp.toString();
     return `/admin/orders${qs ? `?${qs}` : ""}`;
   };
-  const [cbReady, aiReady, productsRes] = await Promise.all([
+  const [cbReady, bdcReady, aiReady, productsRes] = await Promise.all([
     carrybeeConfigured(),
+    bdcourierConfigured(),
     aiConfigured(),
     supabase
       .from("products")
@@ -211,7 +213,7 @@ export default async function AdminOrders({
         </p>
       )}
 
-      <OrdersList orders={rows} cbReady={cbReady} isTrash={isTrash} />
+      <OrdersList orders={rows} cbReady={cbReady} bdcReady={bdcReady} isTrash={isTrash} />
 
       {totalPages > 1 && (
         <div className="mt-6 flex items-center justify-center gap-1.5 flex-wrap">

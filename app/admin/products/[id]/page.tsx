@@ -21,7 +21,7 @@ export default async function EditProduct({
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">পণ্য এডিট</h1>
+      <h1 className="text-2xl font-bold mb-5">Edit product</h1>
       <ProductForm
         categories={(cats as Category[]) ?? []}
         landings={variants.map((v) => ({ key: v.key, name: v.name }))}

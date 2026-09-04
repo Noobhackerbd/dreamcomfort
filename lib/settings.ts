@@ -50,6 +50,10 @@ export interface MobileSettings {
   apiKey: string; // access token the Android app uses (Bearer). Empty = mobile API disabled.
 }
 
+export interface BdCourierSettings {
+  apiToken: string; // bdcourier.com API token for the customer courier-ratio (fraud) check
+}
+
 async function readSetting<T>(key: string, fallback: T): Promise<T> {
   try {
     const supabase = getServerSupabase();
@@ -121,6 +125,13 @@ export function getTikTokSettings(): Promise<TikTokSettings> {
     pixelId: process.env.NEXT_PUBLIC_TIKTOK_PIXEL_ID || "DA6Q9UBC77UES9741GT0",
     accessToken: process.env.TIKTOK_ACCESS_TOKEN || "",
     testEventCode: process.env.TIKTOK_TEST_EVENT_CODE || "",
+  });
+}
+
+/** BD Courier (bdcourier.com) API token for the customer courier-ratio / fraud check. */
+export function getBdCourierSettings(): Promise<BdCourierSettings> {
+  return readSetting<BdCourierSettings>("bdcourier", {
+    apiToken: process.env.BDCOURIER_API_TOKEN || "",
   });
 }
 

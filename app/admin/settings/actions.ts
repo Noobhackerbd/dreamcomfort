@@ -96,6 +96,18 @@ export async function saveAiSettings(ai: { apiKey: string; model: string }) {
   return { ok: true };
 }
 
+export async function saveBdCourierSettings(bc: { apiToken: string }) {
+  await requireAdmin();
+  try {
+    await saveSetting("bdcourier", { apiToken: (bc.apiToken || "").trim() });
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? "সেভ ব্যর্থ। settings টেবিল আছে কিনা দেখুন (supabase-migration-2.sql)।" };
+  }
+  revalidatePath("/admin/settings");
+  revalidatePath("/admin/orders");
+  return { ok: true };
+}
+
 export async function saveCarryBeeSettings(cb: {
   env: string;
   clientId: string;

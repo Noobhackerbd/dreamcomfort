@@ -51,6 +51,9 @@ const PATHS: Record<string, React.ReactNode> = {
   trend: (<><path d="M3 17l6-6 4 4 8-8" /><path d="M17 7h4v4" /></>),
   map: (<><path d="M9 3 3 5v16l6-2 6 2 6-2V3l-6 2-6-2z" /><path d="M9 3v16M15 5v16" /></>),
   bell: (<><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.7 21a2 2 0 0 1-3.4 0" /></>),
+  trash: (<><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M6 6l1 14a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-14" /><path d="M10 11v6M14 11v6" /></>),
+  copy: (<><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></>),
+  image: (<><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-5-5L5 21" /></>),
 };
 
 export function Icon({ name, ...props }: { name: string } & SVGProps<SVGSVGElement>) {

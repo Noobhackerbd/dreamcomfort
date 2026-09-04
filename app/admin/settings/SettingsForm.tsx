@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { saveShippingSettings, saveStoreSettings, saveSmsTemplates, saveCarryBeeSettings, saveAiSettings, saveMetaSettings, saveTikTokSettings, saveMobileSettings } from "./actions";
-import type { ShippingSettings, StoreSettings, CarryBeeSettings, AiSettings, MetaSettings, TikTokSettings, MobileSettings } from "@/lib/settings";
+import { saveShippingSettings, saveStoreSettings, saveSmsTemplates, saveCarryBeeSettings, saveAiSettings, saveMetaSettings, saveTikTokSettings, saveMobileSettings, saveBdCourierSettings } from "./actions";
+import type { ShippingSettings, StoreSettings, CarryBeeSettings, AiSettings, MetaSettings, TikTokSettings, MobileSettings, BdCourierSettings } from "@/lib/settings";
 import type { SmsTemplates } from "@/lib/sms/templates";
 
 const cls = "w-full rounded-lg border px-4 py-2.5 text-sm outline-none focus:border-brand";
@@ -21,6 +21,7 @@ export function SettingsForm({
   meta,
   tiktok,
   mobile,
+  bdcourier,
 }: {
   shipping: ShippingSettings;
   store: StoreSettings;
@@ -30,6 +31,7 @@ export function SettingsForm({
   meta: MetaSettings;
   tiktok: TikTokSettings;
   mobile: MobileSettings;
+  bdcourier: BdCourierSettings;
 }) {
   const router = useRouter();
 
@@ -68,6 +70,11 @@ export function SettingsForm({
   const [mbErr, setMbErr] = useState<string | null>(null);
   const [mbBusy, setMbBusy] = useState(false);
   const apiBase = typeof window !== "undefined" ? window.location.origin : "";
+
+  const [bc, setBc] = useState(bdcourier);
+  const [bcSaved, setBcSaved] = useState(false);
+  const [bcErr, setBcErr] = useState<string | null>(null);
+  const [bcBusy, setBcBusy] = useState(false);
 
   return (
     <div className="space-y-8 max-w-2xl">
@@ -244,6 +251,54 @@ export function SettingsForm({
           ) : (
             <span className="text-amber-600">✗ অসম্পূর্ণ</span>
           )}
+        </p>
+      </section>
+
+      {/* BD Courier — customer success-ratio / fraud check */}
+      <section className="rounded-xl border bg-white p-5">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-emerald-100 text-emerald-700 text-xs">🛡️</span>
+          <h2 className="font-semibold">BD Courier — কাস্টমার সাকসেস রেট</h2>
+        </div>
+        <p className="text-xs text-gray-400 mb-3">
+          <a href="https://bdcourier.com" target="_blank" rel="noopener" className="text-brand underline">bdcourier.com</a> অ্যাকাউন্টের API টোকেন দিন।
+          এটি দিলে অর্ডার লিস্টে প্রতিটি কাস্টমারের কুরিয়ার <b>সাকসেস রেট</b> (মোট পার্সেল, ডেলিভারি হয়েছে vs বাতিল) দেখাবে — নতুন অর্ডার কনফার্ম করার আগে যাচাই করতে।
+        </p>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-sm mb-1">API Token</label>
+            <input
+              type="password"
+              value={bc.apiToken}
+              onChange={(e) => setBc({ apiToken: e.target.value })}
+              placeholder="bdcourier.com → Dashboard → API Token"
+              autoComplete="new-password"
+              className={cls + " font-mono"}
+            />
+            <p className="mt-1 text-xs text-gray-400">bdcourier.com এ লগইন করে Dashboard/API সেকশন থেকে টোকেন কপি করুন। এটি পাসওয়ার্ডের মতো — গোপন রাখুন।</p>
+          </div>
+        </div>
+        <div className="mt-3 flex items-center">
+          <button
+            onClick={async () => {
+              setBcErr(null); setBcSaved(false); setBcBusy(true);
+              const res = await saveBdCourierSettings(bc);
+              setBcBusy(false);
+              if (!res.ok) { setBcErr(res.error ?? "সেভ ব্যর্থ।"); return; }
+              setBcSaved(true);
+              router.refresh();
+            }}
+            disabled={bcBusy}
+            className="rounded-lg bg-brand text-white px-5 py-2 text-sm disabled:opacity-60"
+          >
+            {bcBusy ? "সেভ হচ্ছে..." : "সেভ করুন"}
+          </button>
+          <Saved show={bcSaved} />
+          {bcErr && <span className="text-sm text-red-600 ml-3">{bcErr}</span>}
+        </div>
+        <p className="mt-2 text-xs text-gray-400">
+          অবস্থা:{" "}
+          {bc.apiToken ? <span className="text-green-600">✓ কনফিগার করা আছে</span> : <span className="text-amber-600">✗ সেট করা নেই (রেট দেখাবে না)</span>}
         </p>
       </section>
 

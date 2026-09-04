@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { taka, bdDateTime } from "@/lib/format";
 import { Icon } from "@/components/admin/icons";
 import { CarryBeeActions } from "./CarryBeeActions";
+import { CourierRatioChip } from "./CourierRatio";
 import { OrderEditModal } from "./OrderEditModal";
 import { bulkTrashOrders, bulkRestoreOrders, bulkPurgeOrders, logCallAttempt, resetCallAttempts, refreshCarryBeeStatus, updateOrderStatus } from "./actions";
 
@@ -249,7 +250,7 @@ function CarryBeeCell({ cbReady, order }: { cbReady: boolean; order: OrderRow })
   return sent ? <CarryBeeStatusChip orderId={order.id} tracking={order.tracking_id} /> : <CarryBeeSendToggle cbReady={cbReady} order={order} />;
 }
 
-export function OrdersList({ orders, cbReady, isTrash }: { orders: OrderRow[]; cbReady: boolean; isTrash?: boolean }) {
+export function OrdersList({ orders, cbReady, bdcReady, isTrash }: { orders: OrderRow[]; cbReady: boolean; bdcReady?: boolean; isTrash?: boolean }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmMode, setConfirmMode] = useState<null | "trash" | "purge">(null);
@@ -376,6 +377,13 @@ export function OrdersList({ orders, cbReady, isTrash }: { orders: OrderRow[]; c
                   </p>
                   {o.notes && o.notes.trim() && (
                     <p className="mt-1 text-[11px] rounded px-1.5 py-0.5 inline-block truncate max-w-full" style={{ color: "#9a6a12", background: "#fdf6e6" }}>{o.notes}</p>
+                  )}
+
+                  {/* Courier success rate (BD Courier fraud check) */}
+                  {!isTrash && bdcReady && o.customer_phone && (
+                    <div className="mt-1">
+                      <CourierRatioChip phone={o.customer_phone} enabled={bdcReady} />
+                    </div>
                   )}
 
                   {/* Action row — compact icons */}

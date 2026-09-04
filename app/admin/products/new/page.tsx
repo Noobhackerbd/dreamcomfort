@@ -14,7 +14,7 @@ export default async function NewProduct() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">নতুন পণ্য</h1>
+      <h1 className="text-2xl font-bold mb-5">New product</h1>
       <ProductForm
         categories={(data as Category[]) ?? []}
         landings={variants.map((v) => ({ key: v.key, name: v.name }))}
