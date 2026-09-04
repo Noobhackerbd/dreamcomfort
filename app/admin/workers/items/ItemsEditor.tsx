@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { taka } from "@/lib/format";
+import { Icon } from "@/components/admin/icons";
 import type { WorkerItem } from "@/lib/workers";
 import { saveWorkerItems, deleteWorkerItem } from "../actions";
 
@@ -34,36 +35,36 @@ export function ItemsEditor({ initial }: { initial: WorkerItem[] }) {
     setBusy(true); setMsg(null);
     const res = await saveWorkerItems(rows.map((r, i) => ({ id: r.id, name: r.name, pcs_cost: Number(r.pcs_cost) || 0, in_set: r.in_set, sort_order: i })));
     setBusy(false);
-    if (!res.ok) { setMsg(res.error ?? "সেভ ব্যর্থ।"); return; }
-    setMsg("✅ সেভ হয়েছে।");
+    if (!res.ok) { setMsg(res.error ?? "Save failed."); return; }
+    setMsg("Saved ✓");
     router.refresh();
   }
 
   return (
     <div className="max-w-2xl">
-      <div className="rounded-xl border bg-white overflow-hidden">
-        <div className="grid grid-cols-[1fr_110px_80px_40px] gap-2 px-4 py-2 bg-gray-50 text-xs font-semibold text-gray-500">
-          <span>পিসের নাম</span><span className="text-right">কস্ট (৳)</span><span className="text-center">সেটে?</span><span></span>
+      <div className="dc-card overflow-hidden p-0">
+        <div className="grid grid-cols-[1fr_110px_70px_40px] gap-2 px-4 py-2 text-xs font-semibold dc-muted" style={{ background: "var(--a-surface-2)" }}>
+          <span>Piece name</span><span className="text-right">Cost (৳)</span><span className="text-center">In set?</span><span></span>
         </div>
         {rows.map((r, i) => (
-          <div key={i} className="grid grid-cols-[1fr_110px_80px_40px] gap-2 px-4 py-2 items-center border-t">
-            <input value={r.name} onChange={(e) => update(i, { name: e.target.value })} placeholder="পিসের নাম" className="rounded-lg border px-3 py-1.5 text-sm outline-none focus:border-brand" />
-            <input value={r.pcs_cost} onChange={(e) => update(i, { pcs_cost: e.target.value.replace(/[^\d.]/g, "") })} inputMode="decimal" className="rounded-lg border px-3 py-1.5 text-sm text-right outline-none focus:border-brand" />
-            <label className="flex justify-center"><input type="checkbox" checked={r.in_set} onChange={(e) => update(i, { in_set: e.target.checked })} className="h-4 w-4 accent-brand" /></label>
-            <button onClick={() => removeRow(i)} className="text-red-500 text-lg">×</button>
+          <div key={i} className="grid grid-cols-[1fr_110px_70px_40px] gap-2 px-4 py-2 items-center" style={{ borderTop: "1px solid var(--a-border)" }}>
+            <input value={r.name} onChange={(e) => update(i, { name: e.target.value })} placeholder="Piece name" className="dc-input py-1.5" />
+            <input value={r.pcs_cost} onChange={(e) => update(i, { pcs_cost: e.target.value.replace(/[^\d.]/g, "") })} inputMode="decimal" className="dc-input py-1.5 text-right" />
+            <label className="flex justify-center"><input type="checkbox" checked={r.in_set} onChange={(e) => update(i, { in_set: e.target.checked })} className="h-4 w-4" style={{ accentColor: "var(--a-violet)" }} /></label>
+            <button onClick={() => removeRow(i)} className="dc-act dc-act-sm" style={{ color: "#dc2626" }}><Icon name="close" className="h-4 w-4" /></button>
           </div>
         ))}
       </div>
 
-      <button onClick={addRow} className="mt-3 rounded-lg border border-dashed px-4 py-2 text-sm text-brand-dark hover:bg-brand-soft">+ পিস যোগ করুন</button>
+      <button onClick={addRow} className="mt-3 rounded-lg px-4 py-2 text-sm font-medium" style={{ border: "1px dashed var(--a-border)", color: "var(--a-violet)", background: "var(--a-violet-soft)" }}>+ Add piece</button>
 
-      <div className="mt-4 rounded-xl bg-brand-soft/50 border border-brand/15 p-3 text-sm">
-        ১ সেট মেকিং কস্ট (যোগফল): <b className="text-brand-dark text-base">{taka(setCost)}</b>
+      <div className="mt-4 dc-card p-3 text-sm">
+        Making cost per set (sum): <b style={{ color: "var(--a-violet)" }} className="text-base">{taka(setCost)}</b>
       </div>
 
       <div className="mt-4 flex items-center gap-3">
-        <button onClick={save} disabled={busy} className="rounded-lg bg-brand text-white px-6 py-2.5 text-sm disabled:opacity-60">{busy ? "সেভ হচ্ছে..." : "সেভ করুন"}</button>
-        {msg && <span className="text-sm text-gray-600">{msg}</span>}
+        <button onClick={save} disabled={busy} className="dc-btn dc-btn-solid disabled:opacity-60" style={{ background: "var(--a-violet)", borderColor: "var(--a-violet)" }}>{busy ? "Saving…" : "Save"}</button>
+        {msg && <span className="text-sm" style={{ color: msg.includes("✓") ? "var(--a-ok)" : "#dc2626" }}>{msg}</span>}
       </div>
     </div>
   );

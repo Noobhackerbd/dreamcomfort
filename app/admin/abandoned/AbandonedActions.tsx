@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Icon } from "@/components/admin/icons";
 import { markAbandonedConverted, markAbandonedOpen, deleteAbandoned } from "./actions";
 
 export function AbandonedActions({ id, status }: { id: string; status: string }) {
@@ -17,45 +18,29 @@ export function AbandonedActions({ id, status }: { id: string; status: string })
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-1.5">
       {status === "abandoned" ? (
-        <button
-          onClick={() => run(() => markAbandonedConverted(id))}
-          disabled={busy}
-          className="rounded-lg border border-green-300 text-green-700 px-3 py-1.5 text-xs hover:bg-green-50 disabled:opacity-60"
-        >
-          ✓ কনভার্টেড
+        <button onClick={() => run(() => markAbandonedConverted(id))} disabled={busy} className="dc-btn disabled:opacity-60" style={{ color: "#16a34a", borderColor: "#bfe6cd" }}>
+          <Icon name="check" className="h-3.5 w-3.5" /> Converted
         </button>
       ) : (
-        <button
-          onClick={() => run(() => markAbandonedOpen(id))}
-          disabled={busy}
-          className="rounded-lg border px-3 py-1.5 text-xs hover:border-brand disabled:opacity-60"
-        >
-          ↩ আবার খুলুন
+        <button onClick={() => run(() => markAbandonedOpen(id))} disabled={busy} className="dc-btn disabled:opacity-60">
+          <Icon name="refresh" className="h-3.5 w-3.5" /> Reopen
         </button>
       )}
-      <button
-        onClick={() => setConfirm(true)}
-        disabled={busy}
-        className="rounded-lg border border-red-200 text-red-600 px-3 py-1.5 text-xs hover:bg-red-50 disabled:opacity-60"
-      >
-        🗑️
+      <button onClick={() => setConfirm(true)} disabled={busy} className="dc-act dc-act-sm" title="Delete lead" style={{ color: "#dc2626" }}>
+        <Icon name="trash" className="h-4 w-4" />
       </button>
 
       {confirm && (
         <div className="fixed inset-0 z-[90] bg-black/50 flex items-center justify-center p-4" onClick={() => !busy && setConfirm(false)}>
-          <div className="bg-white rounded-2xl w-full max-w-xs p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="font-bold mb-1">লিড ডিলিট করবেন?</h3>
-            <p className="text-sm text-gray-500 mb-4">এটি ফেরানো যাবে না।</p>
+          <div className="dc-card w-full max-w-xs p-5" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-bold mb-1">Delete this lead?</h3>
+            <p className="text-sm dc-muted mb-4">This can&apos;t be undone.</p>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setConfirm(false)} disabled={busy} className="rounded-lg border px-4 py-2 text-sm">বাতিল</button>
-              <button
-                onClick={() => run(() => deleteAbandoned(id)).then(() => setConfirm(false))}
-                disabled={busy}
-                className="rounded-lg bg-red-600 text-white px-4 py-2 text-sm disabled:opacity-60"
-              >
-                {busy ? "..." : "ডিলিট"}
+              <button onClick={() => setConfirm(false)} disabled={busy} className="dc-btn">Cancel</button>
+              <button onClick={() => run(() => deleteAbandoned(id)).then(() => setConfirm(false))} disabled={busy} className="dc-btn disabled:opacity-60" style={{ background: "#dc2626", borderColor: "#dc2626", color: "#fff" }}>
+                {busy ? "…" : "Delete"}
               </button>
             </div>
           </div>

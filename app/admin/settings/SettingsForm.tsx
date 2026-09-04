@@ -6,10 +6,59 @@ import { saveShippingSettings, saveStoreSettings, saveSmsTemplates, saveCarryBee
 import type { ShippingSettings, StoreSettings, CarryBeeSettings, AiSettings, MetaSettings, TikTokSettings, MobileSettings, BdCourierSettings } from "@/lib/settings";
 import type { SmsTemplates } from "@/lib/sms/templates";
 
-const cls = "w-full rounded-lg border px-4 py-2.5 text-sm outline-none focus:border-brand";
+const cls = "dc-input";
+const lbl = "block text-[13px] font-medium dc-muted mb-1";
 
-function Saved({ show }: { show: boolean }) {
-  return show ? <span className="text-sm text-green-600 ml-3">সেভ হয়েছে ✓</span> : null;
+/** A settings card with an icon header + optional description. */
+function Card({
+  icon, iconBg, iconColor, title, desc, children,
+}: {
+  icon: string; iconBg: string; iconColor: string; title: string; desc?: React.ReactNode; children: React.ReactNode;
+}) {
+  return (
+    <section className="dc-card p-5">
+      <div className="flex items-center gap-2.5 mb-1">
+        <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-base shrink-0" style={{ background: iconBg, color: iconColor }}>{icon}</span>
+        <h2 className="font-bold text-[15.5px]">{title}</h2>
+      </div>
+      {desc && <p className="text-xs dc-muted mb-4 leading-relaxed">{desc}</p>}
+      {children}
+    </section>
+  );
+}
+
+/** Save button + saved/error feedback row (violet, matches the rest of the admin). */
+function SaveRow({
+  onSave, busy, saved, err,
+}: {
+  onSave: () => void; busy?: boolean; saved?: boolean; err?: string | null;
+}) {
+  return (
+    <div className="mt-4 flex items-center">
+      <button
+        onClick={onSave}
+        disabled={busy}
+        className="dc-btn dc-btn-solid disabled:opacity-60"
+        style={{ background: "var(--a-violet)", borderColor: "var(--a-violet)" }}
+      >
+        {busy ? "Saving…" : "Save"}
+      </button>
+      {saved && <span className="text-sm ml-3" style={{ color: "var(--a-ok)" }}>Saved ✓</span>}
+      {err && <span className="text-sm ml-3" style={{ color: "#dc2626" }}>{err}</span>}
+    </div>
+  );
+}
+
+/** Green "configured" / amber "not set" status line. */
+function StatusPill({ ok, okText, badText }: { ok: boolean; okText: string; badText: string }) {
+  return (
+    <p className="mt-3 text-xs dc-muted">
+      Status:{" "}
+      {ok
+        ? <span className="font-semibold" style={{ color: "var(--a-ok)" }}>✓ {okText}</span>
+        : <span className="font-semibold" style={{ color: "var(--a-warn)" }}>✗ {badText}</span>}
+    </p>
+  );
 }
 
 export function SettingsForm({
@@ -77,348 +126,162 @@ export function SettingsForm({
   const [bcBusy, setBcBusy] = useState(false);
 
   return (
-    <div className="space-y-8 max-w-2xl">
-      {/* Shipping */}
-      <section className="rounded-xl border bg-white p-5">
-        <h2 className="font-semibold mb-3">ডেলিভারি চার্জ</h2>
+    <div className="space-y-5 max-w-2xl">
+      {/* Delivery charges */}
+      <Card icon="🚚" iconBg="#eafaf0" iconColor="#16a34a" title="Delivery charges"
+        desc="Shipping fee shown at checkout — inside vs outside Dhaka.">
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-sm mb-1">ঢাকার ভিতরে (৳)</label>
+            <label className={lbl}>Inside Dhaka (৳)</label>
             <input value={inside} onChange={(e) => setInside(e.target.value)} inputMode="numeric" className={cls} />
           </div>
           <div>
-            <label className="block text-sm mb-1">ঢাকার বাইরে (৳)</label>
+            <label className={lbl}>Outside Dhaka (৳)</label>
             <input value={outside} onChange={(e) => setOutside(e.target.value)} inputMode="numeric" className={cls} />
           </div>
         </div>
-        <div className="mt-3">
-          <button
-            onClick={async () => {
-              await saveShippingSettings(Number(inside), Number(outside));
-              setShipSaved(true);
-              router.refresh();
-            }}
-            className="rounded-lg bg-brand text-white px-5 py-2 text-sm"
-          >
-            সেভ করুন
-          </button>
-          <Saved show={shipSaved} />
-        </div>
-      </section>
+        <SaveRow saved={shipSaved} onSave={async () => { await saveShippingSettings(Number(inside), Number(outside)); setShipSaved(true); router.refresh(); }} />
+      </Card>
 
-      {/* Store info */}
-      <section className="rounded-xl border bg-white p-5">
-        <h2 className="font-semibold mb-3">দোকানের তথ্য</h2>
+      {/* Store information */}
+      <Card icon="🏪" iconBg="var(--a-violet-soft)" iconColor="var(--a-violet)" title="Store information"
+        desc="Name, contact and address used across the site and invoices.">
         <div className="space-y-3">
-          <input value={s.name} onChange={(e) => setS({ ...s, name: e.target.value })} placeholder="দোকানের নাম" className={cls} />
-          <input value={s.phone} onChange={(e) => setS({ ...s, phone: e.target.value })} placeholder="ফোন" className={cls} />
-          <input value={s.email} onChange={(e) => setS({ ...s, email: e.target.value })} placeholder="ইমেইল" className={cls} />
-          <input value={s.facebook} onChange={(e) => setS({ ...s, facebook: e.target.value })} placeholder="Facebook URL" className={cls} />
-          <input value={s.address} onChange={(e) => setS({ ...s, address: e.target.value })} placeholder="ঠিকানা" className={cls} />
+          <div><label className={lbl}>Store name</label><input value={s.name} onChange={(e) => setS({ ...s, name: e.target.value })} placeholder="Dream Comfort" className={cls} /></div>
+          <div className="grid md:grid-cols-2 gap-3">
+            <div><label className={lbl}>Phone</label><input value={s.phone} onChange={(e) => setS({ ...s, phone: e.target.value })} placeholder="01XXXXXXXXX" className={cls} /></div>
+            <div><label className={lbl}>Email</label><input value={s.email} onChange={(e) => setS({ ...s, email: e.target.value })} placeholder="hello@dreamcomfortbd.com" className={cls} /></div>
+          </div>
+          <div><label className={lbl}>Facebook URL</label><input value={s.facebook} onChange={(e) => setS({ ...s, facebook: e.target.value })} placeholder="https://facebook.com/…" className={cls} /></div>
+          <div><label className={lbl}>Address</label><input value={s.address} onChange={(e) => setS({ ...s, address: e.target.value })} placeholder="Store address" className={cls} /></div>
         </div>
-        <div className="mt-3">
-          <button
-            onClick={async () => {
-              await saveStoreSettings(s);
-              setStoreSaved(true);
-              router.refresh();
-            }}
-            className="rounded-lg bg-brand text-white px-5 py-2 text-sm"
-          >
-            সেভ করুন
-          </button>
-          <Saved show={storeSaved} />
-        </div>
-      </section>
+        <SaveRow saved={storeSaved} onSave={async () => { await saveStoreSettings(s); setStoreSaved(true); router.refresh(); }} />
+      </Card>
 
       {/* SMS templates */}
-      <section className="rounded-xl border bg-white p-5">
-        <h2 className="font-semibold mb-1">এসএমএস টেমপ্লেট</h2>
-        <p className="text-xs text-gray-400 mb-3">
-          প্লেসহোল্ডার: {"{name}"} {"{order}"} {"{total}"} {"{tracking}"}
-        </p>
+      <Card icon="💬" iconBg="#eaf4fb" iconColor="#3E9BD1" title="SMS templates"
+        desc={<>Placeholders: <code className="px-1 rounded" style={{ background: "var(--a-surface-2)" }}>{"{name}"}</code> <code className="px-1 rounded" style={{ background: "var(--a-surface-2)" }}>{"{order}"}</code> <code className="px-1 rounded" style={{ background: "var(--a-surface-2)" }}>{"{total}"}</code> <code className="px-1 rounded" style={{ background: "var(--a-surface-2)" }}>{"{tracking}"}</code></>}>
         <div className="space-y-3">
           {([
-            ["order_placed", "অর্ডার প্লেসড"],
-            ["confirmed", "কনফার্মড"],
-            ["shipped", "শিপড"],
-            ["delivered", "ডেলিভার্ড"],
+            ["order_placed", "Order placed"],
+            ["confirmed", "Confirmed"],
+            ["shipped", "Shipped"],
+            ["delivered", "Delivered"],
           ] as const).map(([key, label]) => (
             <div key={key}>
-              <label className="block text-sm mb-1">{label}</label>
-              <textarea
-                value={t[key]}
-                onChange={(e) => setT({ ...t, [key]: e.target.value })}
-                rows={2}
-                className={cls}
-              />
+              <label className={lbl}>{label}</label>
+              <textarea value={t[key]} onChange={(e) => setT({ ...t, [key]: e.target.value })} rows={2} className={cls} />
             </div>
           ))}
         </div>
-        <div className="mt-3">
-          <button
-            onClick={async () => {
-              await saveSmsTemplates(t);
-              setTplSaved(true);
-              router.refresh();
-            }}
-            className="rounded-lg bg-brand text-white px-5 py-2 text-sm"
-          >
-            সেভ করুন
-          </button>
-          <Saved show={tplSaved} />
-        </div>
-      </section>
+        <SaveRow saved={tplSaved} onSave={async () => { await saveSmsTemplates(t); setTplSaved(true); router.refresh(); }} />
+      </Card>
 
       {/* CarryBee courier */}
-      <section className="rounded-xl border bg-white p-5">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 text-amber-700 text-xs">🐝</span>
-          <h2 className="font-semibold">CarryBee কুরিয়ার</h2>
-        </div>
-        <p className="text-xs text-gray-400 mb-3">
-          CarryBee মার্চেন্ট অ্যাকাউন্টের API তথ্য দিন। এগুলো সেভ করলে অর্ডার পেজ থেকে “Send to CarryBee” বাটন কাজ করবে।
-        </p>
+      <Card icon="🐝" iconBg="#fdf3d6" iconColor="#b7791f" title="CarryBee courier"
+        desc={"Merchant API details — enables the “Send to CarryBee” button on the orders page."}>
         <div className="space-y-3">
           <div>
-            <label className="block text-sm mb-1">Environment</label>
-            <select
-              value={cb.env === "sandbox" ? "sandbox" : "production"}
-              onChange={(e) => setCb({ ...cb, env: e.target.value })}
-              className={cls}
-            >
-              <option value="production">Production (লাইভ)</option>
-              <option value="sandbox">Sandbox (টেস্ট)</option>
+            <label className={lbl}>Environment</label>
+            <select value={cb.env === "sandbox" ? "sandbox" : "production"} onChange={(e) => setCb({ ...cb, env: e.target.value })} className={cls}>
+              <option value="production">Production (live)</option>
+              <option value="sandbox">Sandbox (test)</option>
             </select>
           </div>
-          <div>
-            <label className="block text-sm mb-1">Client ID</label>
-            <input value={cb.clientId} onChange={(e) => setCb({ ...cb, clientId: e.target.value })} placeholder="CARRYBEE_CLIENT_ID" className={cls} />
+          <div className="grid md:grid-cols-2 gap-3">
+            <div><label className={lbl}>Client ID</label><input value={cb.clientId} onChange={(e) => setCb({ ...cb, clientId: e.target.value })} placeholder="CARRYBEE_CLIENT_ID" className={cls} /></div>
+            <div><label className={lbl}>Store ID</label><input value={cb.storeId} onChange={(e) => setCb({ ...cb, storeId: e.target.value })} placeholder="21917" inputMode="numeric" className={cls} /></div>
           </div>
+          <div><label className={lbl}>Client Secret</label><input type="password" value={cb.clientSecret} onChange={(e) => setCb({ ...cb, clientSecret: e.target.value })} placeholder="CARRYBEE_CLIENT_SECRET" className={cls} autoComplete="new-password" /></div>
+          <div><label className={lbl}>Client Context</label><input value={cb.clientContext} onChange={(e) => setCb({ ...cb, clientContext: e.target.value })} placeholder="CARRYBEE_CLIENT_CONTEXT" className={cls} /></div>
           <div>
-            <label className="block text-sm mb-1">Client Secret</label>
-            <input type="password" value={cb.clientSecret} onChange={(e) => setCb({ ...cb, clientSecret: e.target.value })} placeholder="CARRYBEE_CLIENT_SECRET" className={cls} autoComplete="new-password" />
-          </div>
-          <div>
-            <label className="block text-sm mb-1">Client Context</label>
-            <input value={cb.clientContext} onChange={(e) => setCb({ ...cb, clientContext: e.target.value })} placeholder="CARRYBEE_CLIENT_CONTEXT" className={cls} />
-          </div>
-          <div>
-            <label className="block text-sm mb-1">Store ID</label>
-            <input value={cb.storeId} onChange={(e) => setCb({ ...cb, storeId: e.target.value })} placeholder="21917" inputMode="numeric" className={cls} />
-          </div>
-          <div>
-            <label className="block text-sm mb-1">প্রোডাক্টের ওজন (কেজি)</label>
-            <input
-              type="number"
-              step="0.1"
-              min="0.1"
-              value={cb.defaultWeight ?? 1.5}
+            <label className={lbl}>Parcel weight (kg)</label>
+            <input type="number" step="0.1" min="0.1" value={cb.defaultWeight ?? 1.5}
               onChange={(e) => setCb({ ...cb, defaultWeight: e.target.value === "" ? ("" as any) : Number(e.target.value) })}
-              placeholder="1.5"
-              inputMode="decimal"
-              className={cls}
-            />
-            <p className="mt-1 text-xs text-gray-400">CarryBee-তে অর্ডার পাঠানোর সময় এই ওজন যাবে (ডিফল্ট ১.৫ কেজি)।</p>
+              placeholder="1.5" inputMode="decimal" className={cls} />
+            <p className="mt-1 text-xs dc-muted">Default weight sent when creating a CarryBee parcel (default 1.5 kg).</p>
           </div>
-          <label className="flex items-center gap-2 text-sm rounded-lg bg-amber-50 border border-amber-200 px-3 py-2">
+          <label className="flex items-center gap-2.5 text-[13px] rounded-xl px-3 py-2.5" style={{ background: "#fdf6e3", border: "1px solid #f0e2bf", color: "var(--a-muted)" }}>
             <input type="checkbox" checked={!!cb.autoOnConfirm} onChange={(e) => setCb({ ...cb, autoOnConfirm: e.target.checked })} className="h-4 w-4 accent-amber-500" />
-            অর্ডার <b>কনফার্ম</b> করলে স্বয়ংক্রিয়ভাবে CarryBee-তে পাঠাও (যেকোনো ডিভাইস থেকে)। লেবেল প্রিন্ট হবে <a href="/admin/print-station" className="text-brand underline">প্রিন্ট স্টেশন</a> খোলা ল্যাপটপে।
+            <span>Auto-send to CarryBee when an order is <b>confirmed</b> (any device). Labels print on the laptop that has the <a href="/admin/print-station" className="underline" style={{ color: "var(--a-brand)" }}>Print Station</a> open.</span>
           </label>
         </div>
-        <div className="mt-3 flex items-center">
-          <button
-            onClick={async () => {
-              setCbErr(null); setCbSaved(false); setCbBusy(true);
-              const res = await saveCarryBeeSettings(cb);
-              setCbBusy(false);
-              if (!res.ok) { setCbErr(res.error ?? "সেভ ব্যর্থ।"); return; }
-              setCbSaved(true);
-              router.refresh();
-            }}
-            disabled={cbBusy}
-            className="rounded-lg bg-brand text-white px-5 py-2 text-sm disabled:opacity-60"
-          >
-            {cbBusy ? "সেভ হচ্ছে..." : "সেভ করুন"}
-          </button>
-          <Saved show={cbSaved} />
-          {cbErr && <span className="text-sm text-red-600 ml-3">{cbErr}</span>}
-        </div>
-        <p className="mt-2 text-xs text-gray-400">
-          অবস্থা:{" "}
-          {cb.clientId && cb.clientSecret && cb.clientContext ? (
-            <span className="text-green-600">✓ কনফিগার করা আছে</span>
-          ) : (
-            <span className="text-amber-600">✗ অসম্পূর্ণ</span>
-          )}
-        </p>
-      </section>
+        <SaveRow busy={cbBusy} saved={cbSaved} err={cbErr}
+          onSave={async () => { setCbErr(null); setCbSaved(false); setCbBusy(true); const res = await saveCarryBeeSettings(cb); setCbBusy(false); if (!res.ok) { setCbErr(res.error ?? "Save failed."); return; } setCbSaved(true); router.refresh(); }} />
+        <StatusPill ok={!!(cb.clientId && cb.clientSecret && cb.clientContext)} okText="Configured" badText="Incomplete" />
+      </Card>
 
-      {/* BD Courier — customer success-ratio / fraud check */}
-      <section className="rounded-xl border bg-white p-5">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-emerald-100 text-emerald-700 text-xs">🛡️</span>
-          <h2 className="font-semibold">BD Courier — কাস্টমার সাকসেস রেট</h2>
+      {/* BD Courier — customer success rate / fraud check */}
+      <Card icon="🛡️" iconBg="#e7f6ec" iconColor="#16a34a" title="BD Courier — Customer success rate"
+        desc={<>API token from <a href="https://bdcourier.com" target="_blank" rel="noopener" className="underline" style={{ color: "var(--a-brand)" }}>bdcourier.com</a>. Shows each customer&apos;s courier <b>success rate</b> (total parcels, delivered vs cancelled) in the order list — verify a new order before you confirm it.</>}>
+        <div>
+          <label className={lbl}>API Token</label>
+          <input type="password" value={bc.apiToken} onChange={(e) => setBc({ apiToken: e.target.value })}
+            placeholder="bdcourier.com → Dashboard → API Token" autoComplete="new-password" className={cls + " font-mono"} />
+          <p className="mt-1 text-xs dc-muted">Log in to bdcourier.com and copy the token from the Dashboard / API section. Keep it secret — it&apos;s like a password.</p>
         </div>
-        <p className="text-xs text-gray-400 mb-3">
-          <a href="https://bdcourier.com" target="_blank" rel="noopener" className="text-brand underline">bdcourier.com</a> অ্যাকাউন্টের API টোকেন দিন।
-          এটি দিলে অর্ডার লিস্টে প্রতিটি কাস্টমারের কুরিয়ার <b>সাকসেস রেট</b> (মোট পার্সেল, ডেলিভারি হয়েছে vs বাতিল) দেখাবে — নতুন অর্ডার কনফার্ম করার আগে যাচাই করতে।
-        </p>
-        <div className="space-y-3">
-          <div>
-            <label className="block text-sm mb-1">API Token</label>
-            <input
-              type="password"
-              value={bc.apiToken}
-              onChange={(e) => setBc({ apiToken: e.target.value })}
-              placeholder="bdcourier.com → Dashboard → API Token"
-              autoComplete="new-password"
-              className={cls + " font-mono"}
-            />
-            <p className="mt-1 text-xs text-gray-400">bdcourier.com এ লগইন করে Dashboard/API সেকশন থেকে টোকেন কপি করুন। এটি পাসওয়ার্ডের মতো — গোপন রাখুন।</p>
-          </div>
-        </div>
-        <div className="mt-3 flex items-center">
-          <button
-            onClick={async () => {
-              setBcErr(null); setBcSaved(false); setBcBusy(true);
-              const res = await saveBdCourierSettings(bc);
-              setBcBusy(false);
-              if (!res.ok) { setBcErr(res.error ?? "সেভ ব্যর্থ।"); return; }
-              setBcSaved(true);
-              router.refresh();
-            }}
-            disabled={bcBusy}
-            className="rounded-lg bg-brand text-white px-5 py-2 text-sm disabled:opacity-60"
-          >
-            {bcBusy ? "সেভ হচ্ছে..." : "সেভ করুন"}
-          </button>
-          <Saved show={bcSaved} />
-          {bcErr && <span className="text-sm text-red-600 ml-3">{bcErr}</span>}
-        </div>
-        <p className="mt-2 text-xs text-gray-400">
-          অবস্থা:{" "}
-          {bc.apiToken ? <span className="text-green-600">✓ কনফিগার করা আছে</span> : <span className="text-amber-600">✗ সেট করা নেই (রেট দেখাবে না)</span>}
-        </p>
-      </section>
+        <SaveRow busy={bcBusy} saved={bcSaved} err={bcErr}
+          onSave={async () => { setBcErr(null); setBcSaved(false); setBcBusy(true); const res = await saveBdCourierSettings(bc); setBcBusy(false); if (!res.ok) { setBcErr(res.error ?? "Save failed."); return; } setBcSaved(true); router.refresh(); }} />
+        <StatusPill ok={!!bc.apiToken} okText="Configured" badText="Not set — rate hidden" />
+      </Card>
 
       {/* Meta Pixel + Conversions API */}
-      <section className="rounded-xl border bg-white p-5">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-blue-100 text-blue-700 text-xs">📊</span>
-          <h2 className="font-semibold">Meta Pixel + Conversions API</h2>
-        </div>
-        <p className="text-xs text-gray-400 mb-3">
-          Facebook/Meta পিক্সেল আইডি ও Conversions API টোকেন দিন — ব্রাউজার ও সার্ভার দুই দিক থেকেই ইভেন্ট ট্র্যাক হবে।
-        </p>
+      <Card icon="📊" iconBg="#e8f0fe" iconColor="#2563eb" title="Meta Pixel + Conversions API"
+        desc="Facebook/Meta Pixel ID and Conversions API token — tracks events from both browser and server.">
         <div className="space-y-3">
+          <div><label className={lbl}>Pixel ID</label><input value={mt.pixelId} onChange={(e) => setMt({ ...mt, pixelId: e.target.value.replace(/\D/g, "") })} placeholder="1234567890123456" inputMode="numeric" className={cls} /></div>
+          <div><label className={lbl}>Conversions API access token</label><input type="password" value={mt.capiToken} onChange={(e) => setMt({ ...mt, capiToken: e.target.value })} placeholder="EAAB…" autoComplete="new-password" className={cls} /></div>
           <div>
-            <label className="block text-sm mb-1">Pixel ID</label>
-            <input value={mt.pixelId} onChange={(e) => setMt({ ...mt, pixelId: e.target.value.replace(/\D/g, "") })} placeholder="1234567890123456" inputMode="numeric" className={cls} />
-          </div>
-          <div>
-            <label className="block text-sm mb-1">Conversions API Access Token</label>
-            <input type="password" value={mt.capiToken} onChange={(e) => setMt({ ...mt, capiToken: e.target.value })} placeholder="EAAB..." autoComplete="new-password" className={cls} />
-          </div>
-          <div>
-            <label className="block text-sm mb-1">Test Event Code (ঐচ্ছিক)</label>
+            <label className={lbl}>Test event code (optional)</label>
             <input value={mt.testEventCode} onChange={(e) => setMt({ ...mt, testEventCode: e.target.value })} placeholder="TEST12345" className={cls} />
-            <p className="mt-1 text-xs text-gray-400">শুধু Events Manager-এ টেস্ট করার সময় দিন। লাইভে খালি রাখুন।</p>
+            <p className="mt-1 text-xs dc-muted">Only for testing in Events Manager. Leave empty when live.</p>
           </div>
         </div>
-        <div className="mt-3 flex items-center">
-          <button
-            onClick={async () => {
-              setMtErr(null); setMtSaved(false); setMtBusy(true);
-              const res = await saveMetaSettings(mt);
-              setMtBusy(false);
-              if (!res.ok) { setMtErr(res.error ?? "সেভ ব্যর্থ।"); return; }
-              setMtSaved(true);
-              router.refresh();
-            }}
-            disabled={mtBusy}
-            className="rounded-lg bg-brand text-white px-5 py-2 text-sm disabled:opacity-60"
-          >
-            {mtBusy ? "সেভ হচ্ছে..." : "সেভ করুন"}
-          </button>
-          <Saved show={mtSaved} />
-          {mtErr && <span className="text-sm text-red-600 ml-3">{mtErr}</span>}
-        </div>
-        <p className="mt-2 text-xs text-gray-400">
-          অবস্থা:{" "}
-          {mt.pixelId && mt.capiToken ? <span className="text-green-600">✓ কনফিগার করা আছে</span> : <span className="text-amber-600">✗ অসম্পূর্ণ</span>}
-        </p>
-      </section>
+        <SaveRow busy={mtBusy} saved={mtSaved} err={mtErr}
+          onSave={async () => { setMtErr(null); setMtSaved(false); setMtBusy(true); const res = await saveMetaSettings(mt); setMtBusy(false); if (!res.ok) { setMtErr(res.error ?? "Save failed."); return; } setMtSaved(true); router.refresh(); }} />
+        <StatusPill ok={!!(mt.pixelId && mt.capiToken)} okText="Configured" badText="Incomplete" />
+      </Card>
 
       {/* TikTok Pixel + Events API */}
-      <section className="rounded-xl border bg-white p-5">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-gray-900 text-white text-xs">🎵</span>
-          <h2 className="font-semibold">TikTok Pixel + Events API</h2>
-        </div>
-        <p className="text-xs text-gray-400 mb-3">
-          TikTok পিক্সেল আইডি ও Events API টোকেন দিন — ব্রাউজার ও সার্ভার দুই দিক থেকেই ইভেন্ট ট্র্যাক হবে (event_id দিয়ে dedup)।
-        </p>
+      <Card icon="🎵" iconBg="#111827" iconColor="#fff" title="TikTok Pixel + Events API"
+        desc="TikTok Pixel ID and Events API token — tracks events from browser and server (deduped by event_id).">
         <div className="space-y-3">
+          <div><label className={lbl}>Pixel ID</label><input value={tt.pixelId} onChange={(e) => setTt({ ...tt, pixelId: e.target.value.trim() })} placeholder="DA6Q9UBC77UES9741GT0" className={cls} /></div>
           <div>
-            <label className="block text-sm mb-1">Pixel ID</label>
-            <input value={tt.pixelId} onChange={(e) => setTt({ ...tt, pixelId: e.target.value.trim() })} placeholder="DA6Q9UBC77UES9741GT0" className={cls} />
-          </div>
-          <div>
-            <label className="block text-sm mb-1">Events API Access Token</label>
+            <label className={lbl}>Events API access token</label>
             <input type="password" value={tt.accessToken} onChange={(e) => setTt({ ...tt, accessToken: e.target.value })} placeholder="TikTok Events Manager → Settings → Generate Access Token" autoComplete="new-password" className={cls} />
-            <p className="mt-1 text-xs text-gray-400">TikTok Events Manager → তোমার pixel → Settings → Generate Access Token থেকে নিন।</p>
+            <p className="mt-1 text-xs dc-muted">Get it from TikTok Events Manager → your pixel → Settings → Generate Access Token.</p>
           </div>
           <div>
-            <label className="block text-sm mb-1">Test Event Code (ঐচ্ছিক)</label>
+            <label className={lbl}>Test event code (optional)</label>
             <input value={tt.testEventCode} onChange={(e) => setTt({ ...tt, testEventCode: e.target.value })} placeholder="TEST12345" className={cls} />
-            <p className="mt-1 text-xs text-gray-400">
-              সার্ভার থেকে ডেটা আসছে কিনা যাচাই করতে দিন — TikTok Events Manager → Test Events থেকে কোডটি পাবেন, এখানে বসিয়ে সেভ করে সাইটে একটা টেস্ট অর্ডার/ইভেন্ট করুন, Test Events-এ দেখাবে। <b>লাইভে খালি রাখুন।</b>
-            </p>
+            <p className="mt-1 text-xs dc-muted">Use it to verify server events — TikTok Events Manager → Test Events. <b>Leave empty when live.</b></p>
           </div>
         </div>
-        <div className="mt-3 flex items-center">
-          <button
-            onClick={async () => {
-              setTtErr(null); setTtSaved(false); setTtBusy(true);
-              const res = await saveTikTokSettings(tt);
-              setTtBusy(false);
-              if (!res.ok) { setTtErr(res.error ?? "সেভ ব্যর্থ।"); return; }
-              setTtSaved(true);
-              router.refresh();
-            }}
-            disabled={ttBusy}
-            className="rounded-lg bg-brand text-white px-5 py-2 text-sm disabled:opacity-60"
-          >
-            {ttBusy ? "সেভ হচ্ছে..." : "সেভ করুন"}
-          </button>
-          <Saved show={ttSaved} />
-          {ttErr && <span className="text-sm text-red-600 ml-3">{ttErr}</span>}
-        </div>
-        <p className="mt-2 text-xs text-gray-400">
-          অবস্থা:{" "}
-          {tt.pixelId && tt.accessToken ? <span className="text-green-600">✓ কনফিগার করা আছে (browser + server)</span> : tt.pixelId ? <span className="text-amber-600">শুধু browser pixel — server-এর জন্য টোকেন দিন</span> : <span className="text-amber-600">✗ অসম্পূর্ণ</span>}
+        <SaveRow busy={ttBusy} saved={ttSaved} err={ttErr}
+          onSave={async () => { setTtErr(null); setTtSaved(false); setTtBusy(true); const res = await saveTikTokSettings(tt); setTtBusy(false); if (!res.ok) { setTtErr(res.error ?? "Save failed."); return; } setTtSaved(true); router.refresh(); }} />
+        <p className="mt-3 text-xs dc-muted">
+          Status:{" "}
+          {tt.pixelId && tt.accessToken
+            ? <span className="font-semibold" style={{ color: "var(--a-ok)" }}>✓ Configured (browser + server)</span>
+            : tt.pixelId
+              ? <span className="font-semibold" style={{ color: "var(--a-warn)" }}>Browser pixel only — add a token for server</span>
+              : <span className="font-semibold" style={{ color: "var(--a-warn)" }}>✗ Incomplete</span>}
         </p>
-      </section>
+      </Card>
 
       {/* Android app — API access token */}
-      <section className="rounded-xl border bg-white p-5">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-green-100 text-green-700 text-xs">📱</span>
-          <h2 className="font-semibold">অ্যান্ড্রয়েড অ্যাপ (API টোকেন)</h2>
-        </div>
-        <p className="text-xs text-gray-400 mb-3">
-          অ্যাডমিন অ্যাপে লগইন করতে এই টোকেন লাগবে। অ্যাপে <b>API URL</b> ও <b>Access Token</b> বসান।
-        </p>
+      <Card icon="📱" iconBg="#eafaf0" iconColor="#16a34a" title="Android app (API token)"
+        desc="Needed to log in to the admin app. Enter the API URL and access token in the app.">
         <div className="space-y-3">
           <div>
-            <label className="block text-sm mb-1">API URL</label>
-            <input readOnly value={apiBase} onFocus={(e) => e.currentTarget.select()} className={cls + " font-mono text-brand-dark"} />
+            <label className={lbl}>API URL</label>
+            <input readOnly value={apiBase} onFocus={(e) => e.currentTarget.select()} className={cls + " font-mono"} style={{ color: "var(--a-brand)" }} />
           </div>
           <div>
-            <label className="block text-sm mb-1">Access Token</label>
+            <label className={lbl}>Access token</label>
             <div className="flex gap-2">
-              <input value={mb.apiKey} onChange={(e) => setMb({ apiKey: e.target.value.trim() })} placeholder="একটি লম্বা গোপন টোকেন" className={cls + " font-mono"} />
+              <input value={mb.apiKey} onChange={(e) => setMb({ apiKey: e.target.value.trim() })} placeholder="a long secret token" className={cls + " font-mono"} />
               <button
                 type="button"
                 onClick={() => {
@@ -427,95 +290,37 @@ export function SettingsForm({
                     : Math.random().toString(36).slice(2) + Date.now().toString(36);
                   setMb({ apiKey: gen });
                 }}
-                className="shrink-0 rounded-lg border px-3 py-2 text-sm hover:bg-gray-50"
+                className="dc-btn shrink-0"
               >
-                জেনারেট
+                Generate
               </button>
             </div>
-            <p className="mt-1 text-xs text-gray-400">এটি একটি পাসওয়ার্ডের মতো — কাউকে দেবেন না। বদলালে অ্যাপে আবার লগইন করতে হবে।</p>
+            <p className="mt-1 text-xs dc-muted">This is like a password — don&apos;t share it. Changing it requires logging in to the app again.</p>
           </div>
         </div>
-        <div className="mt-3 flex items-center">
-          <button
-            onClick={async () => {
-              setMbErr(null); setMbSaved(false); setMbBusy(true);
-              const res = await saveMobileSettings(mb);
-              setMbBusy(false);
-              if (!res.ok) { setMbErr(res.error ?? "সেভ ব্যর্থ।"); return; }
-              setMbSaved(true);
-              router.refresh();
-            }}
-            disabled={mbBusy}
-            className="rounded-lg bg-brand text-white px-5 py-2 text-sm disabled:opacity-60"
-          >
-            {mbBusy ? "সেভ হচ্ছে..." : "সেভ করুন"}
-          </button>
-          <Saved show={mbSaved} />
-          {mbErr && <span className="text-sm text-red-600 ml-3">{mbErr}</span>}
-        </div>
-        <p className="mt-2 text-xs text-gray-400">
-          অবস্থা: {mb.apiKey ? <span className="text-green-600">✓ অ্যাপ লগইন চালু</span> : <span className="text-amber-600">✗ টোকেন সেট করুন (নইলে অ্যাপ কাজ করবে না)</span>}
-        </p>
-      </section>
+        <SaveRow busy={mbBusy} saved={mbSaved} err={mbErr}
+          onSave={async () => { setMbErr(null); setMbSaved(false); setMbBusy(true); const res = await saveMobileSettings(mb); setMbBusy(false); if (!res.ok) { setMbErr(res.error ?? "Save failed."); return; } setMbSaved(true); router.refresh(); }} />
+        <StatusPill ok={!!mb.apiKey} okText="App login enabled" badText="Set a token (app won't work otherwise)" />
+      </Card>
 
       {/* AI (Anthropic) — order screenshot reader */}
-      <section className="rounded-xl border bg-white p-5">
-        <div className="flex items-center gap-2 mb-1">
-          <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-purple-100 text-purple-700 text-xs">🤖</span>
-          <h2 className="font-semibold">AI অর্ডার রিডার (Anthropic)</h2>
-        </div>
-        <p className="text-xs text-gray-400 mb-3">
-          Anthropic API key দিন — মেসেঞ্জার/হোয়াটসঅ্যাপ অর্ডারের স্ক্রিনশট থেকে নাম, ফোন ও ঠিকানা স্বয়ংক্রিয়ভাবে পূরণ হবে।
-        </p>
+      <Card icon="🤖" iconBg="#f3eefc" iconColor="#7c3aed" title="AI order reader (Anthropic)"
+        desc="Enter an Anthropic API key — it auto-fills name, phone and address from Messenger/WhatsApp order screenshots.">
         <div className="space-y-3">
           <div>
-            <label className="block text-sm mb-1">Anthropic API Key</label>
-            <input
-              type="password"
-              value={aiCfg.apiKey}
-              onChange={(e) => setAiCfg({ ...aiCfg, apiKey: e.target.value })}
-              placeholder="sk-ant-..."
-              autoComplete="new-password"
-              className={cls}
-            />
+            <label className={lbl}>Anthropic API key</label>
+            <input type="password" value={aiCfg.apiKey} onChange={(e) => setAiCfg({ ...aiCfg, apiKey: e.target.value })} placeholder="sk-ant-…" autoComplete="new-password" className={cls} />
           </div>
           <div>
-            <label className="block text-sm mb-1">Model</label>
-            <input
-              value={aiCfg.model}
-              onChange={(e) => setAiCfg({ ...aiCfg, model: e.target.value })}
-              placeholder="claude-sonnet-5"
-              className={cls}
-            />
-            <p className="mt-1 text-xs text-gray-400">
-              বর্তমান মডেল ব্যবহার করুন: <b>claude-sonnet-5</b> (সুপারিশকৃত) · claude-haiku-4-5-20251001 (সস্তা/দ্রুত) · claude-opus-5।
-              পুরনো claude-3 মডেল আর কাজ করে না।
-            </p>
+            <label className={lbl}>Model</label>
+            <input value={aiCfg.model} onChange={(e) => setAiCfg({ ...aiCfg, model: e.target.value })} placeholder="claude-sonnet-5" className={cls} />
+            <p className="mt-1 text-xs dc-muted">Recommended: <b>claude-sonnet-5</b> · claude-haiku-4-5-20251001 (cheaper/faster) · claude-opus-5. Old claude-3 models no longer work.</p>
           </div>
         </div>
-        <div className="mt-3 flex items-center">
-          <button
-            onClick={async () => {
-              setAiErr(null); setAiSaved(false); setAiBusy(true);
-              const res = await saveAiSettings(aiCfg);
-              setAiBusy(false);
-              if (!res.ok) { setAiErr(res.error ?? "সেভ ব্যর্থ।"); return; }
-              setAiSaved(true);
-              router.refresh();
-            }}
-            disabled={aiBusy}
-            className="rounded-lg bg-brand text-white px-5 py-2 text-sm disabled:opacity-60"
-          >
-            {aiBusy ? "সেভ হচ্ছে..." : "সেভ করুন"}
-          </button>
-          <Saved show={aiSaved} />
-          {aiErr && <span className="text-sm text-red-600 ml-3">{aiErr}</span>}
-        </div>
-        <p className="mt-2 text-xs text-gray-400">
-          অবস্থা:{" "}
-          {aiCfg.apiKey ? <span className="text-green-600">✓ কনফিগার করা আছে</span> : <span className="text-amber-600">✗ সেট করা নেই</span>}
-        </p>
-      </section>
+        <SaveRow busy={aiBusy} saved={aiSaved} err={aiErr}
+          onSave={async () => { setAiErr(null); setAiSaved(false); setAiBusy(true); const res = await saveAiSettings(aiCfg); setAiBusy(false); if (!res.ok) { setAiErr(res.error ?? "Save failed."); return; } setAiSaved(true); router.refresh(); }} />
+        <StatusPill ok={!!aiCfg.apiKey} okText="Configured" badText="Not set" />
+      </Card>
     </div>
   );
 }

@@ -10,14 +10,14 @@ export default async function WorkerItemsPage() {
   return (
     <div>
       <div className="flex items-center gap-2 mb-2">
-        <Link href="/admin/workers" className="text-sm text-brand-dark">← কর্মী</Link>
+        <Link href="/admin/workers" className="text-sm" style={{ color: "var(--a-brand)" }}>← Workers</Link>
       </div>
-      <h1 className="text-2xl font-bold mb-1">কস্ট সেটিংস</h1>
-      <p className="text-sm text-gray-500 mb-6">প্রতিটি পিসের মেকিং কস্ট দিন। ১ সেট = সব “সেটে আছে” পিসের যোগফল।</p>
+      <h1 className="text-2xl font-bold mb-1">Cost settings</h1>
+      <p className="text-sm dc-muted mb-5">Set the making cost of each piece. 1 set = the sum of every &ldquo;in set&rdquo; piece.</p>
 
       {missing ? (
-        <div className="rounded-xl border border-amber-300 bg-amber-50 p-5 text-sm text-amber-800">
-          আগে <code className="bg-white/60 px-1 rounded">supabase-migration-workers.sql</code> চালান।
+        <div className="dc-card p-5 text-sm" style={{ borderColor: "var(--a-warn-soft)", background: "var(--a-warn-soft)", color: "var(--a-warn)" }}>
+          Run <code className="bg-white/60 px-1 rounded">supabase-migration-workers.sql</code> first.
         </div>
       ) : (
         <ItemsEditor initial={items} />

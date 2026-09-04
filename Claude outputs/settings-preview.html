@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Settings Redesign Preview</title>
+<style>
+  :root{
+    --a-bg:#fbf3ea; --a-surface:#fff; --a-surface-2:#f6f2ec; --a-border:#ece3d6;
+    --a-text:#1f2430; --a-muted:#6b6255; --a-faint:#9a917f;
+    --a-violet:#6d5ae6; --a-violet-soft:#efeafc; --a-brand:#3E9BD1;
+    --a-ok:#16a34a; --a-warn:#c2792b;
+    --a-shadow:0 1px 2px rgba(17,24,39,.05); --a-shadow-lg:0 12px 30px rgba(17,24,39,.14);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--a-bg);color:var(--a-text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans Bengali",sans-serif;}
+  .wrap{max-width:720px;margin:0 auto;padding:20px 16px 60px;}
+  .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+  h1{font-size:24px;font-weight:800;margin:0;letter-spacing:-.02em;}
+  .sub{color:var(--a-muted);font-size:13px;margin:0 0 20px;}
+  .card{background:var(--a-surface);border:1px solid var(--a-border);border-radius:16px;
+    padding:18px;margin-bottom:16px;box-shadow:var(--a-shadow);}
+  .chead{display:flex;align-items:center;gap:10px;margin-bottom:4px;}
+  .cico{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;}
+  .ctitle{font-weight:700;font-size:15.5px;margin:0;}
+  .cdesc{color:var(--a-faint);font-size:12px;margin:2px 0 14px;line-height:1.5;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  @media(max-width:520px){.grid2{grid-template-columns:1fr;}}
+  label.l{display:block;font-size:12.5px;font-weight:600;color:var(--a-muted);margin:0 0 5px;}
+  .inp{width:100%;border:1px solid var(--a-border);background:#fff;border-radius:11px;
+    padding:10px 12px;font-size:14px;color:var(--a-text);outline:none;}
+  .inp:focus{border-color:var(--a-violet);box-shadow:0 0 0 3px var(--a-violet-soft);}
+  .inp.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;}
+  .field{margin-bottom:12px;}
+  .hint{font-size:11.5px;color:var(--a-faint);margin:5px 0 0;line-height:1.5;}
+  .row{display:flex;align-items:center;gap:12px;margin-top:4px;}
+  .btn{border:1px solid var(--a-violet);background:var(--a-violet);color:#fff;
+    border-radius:11px;padding:9px 18px;font-size:13.5px;font-weight:600;cursor:pointer;}
+  .status{font-size:12px;color:var(--a-faint);margin:12px 0 0;}
+  .ok{color:var(--a-ok);font-weight:600;}
+  .warn{color:var(--a-warn);font-weight:600;}
+  .pill-ok{background:#e7f6ec;color:#16a34a;}
+  .pill-warn{background:#fdeede;color:#c2792b;}
+  .tag{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;
+    padding:3px 9px;border-radius:999px;}
+  .toggle{display:flex;align-items:center;gap:10px;background:var(--a-surface-2);
+    border:1px solid var(--a-border);border-radius:11px;padding:10px 12px;font-size:13px;color:var(--a-muted);}
+  .sw{width:38px;height:22px;border-radius:999px;background:var(--a-violet);position:relative;flex:0 0 auto;}
+  .sw::after{content:"";position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;background:#fff;}
+  .note{font-size:11px;color:var(--a-faint);text-align:center;margin-top:26px;}
+  .new{background:var(--a-violet-soft);color:var(--a-violet);font-size:10px;font-weight:800;
+    padding:2px 7px;border-radius:999px;letter-spacing:.03em;margin-left:2px;}
+  .txta{min-height:56px;resize:vertical;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><h1>Settings</h1></div>
+  <p class="sub">Store, delivery, courier & tracking — all in one place.</p>
+
+  <!-- Push notifications -->
+  <div class="card">
+    <div class="chead"><span class="cico" style="background:#eaf4fb">🔔</span><h2 class="ctitle">Push notifications</h2></div>
+    <p class="cdesc">Get a phone alert on every new order. Enable notifications on this device.</p>
+    <button class="btn" style="background:var(--a-brand);border-color:var(--a-brand)">Enable notifications</button>
+  </div>
+
+  <!-- Delivery charges -->
+  <div class="card">
+    <div class="chead"><span class="cico" style="background:#eafaf0">🚚</span><h2 class="ctitle">Delivery charges</h2></div>
+    <p class="cdesc">Shipping fee shown at checkout, inside vs outside Dhaka.</p>
+    <div class="grid2">
+      <div><label class="l">Inside Dhaka (৳)</label><input class="inp" value="60"></div>
+      <div><label class="l">Outside Dhaka (৳)</label><input class="inp" value="120"></div>
+    </div>
+    <div class="row"><button class="btn">Save</button></div>
+  </div>
+
+  <!-- Store info -->
+  <div class="card">
+    <div class="chead"><span class="cico" style="background:#f3eefc">🏪</span><h2 class="ctitle">Store information</h2></div>
+    <p class="cdesc">Name, contact & address used across the site and invoices.</p>
+    <div class="field"><label class="l">Store name</label><input class="inp" value="Dream Comfort"></div>
+    <div class="grid2">
+      <div><label class="l">Phone</label><input class="inp" value="01XXXXXXXXX"></div>
+      <div><label class="l">Email</label><input class="inp" value="hello@dreamcomfortbd.com"></div>
+    </div>
+    <div class="row"><button class="btn">Save</button></div>
+  </div>
+
+  <!-- BD Courier -->
+  <div class="card" style="border-color:#cfe9db">
+    <div class="chead"><span class="cico" style="background:#e7f6ec">🛡️</span>
+      <h2 class="ctitle">BD Courier — Customer success rate <span class="new">NEW</span></h2></div>
+    <p class="cdesc">API token from bdcourier.com. Shows each customer's courier delivery success
+      rate in the order list — verify a new order before you confirm it.</p>
+    <div class="field"><label class="l">API Token</label>
+      <input class="inp mono" type="password" value="••••••••••••••••" placeholder="bdcourier.com → Dashboard → API Token"></div>
+    <div class="row"><button class="btn">Save</button>
+      <span class="tag pill-warn">✗ Not set — rate hidden</span></div>
+  </div>
+
+  <!-- CarryBee -->
+  <div class="card">
+    <div class="chead"><span class="cico" style="background:#fdf3d6">🐝</span><h2 class="ctitle">CarryBee courier</h2></div>
+    <p class="cdesc">Merchant API details — enables "Send to CarryBee" on the orders page.</p>
+    <div class="field"><label class="l">Environment</label>
+      <select class="inp"><option>Production (live)</option><option>Sandbox (test)</option></select></div>
+    <div class="grid2">
+      <div><label class="l">Client ID</label><input class="inp" value="21917"></div>
+      <div><label class="l">Store ID</label><input class="inp" value="21917"></div>
+    </div>
+    <div class="field" style="margin-top:12px"><label class="l">Client Secret</label>
+      <input class="inp" type="password" value="••••••••••••"></div>
+    <div class="toggle" style="margin-top:6px"><span class="sw"></span>
+      Auto-send to CarryBee when an order is <b>confirmed</b> (any device).</div>
+    <div class="row" style="margin-top:14px"><button class="btn">Save</button>
+      <span class="tag pill-ok">✓ Configured</span></div>
+  </div>
+
+  <!-- Meta -->
+  <div class="card">
+    <div class="chead"><span class="cico" style="background:#e8f0fe">📊</span><h2 class="ctitle">Meta Pixel + Conversions API</h2></div>
+    <p class="cdesc">Facebook Pixel ID & CAPI token — tracks browser + server events.</p>
+    <div class="field"><label class="l">Pixel ID</label><input class="inp" value="1234567890123456"></div>
+    <div class="field"><label class="l">Conversions API access token</label>
+      <input class="inp" type="password" value="••••••••••••"></div>
+    <div class="row"><button class="btn">Save</button><span class="tag pill-ok">✓ Configured</span></div>
+  </div>
+
+  <!-- SMS templates (collapsed look) -->
+  <div class="card">
+    <div class="chead"><span class="cico" style="background:#eafaf0">💬</span><h2 class="ctitle">SMS templates</h2></div>
+    <p class="cdesc">Placeholders: {name} {order} {total} {tracking}</p>
+    <div class="field"><label class="l">Order placed</label>
+      <textarea class="inp txta">Hi {name}, your order {order} is received. Total ৳{total}.</textarea></div>
+    <div class="row"><button class="btn">Save</button></div>
+  </div>
+
+  <p class="note">Preview only — TikTok, Android app token & AI reader sections follow the same card style.</p>
+</div>
+</body>
+</html>

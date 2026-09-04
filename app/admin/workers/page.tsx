@@ -3,6 +3,7 @@ import Image from "next/image";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { isMissingTable, summarize, setCost, WorkerItem, ProductionRow, AdjustmentRow, Worker } from "@/lib/workers";
 import { taka } from "@/lib/format";
+import { Icon } from "@/components/admin/icons";
 import { AddWorker } from "./AddWorker";
 
 export const dynamic = "force-dynamic";
@@ -19,10 +20,9 @@ export default async function WorkersPage() {
   if (isMissingTable(wRes.error) || isMissingTable(itemsRes.error)) {
     return (
       <div>
-        <h1 className="text-2xl font-bold mb-4">কর্মী</h1>
-        <div className="rounded-xl border border-amber-300 bg-amber-50 p-5 text-sm text-amber-800">
-          কর্মী ফিচার চালু করতে ডাটাবেস টেবিল যোগ করতে হবে। Supabase → SQL Editor-এ{" "}
-          <code className="bg-white/60 px-1 rounded">supabase-migration-workers.sql</code> ফাইলটি চালান, তারপর এই পেজ রিফ্রেশ করুন।
+        <h1 className="text-2xl font-bold mb-4">Workers</h1>
+        <div className="dc-card p-5 text-sm" style={{ borderColor: "var(--a-warn-soft)", background: "var(--a-warn-soft)", color: "var(--a-warn)" }}>
+          To enable the Workers feature, add the database tables. Run <code className="bg-white/60 px-1 rounded">supabase-migration-workers.sql</code> in Supabase → SQL Editor, then refresh this page.
         </div>
       </div>
     );
@@ -39,46 +39,47 @@ export default async function WorkersPage() {
     adj: adj.filter((a) => a.worker_id === id) as AdjustmentRow[],
   });
 
+  const totalDue = workers.reduce((n, w) => { const { prod: p, adj: a } = byWorker(w.id); return n + summarize(p, a).due; }, 0);
+
   return (
     <div>
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-        <h1 className="text-2xl font-bold">কর্মী</h1>
-        <div className="flex items-center gap-2">
-          <Link href="/admin/workers/items" className="rounded-lg border px-4 py-2 text-sm hover:bg-brand-soft">⚙️ কস্ট সেটিংস</Link>
-        </div>
+        <h1 className="text-2xl font-bold">Workers</h1>
+        <Link href="/admin/workers/items" className="dc-btn"><Icon name="settings" className="h-4 w-4" /> Cost settings</Link>
       </div>
 
-      <div className="mb-4 rounded-xl border bg-white p-3 text-sm text-gray-600 flex flex-wrap items-center gap-x-4 gap-y-1">
-        <span>১ সেট = <b>{items.filter((i) => i.in_set && i.active).length}</b> পিস</span>
-        <span>প্রতি সেট মেকিং কস্ট: <b className="text-brand-dark">{taka(oneSet)}</b></span>
-        <Link href="/admin/workers/items" className="text-brand-dark underline">কস্ট বদলান</Link>
+      <div className="dc-card p-3 mb-4 text-sm dc-muted flex flex-wrap items-center gap-x-5 gap-y-1">
+        <span>1 set = <b className="text-[var(--a-text)]">{items.filter((i) => i.in_set && i.active).length}</b> pcs</span>
+        <span>Making cost / set: <b style={{ color: "var(--a-violet)" }}>{taka(oneSet)}</b></span>
+        <span>Total dues: <b style={{ color: "#16a34a" }}>{taka(totalDue)}</b></span>
+        <Link href="/admin/workers/items" className="underline" style={{ color: "var(--a-brand)" }}>Change cost</Link>
       </div>
 
       <AddWorker />
 
       {workers.length === 0 ? (
-        <p className="text-center text-gray-400 py-10">এখনও কোনো কর্মী যোগ করা হয়নি।</p>
+        <p className="text-center dc-muted py-10">No workers added yet.</p>
       ) : (
-        <div className="mt-4 space-y-3">
+        <div className="mt-4 space-y-2">
           {workers.map((w) => {
             const { prod: p, adj: a } = byWorker(w.id);
             const sum = summarize(p, a);
             return (
-              <Link key={w.id} href={`/admin/workers/${w.id}`} className="flex items-center gap-4 rounded-xl border bg-white p-4 hover:shadow-sm transition">
-                <div className="h-14 w-14 rounded-full overflow-hidden bg-gray-100 ring-1 ring-black/5 shrink-0 flex items-center justify-center">
+              <Link key={w.id} href={`/admin/workers/${w.id}`} className="dc-card p-3.5 flex items-center gap-4 hover:shadow-sm transition">
+                <div className="h-12 w-12 rounded-full overflow-hidden shrink-0 flex items-center justify-center" style={{ background: "var(--a-surface-2)", boxShadow: "inset 0 0 0 1px var(--a-border)" }}>
                   {w.photo ? (
-                    <Image src={w.photo} alt={w.name} width={56} height={56} className="h-full w-full object-cover" />
+                    <Image src={w.photo} alt={w.name} width={48} height={48} className="h-full w-full object-cover" />
                   ) : (
                     <span className="text-xl">🧑‍🏭</span>
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-gray-900 truncate">{w.name}{!w.active && <span className="ml-2 text-xs text-gray-400">(নিষ্ক্রিয়)</span>}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{sum.sets} সেট · {sum.pieces} পিস · আয় {taka(sum.earned)}</p>
+                  <p className="font-bold truncate">{w.name}{!w.active && <span className="ml-2 text-xs dc-muted">(inactive)</span>}</p>
+                  <p className="text-xs dc-muted mt-0.5">{sum.sets} sets · {sum.pieces} pcs · earned {taka(sum.earned)}</p>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="text-xs text-gray-400">বাকি পাওনা</p>
-                  <p className={"font-bold text-lg " + (sum.due > 0 ? "text-green-600" : "text-gray-500")}>{taka(sum.due)}</p>
+                  <p className="text-xs dc-muted">Due</p>
+                  <p className="font-bold text-lg" style={{ color: sum.due > 0 ? "#16a34a" : "var(--a-muted)" }}>{taka(sum.due)}</p>
                 </div>
               </Link>
             );

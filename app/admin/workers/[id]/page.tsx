@@ -16,7 +16,7 @@ export default async function WorkerPage({ params }: { params: { id: string } })
   ]);
 
   if (isMissingTable(wRes.error)) {
-    return <div className="rounded-xl border border-amber-300 bg-amber-50 p-5 text-sm text-amber-800">আগে workers migration চালান।</div>;
+    return <div className="dc-card p-5 text-sm" style={{ borderColor: "var(--a-warn-soft)", background: "var(--a-warn-soft)", color: "var(--a-warn)" }}>Run the workers migration first.</div>;
   }
   if (!wRes.data) notFound();
 
@@ -29,7 +29,7 @@ export default async function WorkerPage({ params }: { params: { id: string } })
 
   return (
     <div>
-      <Link href="/admin/workers" className="text-sm text-brand-dark">← কর্মী তালিকা</Link>
+      <Link href="/admin/workers" className="text-sm" style={{ color: "var(--a-brand)" }}>← Workers</Link>
       <WorkerDetail
         worker={worker}
         items={items.filter((i) => i.active)}

@@ -30,7 +30,7 @@ export function LandingVariants({ initial, products }: { initial: Variant[]; pro
 
   function addVariant() {
     const key = nextKey();
-    setList((l) => [...l, { key, name: `ল্যান্ডিং ${key.replace("landing", "")}`, productSlugs: [] }]);
+    setList((l) => [...l, { key, name: `Landing ${key.replace("landing", "")}`, productSlugs: [] }]);
   }
   function update(i: number, patch: Partial<Variant>) {
     setList((l) => l.map((v, idx) => (idx === i ? { ...v, ...patch } : v)));
@@ -53,46 +53,44 @@ export function LandingVariants({ initial, products }: { initial: Variant[]; pro
     setMsg(null);
     const res = await saveLandingVariants(list);
     setBusy(false);
-    if (!res.ok) { setMsg(res.error ?? "সেভ ব্যর্থ হয়েছে।"); return; }
-    setMsg("✅ সেভ হয়েছে।");
+    if (!res.ok) { setMsg(res.error ?? "Save failed."); return; }
+    setMsg("Saved ✓");
     router.refresh();
   }
 
   return (
-    <div className="mt-8 max-w-3xl">
+    <div className="max-w-3xl">
       <div className="flex items-center justify-between mb-1">
-        <h2 className="text-lg font-bold">🧩 অতিরিক্ত ল্যান্ডিং পেজ</h2>
-        <button onClick={addVariant} className="rounded-lg bg-brand text-white px-4 py-2 text-sm">+ নতুন ল্যান্ডিং</button>
+        <h2 className="text-lg font-bold">🧩 Extra landing pages</h2>
+        <button onClick={addVariant} className="dc-btn dc-btn-solid" style={{ background: "var(--a-violet)", borderColor: "var(--a-violet)" }}>+ New landing</button>
       </div>
-      <p className="text-sm text-gray-500 mb-4">
-        একই ডিজাইন — শুধু পণ্য আলাদা। প্রতিটি পেজ আলাদা URL-এ খুলবে (যেমন <code className="bg-gray-100 px-1 rounded">/landing2</code>)। বিজ্ঞাপনে ঐ URL ব্যবহার করুন।
-      </p>
+      <p className="text-sm dc-muted mb-4">Same design — only the products differ. Each opens at its own URL (e.g. <code className="px-1 rounded" style={{ background: "var(--a-surface-2)" }}>/landing2</code>). Use that URL in your ads.</p>
 
       {list.length === 0 && (
-        <p className="rounded-xl border border-dashed p-4 text-sm text-gray-400">এখনও কোনো অতিরিক্ত ল্যান্ডিং নেই — “+ নতুন ল্যান্ডিং” চাপুন।</p>
+        <p className="rounded-xl p-4 text-sm dc-muted" style={{ border: "1px dashed var(--a-border)" }}>No extra landing pages yet — press &ldquo;+ New landing&rdquo;.</p>
       )}
 
       <div className="space-y-4">
         {list.map((v, i) => (
-          <div key={i} className="rounded-2xl border border-black/5 bg-white p-4 shadow-sm">
+          <div key={i} className="dc-card p-4">
             <div className="flex flex-wrap items-end gap-3 mb-3">
               <div className="flex-1 min-w-[140px]">
-                <label className="block text-xs font-medium mb-1 text-gray-500">নাম (নিজের জন্য)</label>
-                <input value={v.name} onChange={(e) => update(i, { name: e.target.value })} className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-brand" placeholder="যেমন: বেবি প্রোডাক্ট ল্যান্ডিং" />
+                <label className="block text-xs font-medium dc-muted mb-1">Name (for yourself)</label>
+                <input value={v.name} onChange={(e) => update(i, { name: e.target.value })} className="dc-input py-2" placeholder="e.g. Baby products landing" />
               </div>
               <div className="min-w-[140px]">
-                <label className="block text-xs font-medium mb-1 text-gray-500">URL কী</label>
-                <input value={v.key} onChange={(e) => update(i, { key: slugifyKey(e.target.value) })} className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-brand font-mono" placeholder="landing2" />
+                <label className="block text-xs font-medium dc-muted mb-1">URL key</label>
+                <input value={v.key} onChange={(e) => update(i, { key: slugifyKey(e.target.value) })} className="dc-input py-2 font-mono" placeholder="landing2" />
               </div>
-              <button onClick={() => remove(i)} className="rounded-lg border border-red-200 text-red-600 px-3 py-2 text-sm hover:bg-red-50">সরান</button>
+              <button onClick={() => remove(i)} className="dc-btn" style={{ color: "#dc2626", borderColor: "#f0c9c9" }}>Remove</button>
             </div>
 
             <div className="mb-3 text-xs">
-              <span className="text-gray-500">লিংক: </span>
-              <a href={`/${v.key}`} target="_blank" rel="noopener" className="text-brand-dark font-medium break-all hover:underline">{origin}/{v.key}</a>
+              <span className="dc-muted">Link: </span>
+              <a href={`/${v.key}`} target="_blank" rel="noopener" className="font-medium break-all hover:underline" style={{ color: "var(--a-brand)" }}>{origin}/{v.key}</a>
             </div>
 
-            <label className="block text-xs font-medium mb-2 text-gray-500">পণ্য নির্বাচন করুন ({v.productSlugs.length}টি)</label>
+            <label className="block text-xs font-medium dc-muted mb-2">Select products ({v.productSlugs.length})</label>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {products.map((p) => {
                 const on = v.productSlugs.includes(p.slug);
@@ -101,19 +99,22 @@ export function LandingVariants({ initial, products }: { initial: Variant[]; pro
                     key={p.slug}
                     type="button"
                     onClick={() => toggleProduct(i, p.slug)}
-                    className={"flex items-center gap-2 rounded-xl border p-2 text-left transition " + (on ? "border-brand ring-2 ring-brand/20 bg-brand-soft" : "border-black/10 hover:border-brand/40")}
+                    className="flex items-center gap-2 rounded-xl border p-2 text-left transition"
+                    style={on
+                      ? { borderColor: "var(--a-violet)", background: "var(--a-violet-soft)", boxShadow: "0 0 0 2px var(--a-violet-soft)" }
+                      : { borderColor: "var(--a-border)" }}
                   >
-                    <span className="h-9 w-9 rounded-lg overflow-hidden bg-gray-100 shrink-0 flex items-center justify-center">
+                    <span className="h-9 w-9 rounded-lg overflow-hidden shrink-0 flex items-center justify-center" style={{ background: "var(--a-surface-2)" }}>
                       {p.image ? (
                         <Image src={p.image} alt="" width={36} height={36} className="h-full w-full object-cover" />
                       ) : (
-                        <span className="text-[9px] text-gray-400">—</span>
+                        <span className="text-[9px] dc-muted">—</span>
                       )}
                     </span>
                     <span className="flex-1 min-w-0">
                       <span className="block text-xs font-medium leading-tight line-clamp-2">{p.name}</span>
                     </span>
-                    <span className={"shrink-0 h-4 w-4 rounded-full border flex items-center justify-center text-[10px] " + (on ? "bg-brand text-white border-brand" : "border-gray-300")}>{on ? "✓" : ""}</span>
+                    <span className="shrink-0 h-4 w-4 rounded-full border flex items-center justify-center text-[10px]" style={on ? { background: "var(--a-violet)", color: "#fff", borderColor: "var(--a-violet)" } : { borderColor: "var(--a-border)" }}>{on ? "✓" : ""}</span>
                   </button>
                 );
               })}
@@ -124,10 +125,10 @@ export function LandingVariants({ initial, products }: { initial: Variant[]; pro
 
       {list.length > 0 && (
         <div className="mt-4 flex items-center gap-3">
-          <button onClick={save} disabled={busy} className="rounded-xl bg-brand text-white px-6 py-2.5 text-sm font-medium hover:bg-brand-dark disabled:opacity-60">
-            {busy ? "সেভ হচ্ছে..." : "সেভ করুন"}
+          <button onClick={save} disabled={busy} className="dc-btn dc-btn-solid disabled:opacity-60" style={{ background: "var(--a-violet)", borderColor: "var(--a-violet)" }}>
+            {busy ? "Saving…" : "Save"}
           </button>
-          {msg && <span className="text-sm text-gray-600">{msg}</span>}
+          {msg && <span className="text-sm" style={{ color: msg.includes("✓") ? "var(--a-ok)" : "#dc2626" }}>{msg}</span>}
         </div>
       )}
     </div>

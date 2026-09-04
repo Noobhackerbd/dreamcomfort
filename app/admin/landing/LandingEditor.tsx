@@ -8,7 +8,7 @@ import type { LandingConfig } from "@/lib/landing";
 
 interface ProductOpt { slug: string; name: string; price?: number; image?: string | null }
 
-const cls = "w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-brand";
+const cls = "dc-input py-2";
 
 async function uploadImage(file: File): Promise<string | null> {
   const supabase = getSupabaseBrowserClient();
@@ -34,7 +34,6 @@ export function LandingEditor({
   const [busy, setBusy] = useState(false);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
 
-  // Selected products (in order) + those still available to add.
   const slugs = c.productSlugs ?? [];
   const bySlug = new Map(products.map((p) => [p.slug, p]));
   const selected = slugs.map((s) => bySlug.get(s)).filter(Boolean) as ProductOpt[];
@@ -65,34 +64,31 @@ export function LandingEditor({
     setSaved(false);
     try {
       const res = await saveLanding(c);
-      if (!res?.ok) {
-        setSaveError(res?.error || "সেভ ব্যর্থ হয়েছে।");
-        return;
-      }
+      if (!res?.ok) { setSaveError(res?.error || "Save failed."); return; }
       setSaved(true);
       router.refresh();
     } catch (e: any) {
-      setSaveError(e?.message || "সেভ ব্যর্থ হয়েছে।");
+      setSaveError(e?.message || "Save failed.");
     } finally {
       setSaving(false);
     }
   }
 
+  const iconBtn = "h-7 w-7 rounded-lg border text-sm disabled:opacity-30 flex items-center justify-center";
+
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="space-y-5 max-w-3xl">
       {/* Hero product + logo */}
-      <section className="rounded-xl border bg-white p-5 space-y-3">
-        <h2 className="font-semibold">প্রধান পণ্য ও লোগো</h2>
+      <section className="dc-card p-5 space-y-3">
+        <h2 className="font-bold text-[15px]">Main products &amp; logo</h2>
         <div>
-          <label className="block text-sm mb-1">ল্যান্ডিং পেজের পণ্য (ড্র্যাগ করে সাজান)</label>
-          <p className="text-xs text-gray-400 mb-2">
-            পণ্য উপরে-নিচে ড্র্যাগ করে বা ▲▼ চেপে ক্রম বদলান — ক্রেতা এই ক্রমেই পণ্য দেখবে। কিছু না বাছলে সব সক্রিয় পণ্য দেখাবে।
-          </p>
+          <label className="block text-sm font-medium dc-muted mb-1">Landing page products (drag to order)</label>
+          <p className="text-xs dc-muted mb-2">Drag up/down or use ▲▼ to reorder — customers see products in this order. If none are chosen, all active products show.</p>
 
           {selected.length === 0 ? (
-            <p className="rounded-lg border border-dashed p-3 text-sm text-gray-400">কোনো পণ্য নির্বাচিত নয় — নিচ থেকে যোগ করুন।</p>
+            <p className="rounded-lg p-3 text-sm dc-muted" style={{ border: "1px dashed var(--a-border)" }}>No products selected — add from below.</p>
           ) : (
-            <div className="rounded-lg border divide-y">
+            <div className="rounded-lg divide-y" style={{ border: "1px solid var(--a-border)" }}>
               {selected.map((p, idx) => (
                 <div
                   key={p.slug}
@@ -101,21 +97,21 @@ export function LandingEditor({
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={() => { if (dragIdx !== null) move(dragIdx, idx); setDragIdx(null); }}
                   onDragEnd={() => setDragIdx(null)}
-                  className={"flex items-center gap-2 px-2 py-2 bg-white " + (dragIdx === idx ? "opacity-50" : "")}
+                  className={"flex items-center gap-2 px-2 py-2 " + (dragIdx === idx ? "opacity-50" : "")}
                 >
-                  <span className="cursor-grab select-none text-gray-400 px-1" title="ড্র্যাগ করুন">⠿</span>
-                  <span className="w-5 text-center text-xs text-gray-400">{idx + 1}</span>
+                  <span className="cursor-grab select-none px-1" style={{ color: "var(--a-faint)" }} title="Drag">⠿</span>
+                  <span className="w-5 text-center text-xs dc-muted">{idx + 1}</span>
                   {p.image ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={p.image} alt="" className="h-9 w-9 rounded object-cover" />
                   ) : (
-                    <span className="h-9 w-9 rounded bg-gray-100" />
+                    <span className="h-9 w-9 rounded" style={{ background: "var(--a-surface-2)" }} />
                   )}
                   <span className="flex-1 min-w-0 truncate text-sm">{p.name}</span>
                   <div className="flex items-center gap-1">
-                    <button type="button" onClick={() => move(idx, idx - 1)} disabled={idx === 0} className="h-7 w-7 rounded border text-sm disabled:opacity-30">▲</button>
-                    <button type="button" onClick={() => move(idx, idx + 1)} disabled={idx === selected.length - 1} className="h-7 w-7 rounded border text-sm disabled:opacity-30">▼</button>
-                    <button type="button" onClick={() => removeProduct(p.slug)} className="h-7 w-7 rounded border border-red-200 text-red-500 text-sm" title="সরান">×</button>
+                    <button type="button" onClick={() => move(idx, idx - 1)} disabled={idx === 0} className={iconBtn} style={{ borderColor: "var(--a-border)" }}>▲</button>
+                    <button type="button" onClick={() => move(idx, idx + 1)} disabled={idx === selected.length - 1} className={iconBtn} style={{ borderColor: "var(--a-border)" }}>▼</button>
+                    <button type="button" onClick={() => removeProduct(p.slug)} className={iconBtn} style={{ borderColor: "#f0c9c9", color: "#dc2626" }} title="Remove">×</button>
                   </div>
                 </div>
               ))}
@@ -124,140 +120,116 @@ export function LandingEditor({
 
           {available.length > 0 && (
             <div className="mt-3">
-              <label className="block text-xs font-medium text-gray-500 mb-1">পণ্য যোগ করুন</label>
-              <div className="max-h-40 overflow-y-auto rounded-lg border divide-y">
+              <label className="block text-xs font-medium dc-muted mb-1">Add a product</label>
+              <div className="max-h-40 overflow-y-auto rounded-lg divide-y" style={{ border: "1px solid var(--a-border)" }}>
                 {available.map((p) => (
-                  <button
-                    type="button"
-                    key={p.slug}
-                    onClick={() => addProduct(p.slug)}
-                    className="w-full flex items-center gap-2 px-2 py-2 text-left text-sm hover:bg-gray-50"
-                  >
+                  <button type="button" key={p.slug} onClick={() => addProduct(p.slug)} className="w-full flex items-center gap-2 px-2 py-2 text-left text-sm hover:bg-[var(--a-surface-2)]">
                     {p.image ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={p.image} alt="" className="h-8 w-8 rounded object-cover" />
                     ) : (
-                      <span className="h-8 w-8 rounded bg-gray-100" />
+                      <span className="h-8 w-8 rounded" style={{ background: "var(--a-surface-2)" }} />
                     )}
                     <span className="flex-1 min-w-0 truncate">{p.name}</span>
-                    <span className="text-brand text-lg leading-none">＋</span>
+                    <span className="text-lg leading-none" style={{ color: "var(--a-violet)" }}>＋</span>
                   </button>
                 ))}
               </div>
             </div>
           )}
-          {products.length === 0 && <p className="mt-2 text-sm text-gray-400">কোনো পণ্য নেই — আগে <a href="/admin/products" className="text-brand underline">পণ্য যোগ করুন</a>।</p>}
-          {selected.length > 0 && <p className="text-xs text-gray-500 mt-2">{selected.length}টি পণ্য নির্বাচিত।</p>}
+          {products.length === 0 && <p className="mt-2 text-sm dc-muted">No products — <a href="/admin/products" className="underline" style={{ color: "var(--a-brand)" }}>add a product</a> first.</p>}
+          {selected.length > 0 && <p className="text-xs dc-muted mt-2">{selected.length} product(s) selected.</p>}
         </div>
         <div>
-          <label className="block text-sm mb-1">লোগো</label>
+          <label className="block text-sm font-medium dc-muted mb-1">Logo</label>
           <div className="flex items-center gap-3">
             {c.logoUrl && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={c.logoUrl} alt="logo" className="h-10 w-auto object-contain border rounded p-1" />
+              <img src={c.logoUrl} alt="logo" className="h-10 w-auto object-contain rounded p-1" style={{ border: "1px solid var(--a-border)" }} />
             )}
-            <label className="text-sm text-brand cursor-pointer">
-              {c.logoUrl ? "পরিবর্তন" : "আপলোড"} {busy && "..."}
+            <label className="text-sm cursor-pointer" style={{ color: "var(--a-brand)" }}>
+              {c.logoUrl ? "Change" : "Upload"} {busy && "…"}
               <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
                 const f = e.target.files?.[0]; if (!f) return; setBusy(true);
                 const url = await uploadImage(f); setBusy(false); if (url) set("logoUrl", url);
               }} />
             </label>
-            {c.logoUrl && <button onClick={() => set("logoUrl", "")} className="text-red-500 text-sm">সরান</button>}
+            {c.logoUrl && <button onClick={() => set("logoUrl", "")} className="text-sm" style={{ color: "#dc2626" }}>Remove</button>}
           </div>
         </div>
       </section>
 
       {/* Headline / copy */}
-      <section className="rounded-xl border bg-white p-5 space-y-3">
-        <h2 className="font-semibold">হেডলাইন ও টেক্সট</h2>
-        <div>
-          <label className="block text-sm mb-1">হেডলাইন</label>
-          <input value={c.headline} onChange={(e) => set("headline", e.target.value)} className={cls} />
-        </div>
-        <div>
-          <label className="block text-sm mb-1">সাব-হেডলাইন</label>
-          <textarea value={c.subheadline} onChange={(e) => set("subheadline", e.target.value)} rows={2} className={cls} />
-        </div>
+      <section className="dc-card p-5 space-y-3">
+        <h2 className="font-bold text-[15px]">Headline &amp; text</h2>
+        <div><label className="block text-sm font-medium dc-muted mb-1">Headline</label><input value={c.headline} onChange={(e) => set("headline", e.target.value)} className={cls} /></div>
+        <div><label className="block text-sm font-medium dc-muted mb-1">Sub-headline</label><textarea value={c.subheadline} onChange={(e) => set("subheadline", e.target.value)} rows={2} className={cls} /></div>
         <div className="grid sm:grid-cols-2 gap-3">
-          <div>
-            <label className="block text-sm mb-1">আর্জেন্সি টেক্সট</label>
-            <input value={c.urgencyText} onChange={(e) => set("urgencyText", e.target.value)} className={cls} />
-          </div>
-          <div>
-            <label className="block text-sm mb-1">স্ট্যাট (যেমন: ৫০০০+ সন্তুষ্ট মা)</label>
-            <input value={c.statText} onChange={(e) => set("statText", e.target.value)} className={cls} />
-          </div>
-          <div>
-            <label className="block text-sm mb-1">বাটন টেক্সট (CTA)</label>
-            <input value={c.ctaText} onChange={(e) => set("ctaText", e.target.value)} className={cls} />
-          </div>
+          <div><label className="block text-sm font-medium dc-muted mb-1">Urgency text</label><input value={c.urgencyText} onChange={(e) => set("urgencyText", e.target.value)} className={cls} /></div>
+          <div><label className="block text-sm font-medium dc-muted mb-1">Stat (e.g. 5000+ happy moms)</label><input value={c.statText} onChange={(e) => set("statText", e.target.value)} className={cls} /></div>
+          <div><label className="block text-sm font-medium dc-muted mb-1">Button text (CTA)</label><input value={c.ctaText} onChange={(e) => set("ctaText", e.target.value)} className={cls} /></div>
         </div>
       </section>
 
-      {/* Hero images note (multi-product: hero = the selected product's own images) */}
-      <section className="rounded-xl border bg-white p-5">
-        <h2 className="font-semibold mb-1">হিরো ছবি (স্লাইডার)</h2>
-        <p className="text-sm text-gray-600">
-          এই ল্যান্ডিং পেজে হিরো স্লাইডার প্রতিটি <b>পণ্যের নিজের ছবি</b> থেকে তৈরি হয়। একাধিক ছবির স্লাইডশো
-          চাইলে <a href="/admin/products" className="text-brand underline">পণ্য সম্পাদনা</a> করে সেই পণ্যে
-          একাধিক ছবি আপলোড করুন — ক্রেতা সেই পণ্য বেছে নিলে সব ছবি স্লাইডশো হিসেবে দেখাবে।
-        </p>
+      {/* Hero images note */}
+      <section className="dc-card p-5">
+        <h2 className="font-bold text-[15px] mb-1">Hero images (slider)</h2>
+        <p className="text-sm dc-muted">The hero slider is built from each <b>product&apos;s own images</b>. For a multi-image slideshow, <a href="/admin/products" className="underline" style={{ color: "var(--a-brand)" }}>edit the product</a> and upload multiple images — they show as a slideshow when the customer picks that product.</p>
       </section>
 
       {/* Badges */}
-      <section className="rounded-xl border bg-white p-5">
-        <h2 className="font-semibold mb-2">ব্যাজ / প্রতিশ্রুতি</h2>
+      <section className="dc-card p-5">
+        <h2 className="font-bold text-[15px] mb-2">Badges / promises</h2>
         {c.badges.map((b, idx) => (
           <div key={idx} className="flex gap-2 mb-2">
             <input value={b} onChange={(e) => set("badges", c.badges.map((x, i) => i === idx ? e.target.value : x))} className={cls} />
-            <button onClick={() => set("badges", c.badges.filter((_, i) => i !== idx))} className="text-red-500 text-sm px-2">✕</button>
+            <button onClick={() => set("badges", c.badges.filter((_, i) => i !== idx))} className="text-sm px-2" style={{ color: "#dc2626" }}>✕</button>
           </div>
         ))}
-        <button onClick={() => set("badges", [...c.badges, ""])} className="text-sm text-brand">+ ব্যাজ যোগ</button>
+        <button onClick={() => set("badges", [...c.badges, ""])} className="text-sm" style={{ color: "var(--a-violet)" }}>+ Add badge</button>
       </section>
 
       {/* Benefits */}
-      <section className="rounded-xl border bg-white p-5">
-        <h2 className="font-semibold mb-2">সুবিধা (Benefits)</h2>
+      <section className="dc-card p-5">
+        <h2 className="font-bold text-[15px] mb-2">Benefits</h2>
         {c.benefits.map((b, idx) => (
           <div key={idx} className="grid grid-cols-[60px_1fr_1fr_auto] gap-2 mb-2 items-center">
             <input value={b.icon} onChange={(e) => set("benefits", c.benefits.map((x, i) => i === idx ? { ...x, icon: e.target.value } : x))} placeholder="🛌" className={cls} />
-            <input value={b.title} onChange={(e) => set("benefits", c.benefits.map((x, i) => i === idx ? { ...x, title: e.target.value } : x))} placeholder="শিরোনাম" className={cls} />
-            <input value={b.text} onChange={(e) => set("benefits", c.benefits.map((x, i) => i === idx ? { ...x, text: e.target.value } : x))} placeholder="বিবরণ" className={cls} />
-            <button onClick={() => set("benefits", c.benefits.filter((_, i) => i !== idx))} className="text-red-500 text-sm">✕</button>
+            <input value={b.title} onChange={(e) => set("benefits", c.benefits.map((x, i) => i === idx ? { ...x, title: e.target.value } : x))} placeholder="Title" className={cls} />
+            <input value={b.text} onChange={(e) => set("benefits", c.benefits.map((x, i) => i === idx ? { ...x, text: e.target.value } : x))} placeholder="Description" className={cls} />
+            <button onClick={() => set("benefits", c.benefits.filter((_, i) => i !== idx))} className="text-sm" style={{ color: "#dc2626" }}>✕</button>
           </div>
         ))}
-        <button onClick={() => set("benefits", [...c.benefits, { icon: "✅", title: "", text: "" }])} className="text-sm text-brand">+ সুবিধা যোগ</button>
+        <button onClick={() => set("benefits", [...c.benefits, { icon: "✅", title: "", text: "" }])} className="text-sm" style={{ color: "var(--a-violet)" }}>+ Add benefit</button>
       </section>
 
       {/* Guarantee */}
-      <section className="rounded-xl border bg-white p-5 space-y-3">
-        <h2 className="font-semibold">গ্যারান্টি</h2>
-        <input value={c.guaranteeTitle} onChange={(e) => set("guaranteeTitle", e.target.value)} placeholder="গ্যারান্টি শিরোনাম" className={cls} />
-        <textarea value={c.guaranteeText} onChange={(e) => set("guaranteeText", e.target.value)} rows={2} placeholder="গ্যারান্টি বিবরণ" className={cls} />
+      <section className="dc-card p-5 space-y-3">
+        <h2 className="font-bold text-[15px]">Guarantee</h2>
+        <input value={c.guaranteeTitle} onChange={(e) => set("guaranteeTitle", e.target.value)} placeholder="Guarantee title" className={cls} />
+        <textarea value={c.guaranteeText} onChange={(e) => set("guaranteeText", e.target.value)} rows={2} placeholder="Guarantee description" className={cls} />
       </section>
 
       {/* Reviews */}
-      <section className="rounded-xl border bg-white p-5">
-        <h2 className="font-semibold mb-2">রিভিউ</h2>
+      <section className="dc-card p-5">
+        <h2 className="font-bold text-[15px] mb-2">Reviews</h2>
         {c.reviews.map((r, idx) => (
-          <div key={idx} className="rounded-lg border p-3 mb-2 space-y-2">
+          <div key={idx} className="rounded-lg p-3 mb-2 space-y-2" style={{ border: "1px solid var(--a-border)" }}>
             <div className="grid grid-cols-[1fr_80px_auto] gap-2 items-center">
-              <input value={r.name} onChange={(e) => set("reviews", c.reviews.map((x, i) => i === idx ? { ...x, name: e.target.value } : x))} placeholder="নাম" className={cls} />
+              <input value={r.name} onChange={(e) => set("reviews", c.reviews.map((x, i) => i === idx ? { ...x, name: e.target.value } : x))} placeholder="Name" className={cls} />
               <select value={r.stars} onChange={(e) => set("reviews", c.reviews.map((x, i) => i === idx ? { ...x, stars: Number(e.target.value) } : x))} className={cls}>
                 {[5, 4, 3, 2, 1].map((s) => <option key={s} value={s}>{s} ★</option>)}
               </select>
-              <button onClick={() => set("reviews", c.reviews.filter((_, i) => i !== idx))} className="text-red-500 text-sm px-2">✕</button>
+              <button onClick={() => set("reviews", c.reviews.filter((_, i) => i !== idx))} className="text-sm px-2" style={{ color: "#dc2626" }}>✕</button>
             </div>
-            <textarea value={r.text} onChange={(e) => set("reviews", c.reviews.map((x, i) => i === idx ? { ...x, text: e.target.value } : x))} rows={2} placeholder="রিভিউ টেক্সট" className={cls} />
+            <textarea value={r.text} onChange={(e) => set("reviews", c.reviews.map((x, i) => i === idx ? { ...x, text: e.target.value } : x))} rows={2} placeholder="Review text" className={cls} />
             <div className="flex items-center gap-2">
               {r.image && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={r.image} alt="" className="h-8 w-8 rounded-full object-cover" />
               )}
-              <label className="text-xs text-brand cursor-pointer">
-                {r.image ? "ছবি পরিবর্তন" : "ছবি যোগ (ঐচ্ছিক)"}
+              <label className="text-xs cursor-pointer" style={{ color: "var(--a-brand)" }}>
+                {r.image ? "Change photo" : "Add photo (optional)"}
                 <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
                   const f = e.target.files?.[0]; if (!f) return; setBusy(true);
                   const u = await uploadImage(f); setBusy(false);
@@ -267,21 +239,21 @@ export function LandingEditor({
             </div>
           </div>
         ))}
-        <button onClick={() => set("reviews", [...c.reviews, { name: "", text: "", stars: 5 }])} className="text-sm text-brand">+ রিভিউ যোগ</button>
+        <button onClick={() => set("reviews", [...c.reviews, { name: "", text: "", stars: 5 }])} className="text-sm" style={{ color: "var(--a-violet)" }}>+ Add review</button>
       </section>
 
       {/* Save bar */}
-      <div className="sticky bottom-3 rounded-xl border bg-white p-3 shadow-lg">
+      <div className="sticky bottom-3 dc-card p-3" style={{ boxShadow: "var(--a-shadow-lg)" }}>
         <div className="flex items-center gap-3">
-          <button onClick={save} disabled={saving} className="rounded-lg bg-brand text-white px-6 py-2.5 font-medium disabled:opacity-60">
-            {saving ? "সেভ হচ্ছে..." : "ল্যান্ডিং পেজ সেভ করুন"}
+          <button onClick={save} disabled={saving} className="dc-btn dc-btn-solid disabled:opacity-60" style={{ background: "var(--a-violet)", borderColor: "var(--a-violet)" }}>
+            {saving ? "Saving…" : "Save landing page"}
           </button>
-          {saved && <span className="text-green-600 text-sm">সেভ হয়েছে ✓</span>}
-          <a href="/" target="_blank" className="text-sm text-brand hover:underline ml-auto">ল্যান্ডিং পেজ দেখুন →</a>
+          {saved && <span className="text-sm" style={{ color: "var(--a-ok)" }}>Saved ✓</span>}
+          <a href="/" target="_blank" className="text-sm hover:underline ml-auto" style={{ color: "var(--a-brand)" }}>View landing page →</a>
         </div>
         {saveError && (
-          <p className="mt-2 rounded-lg bg-red-50 border border-red-200 text-red-700 px-3 py-2 text-sm">
-            ⚠️ {saveError} — সম্ভবত <code>settings</code> টেবিলটি এখনো তৈরি হয়নি। Supabase SQL এডিটরে <b>supabase-migration-2.sql</b> রান করুন।
+          <p className="mt-2 rounded-lg px-3 py-2 text-sm" style={{ background: "#fdeaea", border: "1px solid #f0c9c9", color: "#b91c1c" }}>
+            ⚠️ {saveError} — the <code>settings</code> table may not exist yet. Run <b>supabase-migration-2.sql</b> in the Supabase SQL editor.
           </p>
         )}
       </div>

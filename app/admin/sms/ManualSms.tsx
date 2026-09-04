@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Icon } from "@/components/admin/icons";
 import { sendManualSms } from "./actions";
 
 export function ManualSms() {
@@ -10,7 +11,6 @@ export function ManualSms() {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  const cls = "w-full rounded-lg border px-4 py-2.5 text-sm outline-none focus:border-brand";
 
   async function send(e: React.FormEvent) {
     e.preventDefault();
@@ -18,22 +18,31 @@ export function ManualSms() {
     setMsg(null);
     const res = await sendManualSms(phone, message);
     setBusy(false);
-    if (!res.ok) return setMsg(res.error ?? "ব্যর্থ।");
-    setMsg("এসএমএস কিউতে পাঠানো হয়েছে ✓");
+    if (!res.ok) return setMsg(res.error ?? "Failed.");
+    setMsg("Queued ✓");
     setMessage("");
     router.refresh();
   }
 
   return (
-    <form onSubmit={send} className="rounded-xl border bg-white p-4 space-y-3 mb-6">
-      <h2 className="font-semibold">ম্যানুয়াল এসএমএস</h2>
-      <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="০১XXXXXXXXX" inputMode="numeric" className={cls} />
-      <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={3} placeholder="মেসেজ লিখুন..." className={cls} />
+    <form onSubmit={send} className="dc-card p-4 space-y-3 mb-6">
+      <div className="flex items-center gap-2">
+        <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-base" style={{ background: "#eaf4fb", color: "#3E9BD1" }}>💬</span>
+        <h2 className="font-bold text-[15px]">Manual SMS</h2>
+      </div>
+      <div>
+        <label className="block text-[13px] font-medium dc-muted mb-1">Phone</label>
+        <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="01XXXXXXXXX" inputMode="numeric" className="dc-input" />
+      </div>
+      <div>
+        <label className="block text-[13px] font-medium dc-muted mb-1">Message</label>
+        <textarea value={message} onChange={(e) => setMessage(e.target.value)} rows={3} placeholder="Write a message…" className="dc-input" />
+      </div>
       <div className="flex items-center gap-3">
-        <button disabled={busy} className="rounded-lg bg-brand text-white px-5 py-2 text-sm disabled:opacity-60">
-          {busy ? "পাঠানো হচ্ছে..." : "পাঠান"}
+        <button disabled={busy} className="dc-btn dc-btn-solid disabled:opacity-60" style={{ background: "var(--a-violet)", borderColor: "var(--a-violet)" }}>
+          <Icon name="chat" className="h-4 w-4" /> {busy ? "Sending…" : "Send"}
         </button>
-        {msg && <span className="text-sm text-gray-500">{msg}</span>}
+        {msg && <span className="text-sm" style={{ color: msg.includes("✓") ? "var(--a-ok)" : "#dc2626" }}>{msg}</span>}
       </div>
     </form>
   );

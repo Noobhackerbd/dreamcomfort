@@ -6,6 +6,7 @@ import { AdminLive } from "@/components/admin/AdminLive";
 import { AdminNav, type NavItem } from "@/components/admin/AdminNav";
 import { AdminMobileBar } from "@/components/admin/AdminMobileBar";
 import { AdminTabBar } from "@/components/admin/AdminTabBar";
+import { GlobalSearch } from "@/components/admin/GlobalSearch";
 import { NotificationBell } from "./NotificationBell";
 import type { BookedItem } from "./BookedReminders";
 import { STORE_NAME } from "@/lib/config";
@@ -202,6 +203,9 @@ export default async function AdminLayout({
 
       {/* Mobile bottom tab bar */}
       <AdminTabBar items={navItems} />
+
+      {/* Floating global search (orders / products / customers) */}
+      <GlobalSearch />
 
       {/* Live updates + new-order sound/toast (client) */}
       <AdminLive />

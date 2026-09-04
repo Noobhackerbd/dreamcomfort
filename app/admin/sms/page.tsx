@@ -3,10 +3,10 @@ import { ManualSms } from "./ManualSms";
 
 export const dynamic = "force-dynamic";
 
-const STATUS_STYLE: Record<string, string> = {
-  sent: "bg-green-100 text-green-700",
-  failed: "bg-red-100 text-red-700",
-  skipped: "bg-gray-100 text-gray-500",
+const STATUS_STYLE: Record<string, { bg: string; fg: string }> = {
+  sent: { bg: "#e7f6ec", fg: "#16a34a" },
+  failed: { bg: "#fdeaea", fg: "#dc2626" },
+  skipped: { bg: "var(--a-surface-2)", fg: "var(--a-muted)" },
 };
 
 export default async function AdminSms() {
@@ -21,52 +21,49 @@ export default async function AdminSms() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">এসএমএস</h1>
+      <h1 className="text-2xl font-bold mb-1">SMS</h1>
+      <p className="text-sm dc-muted mb-4">Send a manual SMS and review everything that went out.</p>
 
       {!configured && (
-        <p className="mb-4 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 px-4 py-2 text-sm">
-          SMS গেটওয়ে কনফিগার করা হয়নি। .env এ <code>SMS_API_KEY</code> ও <code>SMS_SENDER_ID</code> যোগ করুন।
-          এখন মেসেজগুলো “skipped” হিসেবে লগ হবে।
+        <p className="mb-4 rounded-xl border px-4 py-3 text-sm" style={{ borderColor: "var(--a-warn-soft)", background: "var(--a-warn-soft)", color: "var(--a-warn)" }}>
+          SMS gateway isn&apos;t configured. Add <code className="px-1 rounded bg-white/60">SMS_API_KEY</code> and <code className="px-1 rounded bg-white/60">SMS_SENDER_ID</code> to .env — until then messages are logged as &ldquo;skipped&rdquo;.
         </p>
       )}
 
       <ManualSms />
 
-      <h2 className="font-semibold mb-3">পাঠানো মেসেজের লগ</h2>
-      <div className="overflow-x-auto rounded-xl border bg-white">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-left text-gray-500">
-            <tr>
-              <th className="px-4 py-3">সময়</th>
-              <th className="px-4 py-3">ফোন</th>
-              <th className="px-4 py-3">মেসেজ</th>
-              <th className="px-4 py-3">অবস্থা</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(logs ?? []).map((l: any) => (
-              <tr key={l.id} className="border-t align-top">
-                <td className="px-4 py-3 whitespace-nowrap text-gray-400">
-                  {new Date(l.created_at).toLocaleString("en-GB")}
-                </td>
-                <td className="px-4 py-3 whitespace-nowrap">{l.phone}</td>
-                <td className="px-4 py-3 max-w-md text-gray-600">{l.message}</td>
-                <td className="px-4 py-3">
-                  <span className={"rounded-full px-2 py-0.5 text-xs " + (STATUS_STYLE[l.status] ?? "bg-gray-100")}>
-                    {l.status}
-                  </span>
-                </td>
-              </tr>
-            ))}
-            {(!logs || logs.length === 0) && (
+      <h2 className="font-bold text-[15px] mb-3">Sent message log</h2>
+      <div className="dc-card overflow-hidden p-0">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead style={{ background: "var(--a-surface-2)", color: "var(--a-muted)" }} className="text-left">
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-gray-400">
-                  এখনও কোনো এসএমএস পাঠানো হয়নি।
-                </td>
+                <th className="px-4 py-3 font-medium">Time</th>
+                <th className="px-4 py-3 font-medium">Phone</th>
+                <th className="px-4 py-3 font-medium">Message</th>
+                <th className="px-4 py-3 font-medium">Status</th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {(logs ?? []).map((l: any) => {
+                const st = STATUS_STYLE[l.status] ?? STATUS_STYLE.skipped;
+                return (
+                  <tr key={l.id} className="align-top" style={{ borderTop: "1px solid var(--a-border)" }}>
+                    <td className="px-4 py-3 whitespace-nowrap" style={{ color: "var(--a-faint)" }}>{new Date(l.created_at).toLocaleString("en-GB")}</td>
+                    <td className="px-4 py-3 whitespace-nowrap tabular-nums">{l.phone}</td>
+                    <td className="px-4 py-3 max-w-md dc-muted">{l.message}</td>
+                    <td className="px-4 py-3">
+                      <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ background: st.bg, color: st.fg }}>{l.status}</span>
+                    </td>
+                  </tr>
+                );
+              })}
+              {(!logs || logs.length === 0) && (
+                <tr><td colSpan={4} className="px-4 py-8 text-center dc-muted">No SMS sent yet.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
