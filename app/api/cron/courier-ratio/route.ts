@@ -16,8 +16,10 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const STALE_DAYS = 7;        // re-check a saved ratio older than this
-const DEFAULT_BATCH = 20;    // max lookups per run (respects API quota)
+const DEFAULT_BATCH = 6;     // max lookups per run — kept small so the request returns fast
 const LOOKBACK_DAYS = 60;    // only backfill customers who ordered recently
+const TIME_BUDGET_MS = 8000; // stop and return partial before any gateway timeout (Vercel/Cloudflare)
+const CALL_TIMEOUT_MS = 6000; // per-lookup cap
 
 function authorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
@@ -35,6 +37,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, skipped: "BD Courier API token not set" });
   }
 
+  const started = Date.now();
   const batch = Math.min(50, Math.max(1, Number(req.nextUrl.searchParams.get("limit")) || DEFAULT_BATCH));
   const supabase = getServerSupabase();
 
@@ -78,8 +81,11 @@ export async function GET(req: NextRequest) {
     .slice(0, batch);
 
   let updated = 0;
+  let processed = 0;
   for (const p of due) {
-    const r = await refreshAndCacheCourierRatio(p);
+    if (Date.now() - started > TIME_BUDGET_MS) break; // return partial before any gateway timeout
+    processed++;
+    const r = await refreshAndCacheCourierRatio(p, CALL_TIMEOUT_MS);
     if (r) updated++;
   }
 
@@ -87,8 +93,9 @@ export async function GET(req: NextRequest) {
     ok: true,
     candidates: phones.length,
     due: due.length,
-    processed: due.length,
+    processed,
     updated,
-    note: due.length >= batch ? "more remain — next run will continue" : "all caught up",
+    ms: Date.now() - started,
+    note: processed < due.length ? "time budget hit — next run continues" : "all caught up",
   });
 }

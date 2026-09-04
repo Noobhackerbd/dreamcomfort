@@ -63,7 +63,7 @@ function pickCourierMap(body: any): Record<string, any> | null {
  * Fetch a customer's courier success ratio. Returns ok:false with a human message on
  * any failure (no token, network, bad number) so callers can degrade gracefully.
  */
-export async function fetchCourierRatio(rawPhone: string): Promise<CourierRatioResult> {
+export async function fetchCourierRatio(rawPhone: string, timeoutMs = 20000): Promise<CourierRatioResult> {
   const s = await getBdCourierSettings();
   const token = (s.apiToken || "").trim();
   if (!token) return { ok: false, error: "BD Courier API token সেট করা নেই।" };
@@ -74,7 +74,7 @@ export async function fetchCourierRatio(rawPhone: string): Promise<CourierRatioR
   let res: Response;
   try {
     const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 25000);
+    const t = setTimeout(() => ctrl.abort(), Math.max(2000, timeoutMs));
     res = await fetch(`${API_URL}?phone=${encodeURIComponent(phone)}`, {
       method: "GET",
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
@@ -150,11 +150,11 @@ export interface CachedRatio { data: CourierRatio; checkedAt: number }
 
 /** Fetch a phone's ratio and upsert it into the cache. Best-effort — never throws.
  *  Not admin-gated: safe to call from order-creation (public checkout) code. */
-export async function refreshAndCacheCourierRatio(rawPhone: string): Promise<CourierRatio | null> {
+export async function refreshAndCacheCourierRatio(rawPhone: string, timeoutMs = 20000): Promise<CourierRatio | null> {
   try {
     const phone = toLocalBdPhone(rawPhone || "");
     if (!/^01\d{9}$/.test(phone)) return null;
-    const res = await fetchCourierRatio(phone);
+    const res = await fetchCourierRatio(phone, timeoutMs);
     if (!res.ok) return null;
     try {
       const supabase = getServerSupabase();
