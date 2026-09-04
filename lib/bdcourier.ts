@@ -11,6 +11,7 @@
 
 import { getBdCourierSettings } from "@/lib/settings";
 import { toLocalBdPhone } from "@/lib/carrybee";
+import { getServerSupabase } from "@/lib/supabase/server";
 
 const API_URL = "https://api.bdcourier.com/courier-check";
 
@@ -136,4 +137,59 @@ export async function fetchCourierRatio(rawPhone: string): Promise<CourierRatioR
       couriers: couriers.sort((a, b) => b.total - a.total),
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Server-side cache (courier_ratio_cache table). The ratio is fetched and SAVED
+// on the server — once when an order is created (new orders) and by a periodic
+// cron backfill (old orders) — so the admin order list only reads saved rows and
+// the browser never calls the BD Courier API on every render.
+// ---------------------------------------------------------------------------
+
+export interface CachedRatio { data: CourierRatio; checkedAt: number }
+
+/** Fetch a phone's ratio and upsert it into the cache. Best-effort — never throws.
+ *  Not admin-gated: safe to call from order-creation (public checkout) code. */
+export async function refreshAndCacheCourierRatio(rawPhone: string): Promise<CourierRatio | null> {
+  try {
+    const phone = toLocalBdPhone(rawPhone || "");
+    if (!/^01\d{9}$/.test(phone)) return null;
+    const res = await fetchCourierRatio(phone);
+    if (!res.ok) return null;
+    try {
+      const supabase = getServerSupabase();
+      await supabase
+        .from("courier_ratio_cache")
+        .upsert({ phone, data: res.data, checked_at: new Date().toISOString() });
+    } catch {
+      /* cache table not present — the value just isn't persisted */
+    }
+    return res.data;
+  } catch {
+    return null;
+  }
+}
+
+/** Read saved ratios for a set of phones (any format). Returns a map keyed by the
+ *  LOCAL phone (01XXXXXXXXX). Missing table / phones simply yield no entry. */
+export async function getCachedRatios(rawPhones: string[]): Promise<Map<string, CachedRatio>> {
+  const out = new Map<string, CachedRatio>();
+  const locals = Array.from(new Set((rawPhones || []).map((p) => toLocalBdPhone(p || "")).filter((p) => /^01\d{9}$/.test(p))));
+  if (locals.length === 0) return out;
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase
+      .from("courier_ratio_cache")
+      .select("phone, data, checked_at")
+      .in("phone", locals);
+    if (error || !data) return out;
+    for (const row of data as any[]) {
+      if (row?.phone && row?.data) {
+        out.set(row.phone, { data: row.data as CourierRatio, checkedAt: new Date(row.checked_at).getTime() || 0 });
+      }
+    }
+  } catch {
+    /* no cache table */
+  }
+  return out;
 }

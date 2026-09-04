@@ -7,7 +7,7 @@ import { sendSmsAsync } from "@/lib/sms";
 import { fillTemplate, STATUS_SMS_MAP } from "@/lib/sms/templates";
 import { createParcel, getParcelStatus, carrybeeConfigured, listCities, listZones, listAreas } from "@/lib/carrybee";
 import { extractOrderFromImage } from "@/lib/ai";
-import { fetchCourierRatio, type CourierRatio } from "@/lib/bdcourier";
+import { fetchCourierRatio, refreshAndCacheCourierRatio, type CourierRatio } from "@/lib/bdcourier";
 import { toLocalBdPhone } from "@/lib/carrybee";
 import { markLeadConverted } from "@/app/checkout/lead-actions";
 import { revalidatePath } from "next/cache";
@@ -651,6 +651,9 @@ export async function createManualOrder(input: ManualOrderInput) {
   if (input.leadId) {
     void markLeadConverted(input.leadId, order.id, order.order_number);
   }
+
+  // New order → fetch & save this customer's courier success rate immediately.
+  void refreshAndCacheCourierRatio(phone);
 
   // Customer upsert (best-effort).
   try {

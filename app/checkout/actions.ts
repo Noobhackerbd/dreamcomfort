@@ -12,6 +12,7 @@ import { resolveShippingFee, getSmsTemplates, getMetaSettings } from "@/lib/sett
 import { sendSmsAsync } from "@/lib/sms";
 import { fillTemplate } from "@/lib/sms/templates";
 import { markLeadConverted } from "./lead-actions";
+import { refreshAndCacheCourierRatio } from "@/lib/bdcourier";
 import { sendOrderPush } from "@/lib/push";
 import type { DeliveryArea } from "@/lib/config";
 
@@ -165,6 +166,10 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
     if (input.leadId) {
       void markLeadConverted(input.leadId, order.id, order.order_number);
     }
+
+    // New order → fetch & SAVE this customer's courier success rate right away
+    // (so the admin sees it immediately; the cron only backfills old orders).
+    void refreshAndCacheCourierRatio(phone);
 
     // Upsert the customer (best-effort) — backgrounded so it never blocks checkout.
     const orderTotal = Number(order.total);

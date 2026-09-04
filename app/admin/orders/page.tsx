@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getServerSupabase } from "@/lib/supabase/server";
-import { carrybeeConfigured } from "@/lib/carrybee";
-import { bdcourierConfigured } from "@/lib/bdcourier";
+import { carrybeeConfigured, toLocalBdPhone } from "@/lib/carrybee";
+import { bdcourierConfigured, getCachedRatios } from "@/lib/bdcourier";
 import { aiConfigured } from "@/lib/ai";
 import { OrdersList, type OrderRow } from "./OrdersList";
 import { ManualOrderModal, type PickProduct } from "./ManualOrderModal";
@@ -166,6 +166,17 @@ export default async function AdminOrders({
       image: it.products?.images?.[0] ?? null,
     })),
   }));
+
+  // Attach each order's SAVED courier success rate (fetched server-side at order
+  // creation + by the cron backfill) so the list shows saved data, not a live call.
+  if (bdcReady && rows.length) {
+    const ratioMap = await getCachedRatios(rows.map((r) => r.customer_phone));
+    for (const r of rows) {
+      const c = ratioMap.get(toLocalBdPhone(r.customer_phone || ""));
+      r.courierRatio = c?.data ?? null;
+      r.courierCheckedAt = c?.checkedAt ?? null;
+    }
+  }
 
   return (
     <div>

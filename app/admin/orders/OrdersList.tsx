@@ -91,6 +91,8 @@ export interface OrderRow {
   is_booked?: boolean;
   booked_date?: string | null;
   items: { product_name: string; quantity: number; image?: string | null }[];
+  courierRatio?: import("@/lib/bdcourier").CourierRatio | null;
+  courierCheckedAt?: number | null;
 }
 
 const CALL_LIMIT = 3;
@@ -382,7 +384,7 @@ export function OrdersList({ orders, cbReady, bdcReady, isTrash }: { orders: Ord
                   {/* Courier success rate (BD Courier fraud check) */}
                   {!isTrash && bdcReady && o.customer_phone && (
                     <div className="mt-1">
-                      <CourierRatioChip phone={o.customer_phone} enabled={bdcReady} />
+                      <CourierRatioChip phone={o.customer_phone} enabled={bdcReady} data={o.courierRatio ?? null} checkedAt={o.courierCheckedAt ?? null} />
                     </div>
                   )}
 
