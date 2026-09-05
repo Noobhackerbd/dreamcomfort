@@ -8,11 +8,11 @@ import { sendServerEvent } from "@/lib/meta/capi";
 import { sendTikTokEvent, toTikTokProps } from "@/lib/tiktok/events";
 import { getTikTokSignals } from "@/lib/tiktok/signals";
 import { logEvent } from "@/lib/meta/log";
-import { resolveShippingFee, getSmsTemplates, getMetaSettings } from "@/lib/settings";
+import { resolveShippingFee, getSmsTemplates, getMetaSettings, getBdCourierSettings } from "@/lib/settings";
 import { sendSmsAsync } from "@/lib/sms";
 import { fillTemplate } from "@/lib/sms/templates";
 import { markLeadConverted } from "./lead-actions";
-import { refreshAndCacheCourierRatio } from "@/lib/bdcourier";
+import { refreshAndCacheCourierRatio, getCachedRatios } from "@/lib/bdcourier";
 import { sendOrderPush } from "@/lib/push";
 import { validateCoupon, redeemCoupon, type CouponResult } from "@/lib/coupons";
 import type { DeliveryArea } from "@/lib/config";
@@ -142,6 +142,32 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
     const signals = getServerMatchSignals(input.fbclid);
     const phone = normalizePhone(input.phone);
 
+    // Ad-quality gate: if this customer's courier success rate is below the configured
+    // threshold, don't fire the Meta/TikTok Purchase (Pixel + CAPI) — so the ad
+    // algorithms stop optimizing toward fraud-prone / high-return buyers. (0 = off.)
+    //
+    // IMPORTANT: this uses only the SAVED (cached) rate — a couple of fast DB reads,
+    // NO external API call — so checkout is never slowed for the customer. A repeat
+    // fraud-prone buyer is already cached (from a prior order or the cron), so they're
+    // caught; a brand-new number simply isn't suppressed on its first order. The live
+    // fetch that fills the cache always runs in the BACKGROUND below.
+    let trackSuppressed = false;
+    try {
+      const bc = await getBdCourierSettings();
+      const threshold = Number(bc.suppressBelowRatio) || 0;
+      if (threshold > 0) {
+        const local = toLocalBdPhone(input.phone) || "";
+        const cached = await getCachedRatios([local]);
+        const hit = cached.get(local);
+        if (hit && hit.data.total > 0 && hit.data.ratio < threshold) trackSuppressed = true;
+      }
+    } catch {
+      /* never block checkout on the courier lookup */
+    }
+    // Fetch + save the rate in the background (never awaited) — for the admin list,
+    // the cron, and to catch this customer on their NEXT order.
+    void refreshAndCacheCourierRatio(phone);
+
     // Create the order.
     const orderRow: Record<string, unknown> = {
       status: "pending",
@@ -159,6 +185,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
       total,
       notes: input.notes?.trim() || null,
       coupon_code: couponCode,
+      track_suppressed: trackSuppressed,
       event_id: eventId,
       fbp: signals.fbp ?? null,
       fbc: signals.fbc ?? null,
@@ -167,9 +194,10 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
     };
     let { data: order, error: oErr } = await supabase
       .from("orders").insert(orderRow).select("id, order_number, total, created_at").single();
-    if (oErr && ((oErr as any).code === "42703" || /coupon_code/i.test(oErr.message || ""))) {
-      // coupon_code column not migrated yet — save the order without it.
+    if (oErr && ((oErr as any).code === "42703" || /coupon_code|track_suppressed/i.test(oErr.message || ""))) {
+      // Optional columns not migrated yet — save the order without them.
       delete orderRow.coupon_code;
+      delete orderRow.track_suppressed;
       ({ data: order, error: oErr } = await supabase.from("orders").insert(orderRow).select("id, order_number, total, created_at").single());
     }
 
@@ -189,9 +217,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
       void markLeadConverted(input.leadId, order.id, order.order_number);
     }
 
-    // New order → fetch & SAVE this customer's courier success rate right away
-    // (so the admin sees it immediately; the cron only backfills old orders).
-    void refreshAndCacheCourierRatio(phone);
+    // (Courier success rate was already fetched + cached above for the suppression gate.)
 
     // Upsert the customer (best-effort) — backgrounded so it never blocks checkout.
     const orderTotal = Number(order.total);
@@ -250,6 +276,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
       // CAPI — fire-and-forget. Not awaited: removes the Facebook round-trip from the
       // checkout critical path. Browser Pixel on /order/[n] backstops the Purchase.
       void (async () => {
+        if (trackSuppressed) return; // low courier-ratio customer — don't train the algorithm
         const metaCfg = await getMetaSettings();
         if (!metaCfg.capiToken || !metaCfg.pixelId) return;
         const res = await sendServerEvent({
@@ -288,6 +315,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
       // TikTok CompletePayment — backgrounded, same event_id as the browser copy (deduped).
       // sendTikTokEvent no-ops if TikTok isn't configured in admin settings.
       void (async () => {
+        if (trackSuppressed) return; // low courier-ratio customer — suppressed
         await sendTikTokEvent({
           eventName: "CompletePayment",
           eventId,

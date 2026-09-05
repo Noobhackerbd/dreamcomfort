@@ -96,10 +96,11 @@ export async function saveAiSettings(ai: { apiKey: string; model: string }) {
   return { ok: true };
 }
 
-export async function saveBdCourierSettings(bc: { apiToken: string }) {
+export async function saveBdCourierSettings(bc: { apiToken: string; suppressBelowRatio?: number }) {
   await requireAdmin();
   try {
-    await saveSetting("bdcourier", { apiToken: (bc.apiToken || "").trim() });
+    const sup = Math.max(0, Math.min(100, Math.floor(Number(bc.suppressBelowRatio) || 0)));
+    await saveSetting("bdcourier", { apiToken: (bc.apiToken || "").trim(), suppressBelowRatio: sup });
   } catch (e: any) {
     return { ok: false, error: e?.message ?? "সেভ ব্যর্থ। settings টেবিল আছে কিনা দেখুন (supabase-migration-2.sql)।" };
   }

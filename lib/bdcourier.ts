@@ -170,6 +170,18 @@ export async function refreshAndCacheCourierRatio(rawPhone: string, timeoutMs = 
   }
 }
 
+/** Get a phone's ratio for a real-time decision (e.g. tracking suppression at checkout):
+ *  use the saved cache if present (fast, no latency), else fetch live with a short
+ *  timeout and cache it. Returns null when unknown. */
+export async function getRatioForDecision(rawPhone: string, timeoutMs = 4500): Promise<CourierRatio | null> {
+  const local = toLocalBdPhone(rawPhone || "");
+  if (!/^01\d{9}$/.test(local)) return null;
+  const cached = await getCachedRatios([local]);
+  const hit = cached.get(local);
+  if (hit) return hit.data;
+  return refreshAndCacheCourierRatio(local, timeoutMs);
+}
+
 /** Read saved ratios for a set of phones (any format). Returns a map keyed by the
  *  LOCAL phone (01XXXXXXXXX). Missing table / phones simply yield no entry. */
 export async function getCachedRatios(rawPhones: string[]): Promise<Map<string, CachedRatio>> {

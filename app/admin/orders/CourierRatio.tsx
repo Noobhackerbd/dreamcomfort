@@ -1,13 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/admin/icons";
 import { getCourierRatio } from "./actions";
 import type { CourierRatio } from "@/lib/bdcourier";
 
-// The ratio is fetched + SAVED server-side (at order creation and by the cron
-// backfill). This chip just RENDERS the saved value — no automatic browser-side
-// API call. A manual "check now / re-check" button is the only on-demand fetch.
+// The rate is fetched + SAVED on the SERVER. This chip renders the saved value when the
+// page already has it; if not, it auto-loads ONCE via a server action (the API call and
+// the DB caching happen on the server — the browser never calls bdcourier directly).
+// A per-device localStorage copy avoids re-hitting the server on repeat views.
+
+const FRESH_MS = 12 * 60 * 60 * 1000;
+const lsKey = (p: string) => `dc:cratio:${p}`;
+function readLS(phone: string): { data: CourierRatio; ts: number } | null {
+  try { const raw = localStorage.getItem(lsKey(phone)); if (raw) { const o = JSON.parse(raw); if (o?.data && typeof o.ts === "number") return o; } } catch {}
+  return null;
+}
+function writeLS(phone: string, data: CourierRatio, ts: number) {
+  try { localStorage.setItem(lsKey(phone), JSON.stringify({ data, ts })); } catch {}
+}
 
 function agoLabel(ts: number): string {
   const m = Math.max(0, Math.round((Date.now() - ts) / 60000));
@@ -42,29 +53,42 @@ export function CourierRatioChip({
   const [data, setData] = useState<CourierRatio | null>(initialData);
   const [checkedAt, setCheckedAt] = useState<number | null>(initialCheckedAt);
   const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [open, setOpen] = useState(false);
+  const tried = useRef(false);
 
   // Keep in sync when the server passes fresh saved data (e.g. after a refresh).
-  useEffect(() => { setData(initialData); setCheckedAt(initialCheckedAt); }, [initialData, initialCheckedAt]);
+  useEffect(() => { if (initialData) { setData(initialData); setCheckedAt(initialCheckedAt); } }, [initialData, initialCheckedAt]);
 
-  async function check() {
+  /** Fetch via the server action (server-side API call + DB cache). force = re-check. */
+  async function load(force: boolean) {
     if (busy || !phone) return;
-    setBusy(true);
+    setBusy(true); setFailed(false);
     try {
-      const res = await getCourierRatio(phone, true);
-      if (res.ok) { setData(res.data); setCheckedAt(res.checkedAt); }
-    } catch {}
+      const res = await getCourierRatio(phone, force);
+      if (res.ok) { setData(res.data); setCheckedAt(res.checkedAt); writeLS(phone, res.data, res.checkedAt); }
+      else setFailed(true);
+    } catch { setFailed(true); }
     setBusy(false);
   }
 
+  // Auto-load ONCE when the page didn't already provide a saved rate.
+  useEffect(() => {
+    if (!enabled || !phone || data || tried.current) return;
+    tried.current = true;
+    const ls = readLS(phone);
+    if (ls && Date.now() - ls.ts < FRESH_MS) { setData(ls.data); setCheckedAt(ls.ts); return; }
+    void load(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, phone, data]);
+
   if (!enabled || !phone) return null;
 
-  // No saved data yet — show a quiet "pending" chip; the cron will fill it in,
-  // or the owner can fetch it now with one tap.
+  // No data yet — show a quiet auto-loading state (retry on tap if it failed).
   if (!data) {
     return (
-      <button onClick={check} disabled={busy} className="inline-flex items-center gap-1 text-[11px] font-semibold" style={{ color: "var(--a-faint)" }} title="Courier rate not saved yet — tap to check now">
-        <Icon name="target" className={"h-3.5 w-3.5 " + (busy ? "animate-spin" : "")} /> {busy ? "Checking…" : "Check rate"}
+      <button onClick={() => load(true)} disabled={busy} className="inline-flex items-center gap-1 text-[11px] font-semibold" style={{ color: "var(--a-faint)" }} title={failed ? "Couldn't load — tap to retry" : "Loading courier rate…"}>
+        <Icon name="target" className={"h-3.5 w-3.5 " + (busy ? "animate-spin" : "")} /> {busy ? "Checking…" : failed ? "Retry rate" : "Checking…"}
       </button>
     );
   }
@@ -96,7 +120,7 @@ export function CourierRatioChip({
           <div className="absolute left-0 top-8 z-40 w-64 dc-card p-3" style={{ boxShadow: "var(--a-shadow-lg)" }}>
             <div className="flex items-center justify-between mb-2">
               <span className="text-[13px] font-bold">Courier success rate</span>
-              <button onClick={check} disabled={busy} className="dc-act dc-act-sm" title="Re-check now">
+              <button onClick={() => load(true)} disabled={busy} className="dc-act dc-act-sm" title="Re-check now">
                 <Icon name="refresh" className={"h-3.5 w-3.5 " + (busy ? "animate-spin" : "")} />
               </button>
             </div>

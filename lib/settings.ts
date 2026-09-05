@@ -52,6 +52,8 @@ export interface MobileSettings {
 
 export interface BdCourierSettings {
   apiToken: string; // bdcourier.com API token for the customer courier-ratio (fraud) check
+  suppressBelowRatio: number; // 0 = off. Orders from customers whose courier success rate
+                              // is below this % don't fire the Meta/TikTok Purchase event.
 }
 
 export interface HomeBanner {
@@ -141,6 +143,7 @@ export function getTikTokSettings(): Promise<TikTokSettings> {
 export function getBdCourierSettings(): Promise<BdCourierSettings> {
   return readSetting<BdCourierSettings>("bdcourier", {
     apiToken: process.env.BDCOURIER_API_TOKEN || "",
+    suppressBelowRatio: Number(process.env.BDCOURIER_SUPPRESS_BELOW) || 0,
   });
 }
 

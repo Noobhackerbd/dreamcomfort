@@ -214,11 +214,21 @@ export function SettingsForm({
       {/* BD Courier — customer success rate / fraud check */}
       <Card icon="🛡️" iconBg="#e7f6ec" iconColor="#16a34a" title="BD Courier — Customer success rate"
         desc={<>API token from <a href="https://bdcourier.com" target="_blank" rel="noopener" className="underline" style={{ color: "var(--a-brand)" }}>bdcourier.com</a>. Shows each customer&apos;s courier <b>success rate</b> (total parcels, delivered vs cancelled) in the order list — verify a new order before you confirm it.</>}>
-        <div>
-          <label className={lbl}>API Token</label>
-          <input type="password" value={bc.apiToken} onChange={(e) => setBc({ apiToken: e.target.value })}
-            placeholder="bdcourier.com → Dashboard → API Token" autoComplete="new-password" className={cls + " font-mono"} />
-          <p className="mt-1 text-xs dc-muted">Log in to bdcourier.com and copy the token from the Dashboard / API section. Keep it secret — it&apos;s like a password.</p>
+        <div className="space-y-3">
+          <div>
+            <label className={lbl}>API Token</label>
+            <input type="password" value={bc.apiToken} onChange={(e) => setBc({ ...bc, apiToken: e.target.value })}
+              placeholder="bdcourier.com → Dashboard → API Token" autoComplete="new-password" className={cls + " font-mono"} />
+            <p className="mt-1 text-xs dc-muted">Log in to bdcourier.com and copy the token from the Dashboard / API section. Keep it secret — it&apos;s like a password.</p>
+          </div>
+          <div>
+            <label className={lbl}>Skip Meta/TikTok Purchase below this success rate (%)</label>
+            <input type="number" min={0} max={100} inputMode="numeric"
+              value={bc.suppressBelowRatio ?? 0}
+              onChange={(e) => setBc({ ...bc, suppressBelowRatio: e.target.value === "" ? (0 as any) : Number(e.target.value) })}
+              placeholder="0" className={cls} />
+            <p className="mt-1 text-xs dc-muted">Orders from customers whose courier success rate is below this % won&apos;t fire the Purchase event (Pixel + CAPI) — so Meta/TikTok stop chasing fraud-prone buyers. <b>0 = off.</b> Needs the API token above. e.g. <b>50</b>.</p>
+          </div>
         </div>
         <SaveRow busy={bcBusy} saved={bcSaved} err={bcErr}
           onSave={async () => { setBcErr(null); setBcSaved(false); setBcBusy(true); const res = await saveBdCourierSettings(bc); setBcBusy(false); if (!res.ok) { setBcErr(res.error ?? "Save failed."); return; } setBcSaved(true); router.refresh(); }} />

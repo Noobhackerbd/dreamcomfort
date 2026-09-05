@@ -209,6 +209,7 @@ async function OrderContent({
 
       <PurchasePixel
         eventId={order.event_id ?? null}
+        suppress={!!order.track_suppressed}
         value={Number(order.total)}
         contentIds={items.map((it: any) => it.product_id).filter(Boolean)}
         customer={{

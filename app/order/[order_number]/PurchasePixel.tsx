@@ -10,16 +10,25 @@ export function PurchasePixel({
   value,
   contentIds,
   customer,
+  suppress = false,
 }: {
   eventId: string | null;
   value: number;
   contentIds: string[];
   customer?: { name?: string; phone?: string; city?: string; email?: string };
+  suppress?: boolean;
 }) {
   const fired = useRef(false);
   useEffect(() => {
     if (!eventId || fired.current) return;
     fired.current = true;
+
+    // Ad-quality gate: a low courier-ratio customer's Purchase is suppressed on the
+    // server too — play the success chime for the customer, but send no Pixel/CAPI.
+    if (suppress) {
+      try { playSuccess(); } catch {}
+      return;
+    }
 
     // Manual advanced matching — attach the real customer info to the browser
     // Purchase so its match quality is high.
