@@ -114,7 +114,6 @@ const NAV = [
   { href: "/admin/abandoned", label: "Abandoned Carts", icon: "abandoned", badgeKey: "abandoned" },
   { href: "/admin/customers", label: "Customers", icon: "customers" },
   { href: "/admin/workers", label: "Workers", icon: "workers" },
-  { href: "/admin/sms", label: "SMS", icon: "sms" },
   { href: "/admin/tracking", label: "Tracking Health", icon: "tracking" },
   { href: "/admin/settings", label: "Settings", icon: "settings" },
 ];

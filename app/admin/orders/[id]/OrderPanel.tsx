@@ -10,7 +10,6 @@ import {
   saveOrderItemsAndTotals,
   deleteOrder,
   updateOrderCourier,
-  sendManualOrderSms,
   saveBooking,
 } from "../actions";
 
@@ -181,19 +180,6 @@ export function OrderPanel({ order, cbConfigured, embedded, onClose }: { order: 
     router.refresh();
   }
 
-  // ---- Manual SMS ----
-  const [sms, setSms] = useState("");
-  const [smsBusy, setSmsBusy] = useState(false);
-  const [smsMsg, setSmsMsg] = useState<string | null>(null);
-  async function sendSms() {
-    if (!sms.trim()) return;
-    setSmsBusy(true); setSmsMsg(null);
-    const res = await sendManualOrderSms(order.id, sms);
-    setSmsBusy(false);
-    if (!res.ok) return setSmsMsg(res.error ?? "ব্যর্থ।");
-    setSmsMsg("এসএমএস পাঠানো হয়েছে ✓");
-    setSms("");
-  }
 
   // ---- Delete ----
   const [delOpen, setDelOpen] = useState(false);
@@ -437,14 +423,6 @@ export function OrderPanel({ order, cbConfigured, embedded, onClose }: { order: 
             </div>
           </section>
 
-          <section className="rounded-xl border bg-white p-4">
-            <h2 className="font-semibold mb-2">ম্যানুয়াল এসএমএস</h2>
-            <textarea value={sms} onChange={(e) => setSms(e.target.value)} rows={3} placeholder="গ্রাহককে মেসেজ লিখুন..." className={inputCls} />
-            <button onClick={sendSms} disabled={smsBusy || !sms.trim()} className="mt-2 w-full rounded-lg bg-brand text-white px-4 py-2 text-sm disabled:opacity-60">
-              {smsBusy ? "পাঠানো হচ্ছে..." : "এসএমএস পাঠান"}
-            </button>
-            {smsMsg && <p className="text-xs text-green-600 mt-2">{smsMsg}</p>}
-          </section>
         </div>
       </div>
 

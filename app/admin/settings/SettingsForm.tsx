@@ -2,9 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { saveShippingSettings, saveStoreSettings, saveSmsTemplates, saveCarryBeeSettings, saveAiSettings, saveMetaSettings, saveTikTokSettings, saveMobileSettings, saveBdCourierSettings } from "./actions";
+import { saveShippingSettings, saveStoreSettings, saveCarryBeeSettings, saveAiSettings, saveMetaSettings, saveTikTokSettings, saveMobileSettings, saveBdCourierSettings } from "./actions";
 import type { ShippingSettings, StoreSettings, CarryBeeSettings, AiSettings, MetaSettings, TikTokSettings, MobileSettings, BdCourierSettings } from "@/lib/settings";
-import type { SmsTemplates } from "@/lib/sms/templates";
 
 const cls = "dc-input";
 const lbl = "block text-[13px] font-medium dc-muted mb-1";
@@ -64,7 +63,6 @@ function StatusPill({ ok, okText, badText }: { ok: boolean; okText: string; badT
 export function SettingsForm({
   shipping,
   store,
-  templates,
   carrybee,
   ai,
   meta,
@@ -74,7 +72,6 @@ export function SettingsForm({
 }: {
   shipping: ShippingSettings;
   store: StoreSettings;
-  templates: SmsTemplates;
   carrybee: CarryBeeSettings;
   ai: AiSettings;
   meta: MetaSettings;
@@ -91,8 +88,6 @@ export function SettingsForm({
   const [s, setS] = useState(store);
   const [storeSaved, setStoreSaved] = useState(false);
 
-  const [t, setT] = useState(templates);
-  const [tplSaved, setTplSaved] = useState(false);
 
   const [cb, setCb] = useState(carrybee);
   const [cbSaved, setCbSaved] = useState(false);
@@ -156,25 +151,6 @@ export function SettingsForm({
           <div><label className={lbl}>Address</label><input value={s.address} onChange={(e) => setS({ ...s, address: e.target.value })} placeholder="Store address" className={cls} /></div>
         </div>
         <SaveRow saved={storeSaved} onSave={async () => { await saveStoreSettings(s); setStoreSaved(true); router.refresh(); }} />
-      </Card>
-
-      {/* SMS templates */}
-      <Card icon="💬" iconBg="#eaf4fb" iconColor="#3E9BD1" title="SMS templates"
-        desc={<>Placeholders: <code className="px-1 rounded" style={{ background: "var(--a-surface-2)" }}>{"{name}"}</code> <code className="px-1 rounded" style={{ background: "var(--a-surface-2)" }}>{"{order}"}</code> <code className="px-1 rounded" style={{ background: "var(--a-surface-2)" }}>{"{total}"}</code> <code className="px-1 rounded" style={{ background: "var(--a-surface-2)" }}>{"{tracking}"}</code></>}>
-        <div className="space-y-3">
-          {([
-            ["order_placed", "Order placed"],
-            ["confirmed", "Confirmed"],
-            ["shipped", "Shipped"],
-            ["delivered", "Delivered"],
-          ] as const).map(([key, label]) => (
-            <div key={key}>
-              <label className={lbl}>{label}</label>
-              <textarea value={t[key]} onChange={(e) => setT({ ...t, [key]: e.target.value })} rows={2} className={cls} />
-            </div>
-          ))}
-        </div>
-        <SaveRow saved={tplSaved} onSave={async () => { await saveSmsTemplates(t); setTplSaved(true); router.refresh(); }} />
       </Card>
 
       {/* CarryBee courier */}

@@ -80,7 +80,6 @@ function Modal({
   const [qty, setQty] = useState("1");
   const [customAmount, setCustomAmount] = useState(initial?.amount ? String(initial.amount) : "");
   const [shipping, setShipping] = useState("0");
-  const [sendSms, setSendSms] = useState(true);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [booked, setBooked] = useState(false);
   const [bookedDate, setBookedDate] = useState("");
@@ -171,7 +170,7 @@ function Modal({
       customAmount: Number(customAmount) || 0,
       shippingFee: Number(shipping) || 0,
       status: "pending",
-      sendSms,
+      sendSms: false,
       isBooked: booked,
       bookedDate: booked ? bookedDate : null,
       leadId,
@@ -303,11 +302,7 @@ function Modal({
             )}
           </div>
 
-          <div className="flex items-center justify-between rounded-lg bg-cream-deep/50 px-4 py-2.5">
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={sendSms} onChange={(e) => setSendSms(e.target.checked)} className="h-4 w-4 accent-brand" />
-              গ্রাহককে SMS পাঠান
-            </label>
+          <div className="flex items-center justify-end rounded-lg bg-cream-deep/50 px-4 py-2.5">
             <span className="text-sm">সর্বমোট: <b className="text-accent-dark">{taka(computedTotal)}</b></span>
           </div>
 

@@ -15,7 +15,18 @@ import { markLeadConverted } from "./lead-actions";
 import { refreshAndCacheCourierRatio, getCachedRatios } from "@/lib/bdcourier";
 import { sendOrderPush } from "@/lib/push";
 import { validateCoupon, redeemCoupon, type CouponResult } from "@/lib/coupons";
+import { waitUntil } from "@vercel/functions";
 import type { DeliveryArea } from "@/lib/config";
+
+/**
+ * Keep a background task alive until it finishes, WITHOUT delaying the response.
+ * On Vercel a plain `void promise` after a Server Action returns can be killed
+ * before it completes — which is why the server Purchase used to be missing.
+ * waitUntil tells the platform to wait for it. Falls back to best-effort locally.
+ */
+function keepAlive(p: Promise<unknown>) {
+  try { waitUntil(p); } catch { void Promise.resolve(p).catch(() => {}); }
+}
 
 export interface PlaceOrderInput {
   name: string;
@@ -221,7 +232,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
 
     // Upsert the customer (best-effort) — backgrounded so it never blocks checkout.
     const orderTotal = Number(order.total);
-    void (async () => {
+    keepAlive((async () => {
       try {
         const { data: existing } = await supabase
           .from("customers")
@@ -243,7 +254,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
       } catch {
         /* ignore customer upsert errors */
       }
-    })();
+    })());
 
     // Order-placed SMS — backgrounded (template fetch + send off the critical path).
     const orderNumber = order.order_number;
@@ -273,9 +284,10 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
       const contents = lineItems.map((li) => ({ id: li.product_id, quantity: li.quantity, item_price: li.unit_price }));
       const numItems = lineItems.reduce((n, li) => n + li.quantity, 0);
 
-      // CAPI — fire-and-forget. Not awaited: removes the Facebook round-trip from the
-      // checkout critical path. Browser Pixel on /order/[n] backstops the Purchase.
-      void (async () => {
+      // CAPI Purchase — runs in the background but is kept alive via waitUntil so it
+      // ALWAYS completes after the response (a plain fire-and-forget was getting killed
+      // by the serverless runtime, which is why the server Purchase was missing).
+      keepAlive((async () => {
         if (trackSuppressed) return; // low courier-ratio customer — don't train the algorithm
         const metaCfg = await getMetaSettings();
         if (!metaCfg.capiToken || !metaCfg.pixelId) return;
@@ -310,11 +322,12 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
           fbtrace_id: res.fbtrace_id,
           payload: { order_number: snap.order_number },
         });
-      })().catch(() => {}); // swallow late rejections
+      })()); // waitUntil keeps it alive to completion
 
-      // TikTok CompletePayment — backgrounded, same event_id as the browser copy (deduped).
+      // TikTok CompletePayment — same event_id as the browser copy (deduped). Kept alive
+      // via waitUntil so the server copy reliably reaches TikTok after the response.
       // sendTikTokEvent no-ops if TikTok isn't configured in admin settings.
-      void (async () => {
+      keepAlive((async () => {
         if (trackSuppressed) return; // low courier-ratio customer — suppressed
         await sendTikTokEvent({
           eventName: "CompletePayment",
@@ -329,16 +342,16 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
             contents: contents.map((c) => ({ id: c.id, quantity: c.quantity, item_price: c.item_price })),
           }),
         });
-      })().catch(() => {});
+      })());
 
-      // Push — fire-and-forget, not awaited.
-      void sendOrderPush({
+      // Push — kept alive so the admin notification reliably sends.
+      keepAlive(sendOrderPush({
         id: order.id,
         orderNumber: order.order_number,
         total: snap.total,
         customerName: name,
         area: input.area?.trim() || input.city?.trim() || null,
-      }).catch(() => {});
+      }));
     }
 
     return { ok: true, orderNumber: order.order_number };
