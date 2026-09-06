@@ -5,6 +5,14 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { taka } from "@/lib/format";
 import { createManualOrder, parseOrderScreenshot } from "./actions";
+import { SourceIcon } from "@/components/admin/SourceIcon";
+
+const SOURCE_OPTIONS: { key: "whatsapp" | "messenger" | "phone" | "other"; label: string }[] = [
+  { key: "whatsapp", label: "WhatsApp" },
+  { key: "messenger", label: "Messenger" },
+  { key: "phone", label: "ফোন কল" },
+  { key: "other", label: "অন্যান্য" },
+];
 
 export interface PickProduct {
   id: string;
@@ -73,6 +81,7 @@ function Modal({
   const [area, setArea] = useState(initial?.area ?? "");
   const [city, setCity] = useState(initial?.city ?? "");
   const [notes, setNotes] = useState("");
+  const [source, setSource] = useState<"whatsapp" | "messenger" | "phone" | "other">("whatsapp");
 
   const [productId, setProductId] = useState<string>(
     (initial?.productId && products.some((p) => p.id === initial.productId) ? initial.productId : products[0]?.id) ?? ""
@@ -170,6 +179,7 @@ function Modal({
       customAmount: Number(customAmount) || 0,
       shippingFee: Number(shipping) || 0,
       status: "pending",
+      source,
       sendSms: false,
       isBooked: booked,
       bookedDate: booked ? bookedDate : null,
@@ -230,6 +240,30 @@ function Modal({
             <div>
               <label className={lbl}>শহর / জেলা</label>
               <input value={city} onChange={(e) => setCity(e.target.value)} className={cls} />
+            </div>
+          </div>
+
+          {/* Order source — shown as an icon in the order list (like TikTok/Facebook). */}
+          <div>
+            <label className={lbl}>অর্ডার সোর্স (কোথা থেকে এসেছে)</label>
+            <div className="flex flex-wrap gap-2">
+              {SOURCE_OPTIONS.map((o) => {
+                const active = source === o.key;
+                return (
+                  <button
+                    key={o.key}
+                    type="button"
+                    onClick={() => setSource(o.key)}
+                    className={
+                      "inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition " +
+                      (active ? "border-brand bg-brand/5 text-gray-900 font-medium" : "border-gray-200 text-gray-500 hover:bg-gray-50")
+                    }
+                  >
+                    <SourceIcon source={o.key} size={16} />
+                    {o.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 

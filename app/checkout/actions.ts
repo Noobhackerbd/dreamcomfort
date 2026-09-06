@@ -2,7 +2,7 @@
 
 import { getServerSupabase } from "@/lib/supabase/server";
 import { getServerMatchSignals, getExternalId } from "@/lib/meta/fb-cookies";
-import { headers } from "next/headers";
+import { headers, cookies } from "next/headers";
 import { newEventId } from "@/lib/meta/event-id";
 import { sendServerEvent } from "@/lib/meta/capi";
 import { sendTikTokEvent, toTikTokProps } from "@/lib/tiktok/events";
@@ -12,7 +12,7 @@ import { resolveShippingFee, getSmsTemplates, getMetaSettings, getBdCourierSetti
 import { sendSmsAsync } from "@/lib/sms";
 import { fillTemplate } from "@/lib/sms/templates";
 import { markLeadConverted } from "./lead-actions";
-import { refreshAndCacheCourierRatio, getCachedRatios } from "@/lib/bdcourier";
+import { refreshAndCacheCourierRatio, getCachedRatios, getRatioForDecision } from "@/lib/bdcourier";
 import { sendOrderPush } from "@/lib/push";
 import { validateCoupon, redeemCoupon, type CouponResult } from "@/lib/coupons";
 import { waitUntil } from "@vercel/functions";
@@ -179,6 +179,16 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
     // the cron, and to catch this customer on their NEXT order.
     void refreshAndCacheCourierRatio(phone);
 
+    // Traffic source (from the dc_src cookie set on landing) → tiktok / facebook / etc.
+    let source = "direct";
+    try {
+      const c = cookies().get("dc_src")?.value;
+      if (c) source = decodeURIComponent(c).slice(0, 24);
+      else if (input.fbclid) source = "facebook";
+    } catch {
+      if (input.fbclid) source = "facebook";
+    }
+
     // Create the order.
     const orderRow: Record<string, unknown> = {
       status: "pending",
@@ -197,6 +207,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
       notes: input.notes?.trim() || null,
       coupon_code: couponCode,
       track_suppressed: trackSuppressed,
+      source,
       event_id: eventId,
       fbp: signals.fbp ?? null,
       fbc: signals.fbc ?? null,
@@ -205,10 +216,11 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
     };
     let { data: order, error: oErr } = await supabase
       .from("orders").insert(orderRow).select("id, order_number, total, created_at").single();
-    if (oErr && ((oErr as any).code === "42703" || /coupon_code|track_suppressed/i.test(oErr.message || ""))) {
+    if (oErr && ((oErr as any).code === "42703" || /coupon_code|track_suppressed|source/i.test(oErr.message || ""))) {
       // Optional columns not migrated yet — save the order without them.
       delete orderRow.coupon_code;
       delete orderRow.track_suppressed;
+      delete orderRow.source;
       ({ data: order, error: oErr } = await supabase.from("orders").insert(orderRow).select("id, order_number, total, created_at").single());
     }
 
@@ -284,11 +296,35 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
       const contents = lineItems.map((li) => ({ id: li.product_id, quantity: li.quantity, item_price: li.unit_price }));
       const numItems = lineItems.reduce((n, li) => n + li.quantity, 0);
 
+      // Suppression decision for the SERVER events. Because these blocks run in the
+      // BACKGROUND (after the response is sent), we can do a LIVE courier-ratio check
+      // here without ever slowing the customer — so even a brand-new phone number that
+      // wasn't cached at checkout time is correctly caught. Cache-first (instant when the
+      // background refresh above already filled it), live fallback otherwise. Shared by
+      // both server events; result persisted so the confirmation page agrees.
+      const suppressServer: Promise<boolean> = (async () => {
+        if (trackSuppressed) return true; // cache already said "below threshold"
+        try {
+          const bc2 = await getBdCourierSettings();
+          const thr = Number(bc2.suppressBelowRatio) || 0;
+          if (thr <= 0) return false;
+          const r = await getRatioForDecision(phone);
+          if (r && r.total > 0 && r.ratio < thr) {
+            try { await supabase.from("orders").update({ track_suppressed: true }).eq("id", order.id); } catch {}
+            return true;
+          }
+          return false;
+        } catch {
+          return false; // unknown → send (don't punish legit customers)
+        }
+      })();
+      keepAlive(suppressServer);
+
       // CAPI Purchase — runs in the background but is kept alive via waitUntil so it
       // ALWAYS completes after the response (a plain fire-and-forget was getting killed
       // by the serverless runtime, which is why the server Purchase was missing).
       keepAlive((async () => {
-        if (trackSuppressed) return; // low courier-ratio customer — don't train the algorithm
+        if (await suppressServer) return; // low courier-ratio customer — don't train the algorithm
         const metaCfg = await getMetaSettings();
         if (!metaCfg.capiToken || !metaCfg.pixelId) return;
         const res = await sendServerEvent({
@@ -328,7 +364,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
       // via waitUntil so the server copy reliably reaches TikTok after the response.
       // sendTikTokEvent no-ops if TikTok isn't configured in admin settings.
       keepAlive((async () => {
-        if (trackSuppressed) return; // low courier-ratio customer — suppressed
+        if (await suppressServer) return; // low courier-ratio customer — suppressed
         await sendTikTokEvent({
           eventName: "CompletePayment",
           eventId,

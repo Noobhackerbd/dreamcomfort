@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { carrybeeConfigured, toLocalBdPhone } from "@/lib/carrybee";
 import { bdcourierConfigured, getCachedRatios } from "@/lib/bdcourier";
+import { MISSED_PICKUP_HOURS } from "@/lib/courier-status";
 import { aiConfigured } from "@/lib/ai";
 import { OrdersList, type OrderRow } from "./OrdersList";
 import { ManualOrderModal, type PickProduct } from "./ManualOrderModal";
@@ -20,6 +21,8 @@ const STATUS_FILTERS = [
   { value: "confirmed", label: "Confirmed" },
   { value: "processing", label: "Processing" },
   { value: "shipped", label: "Shipped" },
+  { value: "courier_transit", label: "In transit" },
+  { value: "missed_entry", label: "Missed Entry" },
   { value: "delivered", label: "Delivered" },
   { value: "cancelled", label: "Cancelled" },
   { value: "returned", label: "Returned" },
@@ -59,12 +62,21 @@ export default async function AdminOrders({
   const caProbe = await supabase.from("orders").select("call_attempts").limit(1);
   const hasCallAttempts = !(caProbe.error && ((caProbe.error as any).code === "42703" || /call_attempts/i.test(caProbe.error.message || "")));
 
+  const srcProbe = await supabase.from("orders").select("source").limit(1);
+  const hasSource = !(srcProbe.error && ((srcProbe.error as any).code === "42703" || /source/i.test(srcProbe.error.message || "")));
+
+  const csProbe = await supabase.from("orders").select("courier_status").limit(1);
+  const hasCourierStatus = !(csProbe.error && ((csProbe.error as any).code === "42703" || /courier_status/i.test(csProbe.error.message || "")));
+
   const SELECT_COLS =
     "id, order_number, customer_name, customer_phone, address_line, area, city, district, courier, tracking_id, total, status, notes, created_at, is_booked, booked_date" +
     (hasCallAttempts ? ", call_attempts" : "") +
+    (hasSource ? ", source" : "") +
+    (hasCourierStatus ? ", courier_status, courier_pickup_at, courier_last_raw" : "") +
     ", order_items(product_name, quantity, products(images))";
 
   const CALL_LIMIT = 3;
+  const MISSED_CUTOFF = new Date(Date.now() - MISSED_PICKUP_HOURS * 3600000).toISOString();
 
   function build(withDeleted: boolean) {
     let q = supabase.from("orders").select(SELECT_COLS, { count: "exact" }).order("created_at", { ascending: false }).range(from, to);
@@ -82,6 +94,16 @@ export default async function AdminOrders({
         // Pending list hides orders that already reached the attempt limit.
         q = q.eq("status", "pending").eq("is_booked", false);
         if (hasCallAttempts) q = q.lt("call_attempts", CALL_LIMIT);
+      } else if (statusFilter === "missed_entry") {
+        // Parcel stuck at "pickup requested" for 20h+ — the courier never collected it.
+        q = hasCourierStatus
+          ? q.eq("courier_status", "pickup_requested").lte("courier_pickup_at", MISSED_CUTOFF)
+          : q.eq("id", "00000000-0000-0000-0000-000000000000");
+      } else if (statusFilter === "courier_transit") {
+        // Picked up and moving, not yet delivered/returned.
+        q = hasCourierStatus
+          ? q.eq("courier_status", "in_transit")
+          : q.eq("id", "00000000-0000-0000-0000-000000000000");
       } else if (statusFilter) q = q.eq("status", statusFilter);
     }
     if (searchParams.q) {
@@ -160,6 +182,10 @@ export default async function AdminOrders({
     created_at: o.created_at,
     is_booked: !!o.is_booked,
     booked_date: o.booked_date ?? null,
+    source: o.source ?? null,
+    courier_status: o.courier_status ?? null,
+    courier_pickup_at: o.courier_pickup_at ?? null,
+    courier_last_raw: o.courier_last_raw ?? null,
     items: (o.order_items ?? []).map((it: any) => ({
       product_name: it.product_name,
       quantity: Number(it.quantity || 0),

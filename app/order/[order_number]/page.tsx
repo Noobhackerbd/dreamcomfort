@@ -3,10 +3,36 @@ import { Suspense } from "react";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import { taka } from "@/lib/format";
-import { getStoreSettings } from "@/lib/settings";
+import { getStoreSettings, getBdCourierSettings } from "@/lib/settings";
+import { getRatioForDecision } from "@/lib/bdcourier";
 import { PurchasePixel } from "./PurchasePixel";
 
 export const dynamic = "force-dynamic";
+
+// Decide whether to suppress the browser Purchase pixel for this order. The value the
+// checkout wrote (order.track_suppressed) was a fast CACHE-ONLY guess, so a brand-new
+// phone number could slip through as `false`. Here — behind the Suspense skeleton, so
+// the customer already sees the success screen and checkout is never slowed — we do a
+// live-capable (cache-first, then a short live fetch) re-check and persist it.
+async function resolveSuppress(order: any): Promise<boolean> {
+  if (order?.track_suppressed) return true; // already decided at checkout — trust it
+  try {
+    const bc = await getBdCourierSettings();
+    const thr = Number(bc.suppressBelowRatio) || 0;
+    if (thr <= 0) return false; // feature off → zero overhead
+    const r = await getRatioForDecision(order.customer_phone);
+    if (r && r.total > 0 && r.ratio < thr) {
+      try {
+        const supabase = getServerSupabase();
+        await supabase.from("orders").update({ track_suppressed: true }).eq("id", order.id);
+      } catch {}
+      return true;
+    }
+    return false;
+  } catch {
+    return !!order?.track_suppressed; // never break the page on the courier lookup
+  }
+}
 
 // Streamed shell → navigation to this page completes INSTANTLY with this skeleton,
 // then the order details fill in as the DB query resolves (feels sub-second).
@@ -92,6 +118,7 @@ async function OrderContent({
   ]);
   if (!data) notFound();
   const { order, items, imageMap } = data;
+  const suppress = await resolveSuppress(order);
   const fullAddress = [order.address_line, order.area, order.city || order.district]
     .filter((s: any) => s && String(s).trim())
     .join(", ");
@@ -209,7 +236,7 @@ async function OrderContent({
 
       <PurchasePixel
         eventId={order.event_id ?? null}
-        suppress={!!order.track_suppressed}
+        suppress={suppress}
         value={Number(order.total)}
         contentIds={items.map((it: any) => it.product_id).filter(Boolean)}
         customer={{

@@ -10,6 +10,8 @@ import {
   Cell,
   AreaChart,
   Area,
+  ComposedChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -29,8 +31,26 @@ type DayRow = {
   cancelled: number;
 };
 type VisitRow = { day: string; visitors: number };
+type VisitPurchaseRow = { day: string; visitors: number; orders: number };
 
 const fmtDay = (d: string) => (d ? d.slice(8, 10) + "/" + d.slice(5, 7) : "");
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+// `d` is already a Dhaka calendar date (YYYY-MM-DD) — read its weekday directly in UTC
+// (noon avoids any offset edge). Do NOT apply a +06:00 shift or every day slips back one.
+const weekdayShort = (d: string) => (d ? WEEKDAYS[new Date(d + "T12:00:00Z").getUTCDay()] : "");
+const dayFull = (d: string) => (d ? `${weekdayShort(d)} ${fmtDay(d)}` : "");
+
+/** Two-line X-axis tick: weekday (Sun/Mon…) on top, date below. */
+function DayTick(props: any) {
+  const { x, y, payload } = props;
+  const d = String(payload?.value ?? "");
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text x={0} y={0} dy={11} textAnchor="middle" fontSize={10} fontWeight={700} fill="#6b7280">{weekdayShort(d)}</text>
+      <text x={0} y={0} dy={23} textAnchor="middle" fontSize={10} fill="#9aa0a6">{fmtDay(d)}</text>
+    </g>
+  );
+}
 const taka = (n: number) => "৳" + Number(n || 0).toLocaleString("en-BD");
 const compact = (n: number) => (n >= 1000 ? Math.round(n / 100) / 10 + "k" : String(n));
 
@@ -85,14 +105,14 @@ export function OrdersStatusChart({ data }: { data: DayRow[] }) {
     <ResponsiveContainer width="100%" height={250}>
       <BarChart data={data} margin={{ top: 6, right: 6, left: -14, bottom: 0 }} barCategoryGap={2}>
         <CartesianGrid stroke={GRID} vertical={false} />
-        <XAxis dataKey="day" tickFormatter={fmtDay} tick={AXIS} tickLine={false} axisLine={{ stroke: GRID }} minTickGap={26} />
+        <XAxis dataKey="day" tick={<DayTick />} height={30} tickLine={false} axisLine={{ stroke: GRID }} interval={data.length > 16 ? Math.ceil(data.length / 12) : 0} minTickGap={4} />
         <YAxis allowDecimals={false} tick={AXIS} tickLine={false} axisLine={false} width={30} />
         <Tooltip
           cursor={{ fill: "rgba(0,0,0,0.04)" }}
           content={({ active, payload, label }) =>
             active && payload && payload.length ? (
               <TipBox
-                title={fmtDay(String(label))}
+                title={dayFull(String(label))}
                 rows={[
                   ...STATUS.map((s) => ({
                     label: s.name,
@@ -137,13 +157,13 @@ export function RevenueChart({ data }: { data: DayRow[] }) {
           </linearGradient>
         </defs>
         <CartesianGrid stroke={GRID} vertical={false} />
-        <XAxis dataKey="day" tickFormatter={fmtDay} tick={AXIS} tickLine={false} axisLine={{ stroke: GRID }} minTickGap={26} />
+        <XAxis dataKey="day" tick={<DayTick />} height={30} tickLine={false} axisLine={{ stroke: GRID }} interval={data.length > 16 ? Math.ceil(data.length / 12) : 0} minTickGap={4} />
         <YAxis tickFormatter={compact} tick={AXIS} tickLine={false} axisLine={false} width={38} />
         <Tooltip
           cursor={{ stroke: "#3E9BD1", strokeWidth: 1, strokeDasharray: "3 3" }}
           content={({ active, payload, label }) =>
             active && payload && payload.length ? (
-              <TipBox title={fmtDay(String(label))} rows={[{ label: "Sales", color: "#3E9BD1", value: taka(payload[0].value as number) }]} />
+              <TipBox title={dayFull(String(label))} rows={[{ label: "Sales", color: "#3E9BD1", value: taka(payload[0].value as number) }]} />
             ) : null
           }
         />
@@ -168,33 +188,84 @@ const hourAmPm = (h: number) => {
 const hourLabel12 = (x: number) => { const ap = x < 12 ? "AM" : "PM"; let hr = x % 12; if (hr === 0) hr = 12; return `${hr} ${ap}`; };
 const hourRangeBn = (h: number) => `${hourLabel12(h)} – ${hourLabel12((h + 1) % 24)}`;
 
-/** Visitors by time of day — vertical "tower" bars; the peak hour is highlighted. */
-export function VisitorsByHourChart({ data, peakHour }: { data: { hour: number; visits: number }[]; peakHour: number }) {
-  const vis = data.map((d) => d.visits);
+/** Visitors by time of day — vertical "tower" bars (visits, peak hour highlighted) with
+ *  the orders placed in each hour overlaid as a line on a second (right) axis. */
+export function VisitorsByHourChart({ data, peakHour }: { data: { hour: number; visits: number; orders?: number }[]; peakHour: number }) {
+  const hasOrders = data.some((d) => (d.orders ?? 0) > 0);
   return (
     <ResponsiveContainer width="100%" height={230}>
-      <BarChart data={data} margin={{ top: 16, right: 6, left: -14, bottom: 0 }} barCategoryGap={2}>
+      <ComposedChart data={data} margin={{ top: 16, right: 6, left: -14, bottom: 0 }} barCategoryGap={2}>
         <CartesianGrid stroke={GRID} vertical={false} />
         <XAxis dataKey="hour" tickFormatter={hourAmPm} tick={AXIS} tickLine={false} axisLine={{ stroke: GRID }} interval={2} />
-        <YAxis allowDecimals={false} tick={AXIS} tickLine={false} axisLine={false} width={30} tickFormatter={compact} />
+        <YAxis yAxisId="v" allowDecimals={false} tick={AXIS} tickLine={false} axisLine={false} width={30} tickFormatter={compact} />
+        <YAxis yAxisId="o" orientation="right" allowDecimals={false} tick={AXIS} tickLine={false} axisLine={false} width={24} />
         <Tooltip
           cursor={{ fill: "rgba(0,0,0,0.04)" }}
           content={({ active, payload }) =>
             active && payload && payload.length ? (
               <TipBox
                 title={hourRangeBn((payload[0].payload as { hour: number }).hour)}
-                rows={[{ label: "Visits", color: "#6366f1", value: String(payload[0].value) }]}
+                rows={[
+                  { label: "Visits", color: "#6366f1", value: String((payload[0].payload as any).visits ?? 0) },
+                  { label: "Orders", color: "#3E9BD1", value: String((payload[0].payload as any).orders ?? 0) },
+                ]}
               />
             ) : null
           }
         />
-        <Bar dataKey="visits" name="Visits" radius={[4, 4, 0, 0]} maxBarSize={26}>
+        <Legend iconType="circle" iconSize={9} wrapperStyle={{ fontSize: 12, paddingTop: 6 }} />
+        <Bar yAxisId="v" dataKey="visits" name="Visits" radius={[4, 4, 0, 0]} maxBarSize={24}>
           {data.map((d) => (
             <Cell key={d.hour} fill={d.hour === peakHour ? "#16a34a" : "#6366f1"} />
           ))}
-          <LabelList dataKey="visits" content={makeLabel(vis)} />
         </Bar>
-      </BarChart>
+        <Line yAxisId="o" type="monotone" dataKey="orders" name="Orders" stroke="#3E9BD1" strokeWidth={2} dot={hasOrders ? { r: 2, fill: "#3E9BD1" } : false} activeDot={{ r: 4 }}>
+          <LabelList dataKey="orders" content={makeLabel(data.map((d) => d.orders ?? 0))} />
+        </Line>
+      </ComposedChart>
+    </ResponsiveContainer>
+  );
+}
+
+/** Visits vs purchases — daily unique visitors (pink) overlaid with orders (blue),
+ *  so the gap between traffic and conversions is visible at a glance. */
+export function VisitsVsPurchasesChart({ data }: { data: VisitPurchaseRow[] }) {
+  return (
+    <ResponsiveContainer width="100%" height={230}>
+      <AreaChart data={data} margin={{ top: 16, right: 6, left: -14, bottom: 0 }}>
+        <defs>
+          <linearGradient id="dc-vp-vis" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#E77BA6" stopOpacity={0.28} />
+            <stop offset="100%" stopColor="#E77BA6" stopOpacity={0.02} />
+          </linearGradient>
+          <linearGradient id="dc-vp-ord" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#3E9BD1" stopOpacity={0.35} />
+            <stop offset="100%" stopColor="#3E9BD1" stopOpacity={0.03} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid stroke={GRID} vertical={false} />
+        <XAxis dataKey="day" tick={<DayTick />} height={30} tickLine={false} axisLine={{ stroke: GRID }} interval={data.length > 16 ? Math.ceil(data.length / 12) : 0} minTickGap={4} />
+        <YAxis allowDecimals={false} tickFormatter={compact} tick={AXIS} tickLine={false} axisLine={false} width={30} />
+        <Tooltip
+          cursor={{ stroke: "#94a3b8", strokeWidth: 1, strokeDasharray: "3 3" }}
+          content={({ active, payload, label }) =>
+            active && payload && payload.length ? (
+              <TipBox
+                title={dayFull(String(label))}
+                rows={[
+                  { label: "Visitors", color: "#E77BA6", value: String((payload.find((p) => p.dataKey === "visitors")?.value as number) ?? 0) },
+                  { label: "Orders", color: "#3E9BD1", value: String((payload.find((p) => p.dataKey === "orders")?.value as number) ?? 0) },
+                ]}
+              />
+            ) : null
+          }
+        />
+        <Legend iconType="circle" iconSize={9} wrapperStyle={{ fontSize: 12, paddingTop: 6 }} />
+        <Area type="monotone" dataKey="visitors" name="Visitors" stroke="#E77BA6" strokeWidth={2} fill="url(#dc-vp-vis)" dot={false} activeDot={{ r: 4 }} />
+        <Area type="monotone" dataKey="orders" name="Orders" stroke="#3E9BD1" strokeWidth={2} fill="url(#dc-vp-ord)" dot={false} activeDot={{ r: 4 }}>
+          <LabelList dataKey="orders" content={makeLabel(data.map((d) => d.orders))} />
+        </Area>
+      </AreaChart>
     </ResponsiveContainer>
   );
 }
@@ -212,13 +283,13 @@ export function VisitorsChart({ data }: { data: VisitRow[] }) {
           </linearGradient>
         </defs>
         <CartesianGrid stroke={GRID} vertical={false} />
-        <XAxis dataKey="day" tickFormatter={fmtDay} tick={AXIS} tickLine={false} axisLine={{ stroke: GRID }} minTickGap={26} />
+        <XAxis dataKey="day" tick={<DayTick />} height={30} tickLine={false} axisLine={{ stroke: GRID }} interval={data.length > 16 ? Math.ceil(data.length / 12) : 0} minTickGap={4} />
         <YAxis allowDecimals={false} tickFormatter={compact} tick={AXIS} tickLine={false} axisLine={false} width={30} />
         <Tooltip
           cursor={{ stroke: "#E77BA6", strokeWidth: 1, strokeDasharray: "3 3" }}
           content={({ active, payload, label }) =>
             active && payload && payload.length ? (
-              <TipBox title={fmtDay(String(label))} rows={[{ label: "Visitors", color: "#E77BA6", value: String(payload[0].value) }]} />
+              <TipBox title={dayFull(String(label))} rows={[{ label: "Visitors", color: "#E77BA6", value: String(payload[0].value) }]} />
             ) : null
           }
         />

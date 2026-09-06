@@ -7,6 +7,7 @@ import { taka, bdDateTime } from "@/lib/format";
 import { Icon } from "@/components/admin/icons";
 import { CarryBeeActions } from "./CarryBeeActions";
 import { CourierRatioChip } from "./CourierRatio";
+import { SourceIcon } from "@/components/admin/SourceIcon";
 import { OrderEditModal } from "./OrderEditModal";
 import { bulkTrashOrders, bulkRestoreOrders, bulkPurgeOrders, logCallAttempt, resetCallAttempts, refreshCarryBeeStatus, updateOrderStatus } from "./actions";
 
@@ -90,9 +91,37 @@ export interface OrderRow {
   call_attempts?: number;
   is_booked?: boolean;
   booked_date?: string | null;
+  source?: string | null;
+  courier_status?: string | null;
+  courier_pickup_at?: string | null;
+  courier_last_raw?: string | null;
   items: { product_name: string; quantity: number; image?: string | null }[];
   courierRatio?: import("@/lib/bdcourier").CourierRatio | null;
   courierCheckedAt?: number | null;
+}
+
+// Small colored pill for the saved courier tracking status.
+const COURIER_STATUS_META: Record<string, { label: string; bg: string; fg: string }> = {
+  pending: { label: "Courier: Pending", bg: "#f1f5f9", fg: "#475569" },
+  pickup_requested: { label: "Pickup requested", bg: "#fef3e2", fg: "#b45309" },
+  in_transit: { label: "In transit", bg: "#e2f3f7", fg: "#0e7490" },
+  delivered: { label: "Delivered", bg: "#e7f6ec", fg: "#16a34a" },
+  returned: { label: "Returned", bg: "#fdeede", fg: "#ea580c" },
+  hold: { label: "On hold", bg: "#fef9c3", fg: "#a16207" },
+  cancelled: { label: "Cancelled", bg: "#fdeaea", fg: "#dc2626" },
+};
+
+function CourierStatusPill({ status, pickupAt }: { status?: string | null; pickupAt?: string | null }) {
+  if (!status) return null;
+  const missed = status === "pickup_requested" && pickupAt && Date.now() - new Date(pickupAt).getTime() >= 20 * 3600000;
+  const meta = missed
+    ? { label: "⚠ Missed pickup", bg: "#fdeaea", fg: "#dc2626" }
+    : COURIER_STATUS_META[status] ?? { label: status, bg: "#f1f5f9", fg: "#475569" };
+  return (
+    <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap" style={{ background: meta.bg, color: meta.fg }}>
+      {meta.label}
+    </span>
+  );
 }
 
 const CALL_LIMIT = 3;
@@ -359,10 +388,12 @@ export function OrdersList({ orders, cbReady, bdcReady, isTrash }: { orders: Ord
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-x-1.5 gap-y-0.5 flex-wrap min-w-0">
                       <button onClick={() => setEditId(o.id)} className="text-[13px] font-bold hover:underline">{o.order_number}</button>
+                      <span title={`Source: ${o.source || "direct"}`} className="inline-flex shrink-0"><SourceIcon source={o.source} size={14} /></span>
                       {!isTrash && <StatusPill id={o.id} value={o.status} compact />}
                       <span className="text-[10px] font-medium whitespace-nowrap" style={{ color: "var(--a-faint)" }}>· {bdDateTime(o.created_at)}</span>
                       {lastCalled && <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: "#fbf1dd", color: "#a5710f" }}>Last call</span>}
                       {o.is_booked && <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: "var(--a-warn-soft)", color: "var(--a-warn)" }}>Booked</span>}
+                      <CourierStatusPill status={o.courier_status} pickupAt={o.courier_pickup_at} />
                     </div>
                     <p className="font-bold text-[14px] whitespace-nowrap shrink-0">{taka(Number(o.total))}</p>
                   </div>

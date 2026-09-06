@@ -28,6 +28,7 @@ import { HideOnAdmin, HeaderGate, SiteMain } from "@/components/SiteChrome";
 import { STORE, STORE_NAME } from "@/lib/config";
 import { getLandingConfig } from "@/lib/landing";
 import { StorefrontTabBar } from "@/components/store/StorefrontTabBar";
+import { SourceTracker } from "@/components/SourceTracker";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://dreamcomfortbd.com";
 
@@ -119,6 +120,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <TikTokPixel pixelId={tiktok.pixelId || undefined} />
           <VisitTracker />
           <ScrollTracker />
+          <SourceTracker />
         </HideOnAdmin>
       </body>
     </html>

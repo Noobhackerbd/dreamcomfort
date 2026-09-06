@@ -6,7 +6,8 @@ import { Icon } from "@/components/admin/icons";
 import { ResetDailyButton } from "@/components/admin/ResetDailyButton";
 import { AutoRefresh } from "@/components/admin/AutoRefresh";
 import { RangeTabs } from "@/components/admin/RangeTabs";
-import { OrdersStatusChart, RevenueChart, VisitorsChart, VisitorsByHourChart } from "@/components/admin/DashboardCharts";
+import { OrdersStatusChart, RevenueChart, VisitorsByHourChart, VisitsVsPurchasesChart } from "@/components/admin/DashboardCharts";
+import { SourceIcon, normalizeSource, SOURCE_LABEL, type SourceKind } from "@/components/admin/SourceIcon";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +51,14 @@ async function getStats(rangeDays: number, cFrom?: string, cTo?: string) {
   const prevEnd = new Date(prevEndMs).toISOString();
   const todayStartUtc = new Date(todayStartMs).toISOString();
 
+  // The daily TREND charts always span at least the last 7 days, so selecting "Today"
+  // (or any short range) doesn't collapse them to a single bar. The stat CARDS still
+  // use the selected window; only the charts read this wider window.
+  const CHART_MIN_DAYS = 7;
+  const chartStartMs = Math.min(winStartMs, todayStartMs - (CHART_MIN_DAYS - 1) * 86400000);
+  const chartStart = new Date(chartStartMs).toISOString();
+  const ordersFetchStart = new Date(Math.min(prevStartMs, chartStartMs)).toISOString();
+
   // Fetch visit rows in the window (capped so a very busy site can't stall the page).
   async function fetchAllVisits(sinceIso: string): Promise<any[]> {
     const out: any[] = [];
@@ -67,6 +76,8 @@ async function getStats(rangeDays: number, cFrom?: string, cTo?: string) {
 
   const delProbe = await supabase.from("orders").select("deleted_at").limit(1);
   const hasTrash = !(delProbe.error && (delProbe.error as any).code === "42703");
+  const srcProbe = await supabase.from("orders").select("source").limit(1);
+  const hasSource = !(srcProbe.error && (srcProbe.error as any).code === "42703");
   const ordersLive = (sel: string, opts?: any) => { let q: any = supabase.from("orders").select(sel, opts); if (hasTrash) q = q.is("deleted_at", null); return q; };
   const topItemsQuery = hasTrash
     ? supabase.from("order_items").select("product_name, quantity, orders!inner(deleted_at)").is("orders.deleted_at", null)
@@ -79,13 +90,13 @@ async function getStats(rangeDays: number, cFrom?: string, cTo?: string) {
       supabase.from("products").select("id", { count: "exact", head: true }),
       ordersLive("id", { count: "exact", head: true }),
       ordersLive("id", { count: "exact", head: true }).eq("status", "pending"),
-      ordersLive("total, created_at, status, area, city, district").gte("created_at", prevStart),
+      ordersLive("total, created_at, status, area, city, district" + (hasSource ? ", source" : "")).gte("created_at", ordersFetchStart),
       ordersLive("id, order_number, customer_name, total, status, created_at").order("created_at", { ascending: false }).limit(8),
       supabase.from("products").select("id, name_bn, name_en, stock").lte("stock", 5).order("stock", { ascending: true }).limit(8),
       topItemsQuery,
       supabase.from("abandoned_carts").select("id", { count: "exact", head: true }).eq("status", "abandoned"),
       ordersLive("id, order_number, customer_name, customer_phone, booked_date, total, status").eq("is_booked", true).not("booked_date", "is", null).not("status", "in", "(delivered,cancelled,returned)").order("booked_date", { ascending: true }).limit(60),
-      fetchAllVisits(winStart),
+      fetchAllVisits(chartStart),
       supabase.from("page_visits").select("visitor_id", { count: "exact", head: true }).gte("created_at", prevStart).lt("created_at", prevEnd),
       todayItemsQuery,
       supabase.from("settings").select("value").eq("key", "dashboard_daily_reset").maybeSingle(),
@@ -114,11 +125,13 @@ async function getStats(rangeDays: number, cFrom?: string, cTo?: string) {
 
   type Day = { day: string; total: number; count: number; confirmed: number; cancelled: number; pending: number; delivered: number };
   const buckets = new Map<string, Day>();
-  for (let t = winStartMs; t <= winEndMs + 1000; t += 86400000) {
+  for (let t = chartStartMs; t <= winEndMs + 1000; t += 86400000) {
     const key = new Date(t + DHAKA_OFFSET_MS).toISOString().slice(0, 10);
     if (!buckets.has(key)) buckets.set(key, { day: key, total: 0, count: 0, confirmed: 0, cancelled: 0, pending: 0, delivered: 0 });
   }
-  for (const o of cur) {
+  // Fill from the wider chart window (≥7 days) — not just the selected-window orders.
+  const chartOrders = two.filter((o) => o.created_at >= chartStart && o.created_at <= winEnd);
+  for (const o of chartOrders) {
     const b = buckets.get(dhakaDayKey(o.created_at));
     if (!b) continue;
     b.total += Number(o.total || 0); b.count += 1;
@@ -134,9 +147,12 @@ async function getStats(rangeDays: number, cFrom?: string, cTo?: string) {
   const delivered = cur.filter((o) => isDelivered(o.status)).length;
   const cancelled = cur.filter((o) => isCancelled(o.status)).length;
   const salesConfirmed = cur.filter((o) => isConfirmed(o.status)).reduce((s, o) => s + Number(o.total || 0), 0);
+  const returned = cur.filter((o) => o.status === "returned").length;
   const confirmRate = total ? Math.round((confirmed / total) * 100) : 0;
   const cancelRate = total ? Math.round((cancelled / total) * 100) : 0;
-  const deliveryRate = confirmed ? Math.round((delivered / confirmed) * 100) : 0;
+  // Delivery success rate = delivered / (delivered + returned): of orders that
+  // reached a final delivery outcome, how many were delivered (RTO-aware).
+  const deliverySuccessRate = delivered + returned > 0 ? Math.round((delivered / (delivered + returned)) * 100) : 0;
   const aov = confirmed ? Math.round(salesConfirmed / confirmed) : 0;
 
   const visitDays = new Map<string, Set<string>>();
@@ -144,25 +160,47 @@ async function getStats(rangeDays: number, cFrom?: string, cTo?: string) {
   for (const v of (visitsRes ?? []) as any[]) {
     if (v.created_at > winEnd) continue;
     const id = v.visitor_id || v.created_at;
-    allVisitors.add(id);
     const key = dhakaDayKey(v.created_at);
-    if (!buckets.has(key)) continue;
-    if (!visitDays.has(key)) visitDays.set(key, new Set());
-    visitDays.get(key)!.add(id);
+    // Chart buckets span the wider (≥7 day) window…
+    if (buckets.has(key)) {
+      if (!visitDays.has(key)) visitDays.set(key, new Set());
+      visitDays.get(key)!.add(id);
+    }
+    // …but the visitor STAT stays scoped to the selected window.
+    if (v.created_at >= winStart) allVisitors.add(id);
   }
   const visitorsChart = chart.map((c) => ({ day: c.day, visitors: visitDays.get(c.day)?.size ?? 0 }));
+  // Visits vs purchases — daily unique visitors against confirmed-count orders.
+  const visitsVsPurchases = chart.map((c) => ({ day: c.day, visitors: visitDays.get(c.day)?.size ?? 0, orders: c.count }));
+
+  // Traffic-source breakdown over the current window.
+  const sourceCounts: Record<SourceKind, number> = { tiktok: 0, facebook: 0, google: 0, whatsapp: 0, messenger: 0, phone: 0, direct: 0, other: 0 };
+  for (const o of cur) sourceCounts[normalizeSource((o as any).source)] += 1;
+  // Always show the core ad sources; show the manual sources (WhatsApp/Messenger/Phone)
+  // only when they actually have orders, so the row stays tidy.
+  const SRC_ORDER: SourceKind[] = ["tiktok", "facebook", "google", "messenger", "whatsapp", "phone", "other", "direct"];
+  const sources = SRC_ORDER
+    .filter((k) => ["tiktok", "facebook", "google", "direct", "other"].includes(k) || sourceCounts[k] > 0)
+    .map((k) => ({ kind: k, label: SOURCE_LABEL[k], count: sourceCounts[k] }));
   const todayVisitors = visitDays.get(today)?.size ?? 0;
   const visitorsCur = allVisitors.size;
   const visitorsPrev = prevVisitsRes.count ?? 0;
   const visitorsDelta = visitorsPrev > 0 ? Math.round(((visitorsCur - visitorsPrev) / visitorsPrev) * 100) : visitorsCur > 0 ? 100 : 0;
   const conversion = visitorsCur ? Math.round((total / visitorsCur) * 1000) / 10 : 0;
 
+  // "Visitors by time of day" reflects the SELECTED range only (Today = today's hourly
+  // pattern), unlike the daily trend charts which always span ≥7 days.
   const hourCounts = new Array(24).fill(0);
   for (const v of (visitsRes ?? []) as any[]) {
-    if (v.created_at > winEnd) continue;
+    if (v.created_at > winEnd || v.created_at < winStart) continue;
     hourCounts[new Date(new Date(v.created_at).getTime() + DHAKA_OFFSET_MS).getUTCHours()] += 1;
   }
-  const hourly = hourCounts.map((visits, hour) => ({ hour, visits }));
+  // Orders per hour over the same selected window → overlaid on the visitors chart.
+  const hourOrders = new Array(24).fill(0);
+  for (const o of cur) {
+    hourOrders[new Date(new Date(o.created_at).getTime() + DHAKA_OFFSET_MS).getUTCHours()] += 1;
+  }
+  const hourly = hourCounts.map((visits, hour) => ({ hour, visits, orders: hourOrders[hour] }));
   let peakHour = 0, peakVisits = 0;
   hourCounts.forEach((c: number, h: number) => { if (c > peakVisits) { peakVisits = c; peakHour = h; } });
   const peakLabel = peakVisits > 0 ? `${hour12(peakHour)} – ${hour12((peakHour + 1) % 24)}` : "—";
@@ -206,9 +244,9 @@ async function getStats(rangeDays: number, cFrom?: string, cTo?: string) {
   return {
     rangeDays, custom, resetTimeLabel, resetActive, todayProducts,
     products: productsRes.count ?? 0, orders: ordersRes.count ?? 0, pending: pendingRes.count ?? 0, abandoned: abandonedRes.count ?? 0,
-    revenueCur, revenueDelta, ordersDelta, total, confirmed, delivered, cancelled, confirmRate, cancelRate, deliveryRate, salesConfirmed, aov,
+    revenueCur, revenueDelta, ordersDelta, total, confirmed, delivered, cancelled, confirmRate, cancelRate, deliveryRate: deliverySuccessRate, salesConfirmed, aov,
     todayOrders: todayOrders.length, todayRevenue, todayVisitors, visitorsCur, visitorsDelta, conversion,
-    hourly, peakHour, peakLabel, peakVisits, bookedSoon, visitorsChart, chart, topProducts, topAreas,
+    hourly, peakHour, peakLabel, peakVisits, bookedSoon, visitorsChart, visitsVsPurchases, sources, chart, topProducts, topAreas,
     recent: (recentRes.data ?? []) as any[], lowStock: (lowStockRes.data ?? []) as any[],
   };
 }
@@ -367,7 +405,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
         <ChartCard title="Daily sales (৳)" right={<span className="text-sm dc-muted"><b>{taka(stats.revenueCur)}</b></span>} note="Hover the line for that day's sales."><RevenueChart data={stats.chart} /></ChartCard>
       </div>
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <ChartCard title="Daily visitors" right={<span className="text-sm dc-muted"><b>{stats.visitorsCur}</b></span>} note="Unique visitors per day."><VisitorsChart data={stats.visitorsChart} /></ChartCard>
+        <ChartCard title="Visits vs purchases" right={<span className="text-sm dc-muted"><b>{stats.visitorsCur}</b> visits · <b>{stats.total}</b> orders</span>} note="Daily unique visitors against orders placed. Hover for that day."><VisitsVsPurchasesChart data={stats.visitsVsPurchases} /></ChartCard>
         <ChartCard title="Top areas (orders)" note="Areas with the most orders in this range.">
           {stats.topAreas.length === 0 ? <p className="text-sm dc-muted">No data yet.</p> : (
             <ul className="space-y-2.5 text-sm">
@@ -382,7 +420,26 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
         </ChartCard>
       </div>
       <div className="mt-4">
-        <ChartCard title="Visitors by time of day" right={<span className="text-sm"><span className="dc-muted">Peak: </span><b className="text-green-600">{stats.peakLabel}</b>{stats.peakVisits > 0 && <span className="dc-muted"> ({stats.peakVisits})</span>}</span>} note="When most visitors arrive (green = peak hour). Hover a bar for details.">
+        <ChartCard title="Order sources" right={<span className="text-sm dc-muted"><b>{stats.total}</b> orders</span>} note="Where this range's orders came from (last-touch: ad click, UTM or referrer).">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            {stats.sources.map((s) => {
+              const pct = stats.total ? Math.round((s.count / stats.total) * 100) : 0;
+              return (
+                <div key={s.kind} className="rounded-2xl border p-3" style={{ borderColor: "var(--a-border)", background: "var(--a-surface)" }}>
+                  <div className="flex items-center gap-2">
+                    <span className="h-8 w-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: "var(--a-surface-2)" }}><SourceIcon source={s.kind} size={16} /></span>
+                    <p className="text-[20px] font-extrabold tabular-nums leading-none">{s.count}</p>
+                  </div>
+                  <p className="text-[12px] dc-muted mt-2">{s.label}</p>
+                  <p className="text-[11px] font-bold mt-0.5" style={{ color: "var(--a-brand)" }}>{pct}%</p>
+                </div>
+              );
+            })}
+          </div>
+        </ChartCard>
+      </div>
+      <div className="mt-4">
+        <ChartCard title="Visitors by time of day" right={<span className="text-sm"><span className="dc-muted">Peak: </span><b className="text-green-600">{stats.peakLabel}</b>{stats.peakVisits > 0 && <span className="dc-muted"> ({stats.peakVisits})</span>}</span>} note="Visitors per hour (green = peak) with orders that hour as the blue line. Hover for details.">
           <VisitorsByHourChart data={stats.hourly} peakHour={stats.peakHour} />
         </ChartCard>
       </div>

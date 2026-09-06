@@ -569,6 +569,7 @@ export interface ManualOrderInput {
   customAmount?: number; // overrides computed total when > 0
   shippingFee?: number;
   status?: string; // default "confirmed"
+  source?: string; // whatsapp / messenger / phone / other — shown as an icon in the list
   sendSms?: boolean; // default true
   isBooked?: boolean;
   bookedDate?: string | null; // YYYY-MM-DD
@@ -619,27 +620,31 @@ export async function createManualOrder(input: ManualOrderInput) {
   const phone = normalizeBdPhone(input.phone);
   const status = input.status || "confirmed";
 
-  const { data: order, error: oErr } = await supabase
-    .from("orders")
-    .insert({
-      status,
-      customer_name: name,
-      customer_phone: phone,
-      address_line: address,
-      area: input.area?.trim() || null,
-      city: input.city?.trim() || null,
-      district: input.city?.trim() || null,
-      payment_method: "cod",
-      subtotal,
-      shipping_fee: shippingFee,
-      discount: custom > 0 ? Math.max(0, subtotal + shippingFee - custom) : 0,
-      total,
-      notes: input.notes?.trim() || null,
-      is_booked: !!input.isBooked,
-      booked_date: input.isBooked && input.bookedDate ? input.bookedDate : null,
-    })
-    .select("id, order_number, total")
-    .single();
+  const orderRow: Record<string, unknown> = {
+    status,
+    customer_name: name,
+    customer_phone: phone,
+    address_line: address,
+    area: input.area?.trim() || null,
+    city: input.city?.trim() || null,
+    district: input.city?.trim() || null,
+    payment_method: "cod",
+    subtotal,
+    shipping_fee: shippingFee,
+    discount: custom > 0 ? Math.max(0, subtotal + shippingFee - custom) : 0,
+    total,
+    notes: input.notes?.trim() || null,
+    is_booked: !!input.isBooked,
+    booked_date: input.isBooked && input.bookedDate ? input.bookedDate : null,
+    source: (input.source || "manual").slice(0, 24),
+  };
+  let { data: order, error: oErr } = await supabase
+    .from("orders").insert(orderRow).select("id, order_number, total").single();
+  // If the optional `source` column isn't migrated yet, save the order without it.
+  if (oErr && ((oErr as any).code === "42703" || /source/i.test(oErr.message || ""))) {
+    delete orderRow.source;
+    ({ data: order, error: oErr } = await supabase.from("orders").insert(orderRow).select("id, order_number, total").single());
+  }
   if (oErr || !order) return { ok: false, error: oErr?.message ?? "অর্ডার তৈরি ব্যর্থ।" };
 
   const { error: iErr } = await supabase
