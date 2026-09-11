@@ -15,6 +15,9 @@ export interface CartItem {
 
 interface CartState {
   items: CartItem[];
+  drawerOpen: boolean;
+  openDrawer: () => void;
+  closeDrawer: () => void;
   add: (item: Omit<CartItem, "qty">, qty?: number) => void;
   remove: (id: string) => void;
   setQty: (id: string, qty: number) => void;
@@ -27,17 +30,16 @@ export const useCart = create<CartState>()(
   persist(
     (set, get) => ({
       items: [],
+      drawerOpen: false,
+      openDrawer: () => set({ drawerOpen: true }),
+      closeDrawer: () => set({ drawerOpen: false }),
       add: (item, qty = 1) =>
         set((s) => {
           const existing = s.items.find((i) => i.id === item.id);
-          if (existing) {
-            return {
-              items: s.items.map((i) =>
-                i.id === item.id ? { ...i, qty: i.qty + qty } : i
-              ),
-            };
-          }
-          return { items: [...s.items, { ...item, qty }] };
+          const items = existing
+            ? s.items.map((i) => (i.id === item.id ? { ...i, qty: i.qty + qty } : i))
+            : [...s.items, { ...item, qty }];
+          return { items, drawerOpen: true };
         }),
       remove: (id) => set((s) => ({ items: s.items.filter((i) => i.id !== id) })),
       setQty: (id, qty) =>
@@ -50,7 +52,7 @@ export const useCart = create<CartState>()(
       count: () => get().items.reduce((n, i) => n + i.qty, 0),
       subtotal: () => get().items.reduce((sum, i) => sum + i.price * i.qty, 0),
     }),
-    { name: "dc-cart" }
+    { name: "dc-cart", partialize: (s) => ({ items: s.items }) }
   )
 );
 

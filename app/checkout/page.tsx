@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCart } from "@/lib/cart/store";
 import { taka } from "@/lib/format";
 import { SHIPPING, type DeliveryArea } from "@/lib/config";
-import { placeOrder, checkCoupon } from "./actions";
+import { placeOrder, checkCoupon, getCheckoutPrefill } from "./actions";
 import { fireEvent } from "@/components/track";
 
 export default function CheckoutPage() {
@@ -19,6 +19,8 @@ export default function CheckoutPage() {
   const [deliveryArea, setDeliveryArea] = useState<DeliveryArea>("inside");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
+  const [activeAddrId, setActiveAddrId] = useState<string | null>(null);
 
   // Coupon
   const [couponInput, setCouponInput] = useState("");
@@ -27,6 +29,33 @@ export default function CheckoutPage() {
   const [couponBusy, setCouponBusy] = useState(false);
 
   useEffect(() => setMounted(true), []);
+
+  // Prefill for a logged-in customer (profile + saved addresses) — faster checkout.
+  useEffect(() => {
+    let cancelled = false;
+    getCheckoutPrefill().then((p: any) => {
+      if (cancelled || !p?.loggedIn) return;
+      setName((v) => v || p.name || "");
+      setPhone((v) => v || p.phone || "");
+      const addrs = p.addresses || [];
+      setSavedAddresses(addrs);
+      const def = addrs.find((a: any) => a.is_default) || addrs[0];
+      if (def) {
+        setActiveAddrId(def.id);
+        setName((v) => v || def.name || p.name || "");
+        setPhone((v) => v || def.phone || p.phone || "");
+        setAddress((v) => v || [def.address_line, def.area, def.city].filter(Boolean).join(", "));
+      }
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  function pickAddress(a: any) {
+    setActiveAddrId(a.id);
+    setName(a.name || "");
+    setPhone(a.phone || "");
+    setAddress([a.address_line, a.area, a.city].filter(Boolean).join(", "));
+  }
 
   const shippingFee = deliveryArea === "outside" ? SHIPPING.outsideDhaka : SHIPPING.insideDhaka;
 
@@ -100,6 +129,22 @@ export default function CheckoutPage() {
         {/* Left — details */}
         <div className="rounded-2xl border border-black/5 bg-white p-5 space-y-4 shadow-sm">
           <h2 className="font-bold text-lg">ডেলিভারি তথ্য</h2>
+
+          {savedAddresses.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium mb-1.5">সেভ করা ঠিকানা</label>
+              <div className="flex gap-2 flex-wrap">
+                {savedAddresses.map((a) => (
+                  <button key={a.id} type="button" onClick={() => pickAddress(a)}
+                    className={"rounded-xl border px-3 py-2 text-left text-xs max-w-[220px] transition " + (activeAddrId === a.id ? "border-brand bg-brand/5" : "border-black/10 hover:bg-gray-50")}>
+                    <span className="font-semibold block truncate">{a.label || a.name}</span>
+                    <span className="text-gray-500 block truncate">{[a.address_line, a.area].filter(Boolean).join(", ")}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium mb-1">আপনার নাম *</label>
             <input autoComplete="name" autoCapitalize="words" value={name} onChange={(e) => setName(e.target.value)} placeholder="আপনার নাম" className={inputCls} />

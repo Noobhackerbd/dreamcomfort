@@ -28,11 +28,37 @@ export interface ProductInput {
   images: string[];
   rating?: number | null;
   review_count?: number | null;
+  // Rich product-page content (optional, entered as text; parsed here).
+  highlights_text?: string;   // one per line
+  specs_text?: string;        // "label: value" per line
+  how_to_use?: string;
+  faq_text?: string;          // "Question | Answer" per line
+  video_url?: string;
 }
 
-/** True when the error is a "column doesn't exist" (rating/review_count migration not run yet). */
-function isMissingRatingCol(error: any): boolean {
-  return !!error && (error.code === "42703" || /rating|review_count/i.test(error.message || ""));
+const OPTIONAL_COLS = ["rating", "review_count", "highlights", "specs", "how_to_use", "faq", "video_url"];
+/** True when the error is a "column doesn't exist" for one of the optional/newer columns. */
+function isMissingOptionalCol(error: any): boolean {
+  return !!error && (error.code === "42703" || new RegExp(OPTIONAL_COLS.join("|"), "i").test(error.message || ""));
+}
+
+function parseHighlights(t?: string): string[] | null {
+  const arr = (t || "").split("\n").map((s) => s.trim()).filter(Boolean);
+  return arr.length ? arr : null;
+}
+function parseSpecs(t?: string): { label: string; value: string }[] | null {
+  const arr = (t || "").split("\n").map((l) => l.trim()).filter(Boolean).map((l) => {
+    const i = l.indexOf(":");
+    return i > 0 ? { label: l.slice(0, i).trim(), value: l.slice(i + 1).trim() } : null;
+  }).filter(Boolean) as { label: string; value: string }[];
+  return arr.length ? arr : null;
+}
+function parseFaq(t?: string): { q: string; a: string }[] | null {
+  const arr = (t || "").split("\n").map((l) => l.trim()).filter(Boolean).map((l) => {
+    const i = l.indexOf("|");
+    return i > 0 ? { q: l.slice(0, i).trim(), a: l.slice(i + 1).trim() } : null;
+  }).filter(Boolean) as { q: string; a: string }[];
+  return arr.length ? arr : null;
 }
 
 export async function saveProduct(input: ProductInput) {
@@ -58,24 +84,28 @@ export async function saveProduct(input: ProductInput) {
     images: input.images ?? [],
     rating,
     review_count: reviewCount,
+    highlights: parseHighlights(input.highlights_text),
+    specs: parseSpecs(input.specs_text),
+    how_to_use: input.how_to_use?.trim() || null,
+    faq: parseFaq(input.faq_text),
+    video_url: input.video_url?.trim() || null,
   };
+  const stripOptional = (o: Record<string, unknown>) => { for (const c of OPTIONAL_COLS) delete o[c]; return o; };
 
   if (input.id) {
     const update: Record<string, unknown> = { ...row };
     if (input.slug?.trim()) update.slug = slugify(input.slug);
     let { error } = await supabase.from("products").update(update).eq("id", input.id);
-    if (error && isMissingRatingCol(error)) {
-      // Rating columns not migrated yet — save the rest so the product still updates.
-      delete update.rating; delete update.review_count;
-      ({ error } = await supabase.from("products").update(update).eq("id", input.id));
+    if (error && isMissingOptionalCol(error)) {
+      // Newer columns not migrated yet — save the rest so the product still updates.
+      ({ error } = await supabase.from("products").update(stripOptional({ ...update })).eq("id", input.id));
     }
     if (error) return { ok: false, error: error.message };
   } else {
     const slug = slugify(input.slug || input.name_en || input.name_bn || "");
     let { error } = await supabase.from("products").insert({ ...row, slug });
-    if (error && isMissingRatingCol(error)) {
-      const { rating: _r, review_count: _rc, ...rest } = row;
-      ({ error } = await supabase.from("products").insert({ ...rest, slug }));
+    if (error && isMissingOptionalCol(error)) {
+      ({ error } = await supabase.from("products").insert({ ...stripOptional({ ...row }), slug }));
     }
     if (error) return { ok: false, error: error.message };
   }

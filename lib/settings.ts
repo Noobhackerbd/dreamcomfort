@@ -173,3 +173,9 @@ export async function saveSetting(key: string, value: unknown): Promise<void> {
     .upsert({ key, value, updated_at: new Date().toISOString() });
   if (error) throw new Error(error.message);
 }
+
+/** Worker-panel PIN (public /worker access gate). Empty = open (no PIN). */
+export async function getWorkerPin(): Promise<string> {
+  const s = await readSetting<{ pin: string }>("worker_panel", { pin: process.env.WORKER_PANEL_PIN || "" });
+  return (s.pin || "").trim();
+}

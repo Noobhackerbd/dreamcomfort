@@ -53,6 +53,8 @@ export function ProductCard({ p }: { p: Product }) {
         const next = nw ? Array.from(new Set([...arr, p.id])) : arr.filter((x) => x !== p.id);
         localStorage.setItem("dc-wish", JSON.stringify(next));
       } catch {}
+      // Sync to the account when logged in (silently no-ops for guests).
+      import("@/app/account/wishlist-actions").then((m) => m.toggleWishlist(p.id, nw)).catch(() => {});
       return nw;
     });
   }

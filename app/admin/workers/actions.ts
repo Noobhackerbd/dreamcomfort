@@ -3,7 +3,20 @@
 import { getServerSupabase } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { setCost, WorkerItem } from "@/lib/workers";
+import { saveSetting, getWorkerPin } from "@/lib/settings";
 import { revalidatePath } from "next/cache";
+
+export async function getWorkerPanelPin() {
+  await requireAdmin();
+  return getWorkerPin();
+}
+
+export async function setWorkerPanelPin(pin: string) {
+  await requireAdmin();
+  await saveSetting("worker_panel", { pin: (pin || "").trim() });
+  revalidatePath("/admin/workers");
+  return { ok: true };
+}
 
 function today(): string {
   return new Date(new Date().getTime() + 6 * 3600 * 1000).toISOString().slice(0, 10); // Dhaka date

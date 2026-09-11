@@ -17,7 +17,8 @@ export function StorefrontTabBar() {
     pathname.startsWith("/admin") ||
     pathname.startsWith("/order") ||
     pathname.startsWith("/landing") ||
-    pathname.startsWith("/checkout");
+    pathname.startsWith("/checkout") ||
+    pathname.startsWith("/worker");
 
   useEffect(() => {
     if (hide) { document.body.classList.remove("has-store-tabs"); return; }

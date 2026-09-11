@@ -35,6 +35,11 @@ export function ProductForm({ initial, categories, landings = [] }: Props) {
   const [active, setActive] = useState(initial?.is_active ?? true);
   const [rating, setRating] = useState(initial?.rating != null ? String(initial.rating) : "");
   const [reviewCount, setReviewCount] = useState(initial?.review_count != null ? String(initial.review_count) : "");
+  const [highlightsText, setHighlightsText] = useState((initial as any)?.highlights_text ?? "");
+  const [specsText, setSpecsText] = useState((initial as any)?.specs_text ?? "");
+  const [howToUse, setHowToUse] = useState((initial as any)?.how_to_use ?? "");
+  const [faqText, setFaqText] = useState((initial as any)?.faq_text ?? "");
+  const [videoUrl, setVideoUrl] = useState((initial as any)?.video_url ?? "");
   const [images, setImages] = useState<string[]>(initial?.images ?? []);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -102,6 +107,7 @@ export function ProductForm({ initial, categories, landings = [] }: Props) {
       meta_title: metaTitle, meta_description: metaDesc, is_active: active, images,
       rating: rating.trim() === "" ? null : Number(rating),
       review_count: reviewCount.trim() === "" ? null : Number(reviewCount),
+      highlights_text: highlightsText, specs_text: specsText, how_to_use: howToUse, faq_text: faqText, video_url: videoUrl,
     });
     setSaving(false);
     if (!res.ok) return setError(res.error ?? "Save failed.");
@@ -163,6 +169,16 @@ export function ProductForm({ initial, categories, landings = [] }: Props) {
 
       <div><label className={lbl}>Description (Bangla)</label><textarea value={descBn} onChange={(e) => setDescBn(e.target.value)} rows={3} className={cls} /></div>
       <div><label className={lbl}>Description (English)</label><textarea value={descEn} onChange={(e) => setDescEn(e.target.value)} rows={2} className={cls} /></div>
+
+      {/* Premium product-page content (all optional) */}
+      <div className="dc-card p-3.5 space-y-3" style={{ background: "var(--a-surface-2)" }}>
+        <p className="text-sm font-semibold">Premium page content <span className="dc-muted font-normal">(optional — shown on the product page)</span></p>
+        <div><label className={lbl}>Highlights — one per line</label><textarea value={highlightsText} onChange={(e) => setHighlightsText(e.target.value)} rows={3} placeholder={"আরামদায়ক ফ্যাব্রিক\nমেশিন ওয়াশেবল\n১০০% কটন"} className={cls} /></div>
+        <div><label className={lbl}>Specifications — one per line as “Label: Value”</label><textarea value={specsText} onChange={(e) => setSpecsText(e.target.value)} rows={3} placeholder={"উপাদান: কটন\nসাইজ: ফ্রি\nওজন: ৮০০ গ্রাম"} className={cls} /></div>
+        <div><label className={lbl}>How to use</label><textarea value={howToUse} onChange={(e) => setHowToUse(e.target.value)} rows={2} className={cls} /></div>
+        <div><label className={lbl}>FAQ — one per line as “Question | Answer”</label><textarea value={faqText} onChange={(e) => setFaqText(e.target.value)} rows={3} placeholder={"ওয়াশ করা যাবে? | হ্যাঁ, মেশিন ওয়াশেবল।\nডেলিভারিতে কত দিন? | ঢাকায় ১–২ দিন।"} className={cls} /></div>
+        <div><label className={lbl}>Product video URL (YouTube / mp4, optional)</label><input value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://youtu.be/..." className={cls} /></div>
+      </div>
 
       <div>
         <label className={lbl}>Images (first is the main image)</label>

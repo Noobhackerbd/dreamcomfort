@@ -113,12 +113,15 @@ const NAV = [
   { href: "/admin/print-station", label: "Print Station", icon: "print" },
   { href: "/admin/abandoned", label: "Abandoned Carts", icon: "abandoned", badgeKey: "abandoned" },
   { href: "/admin/customers", label: "Customers", icon: "customers" },
+  { href: "/admin/support", label: "Support", icon: "chat", badgeKey: "support" },
+  { href: "/admin/reviews", label: "Reviews", icon: "target" },
+  { href: "/admin/subscribers", label: "Subscribers", icon: "bell" },
   { href: "/admin/workers", label: "Workers", icon: "workers" },
   { href: "/admin/tracking", label: "Tracking Health", icon: "tracking" },
   { href: "/admin/settings", label: "Settings", icon: "settings" },
 ];
 
-interface Notif { booked: BookedItem[]; pending: number; abandoned: number; lowStock: number }
+interface Notif { booked: BookedItem[]; pending: number; abandoned: number; lowStock: number; support: number }
 
 /** Shared admin notifications: booked reminders (due/overdue), pending orders,
  *  abandoned carts, low-stock products. Resilient to missing tables/columns. */
@@ -126,21 +129,22 @@ async function getNotifications(): Promise<Notif> {
   const supabase = getServerSupabase();
   const today = new Date(Date.now() + 6 * 3600 * 1000).toISOString().slice(0, 10);
   const cutoff = new Date(Date.now() + 6 * 3600 * 1000 + 3 * 86400000).toISOString().slice(0, 10);
-  const empty: Notif = { booked: [], pending: 0, abandoned: 0, lowStock: 0 };
+  const empty: Notif = { booked: [], pending: 0, abandoned: 0, lowStock: 0, support: 0 };
   try {
-    const [bookedRes, pendingRes, abandonedRes, lowStockRes] = await Promise.all([
+    const [bookedRes, pendingRes, abandonedRes, lowStockRes, supportRes] = await Promise.all([
       supabase.from("orders").select("id, order_number, customer_name, customer_phone, booked_date, total")
         .eq("is_booked", true).not("booked_date", "is", null).lte("booked_date", cutoff)
         .not("status", "in", "(delivered,cancelled,returned)").order("booked_date", { ascending: true }).limit(60),
       supabase.from("orders").select("id", { count: "exact", head: true }).eq("status", "pending"),
       supabase.from("abandoned_carts").select("id", { count: "exact", head: true }).eq("status", "abandoned"),
       supabase.from("products").select("id", { count: "exact", head: true }).lte("stock", 5),
+      supabase.from("support_tickets").select("id", { count: "exact", head: true }).eq("status", "open"),
     ]);
     const booked: BookedItem[] = ((bookedRes.data ?? []) as any[]).map((b) => ({
       id: b.id, order_number: b.order_number, name: b.customer_name ?? "", phone: b.customer_phone ?? "",
       date: b.booked_date, total: Number(b.total || 0), overdue: b.booked_date < today,
     }));
-    return { booked, pending: pendingRes.count ?? 0, abandoned: abandonedRes.count ?? 0, lowStock: lowStockRes.count ?? 0 };
+    return { booked, pending: pendingRes.count ?? 0, abandoned: abandonedRes.count ?? 0, lowStock: lowStockRes.count ?? 0, support: supportRes.count ?? 0 };
   } catch {
     return empty;
   }
@@ -163,7 +167,7 @@ export default async function AdminLayout({
   }
 
   const notif = await getNotifications();
-  const badges: Record<string, number> = { abandoned: notif.abandoned, bookedDue: notif.booked.length };
+  const badges: Record<string, number> = { abandoned: notif.abandoned, bookedDue: notif.booked.length, support: notif.support };
   const navItems: NavItem[] = NAV.map((n) => ({
     href: n.href,
     label: n.label,

@@ -287,3 +287,28 @@ img {
 
 /* hide the global site header on the landing funnel + thank-you pages */
 body.dc-landing header.site-header { display: none; }
+
+/* ---- Accessibility: skip link + keyboard focus rings ---- */
+.dc-skip {
+  position: fixed;
+  left: 1rem;
+  top: -60px;
+  z-index: 200;
+  background: #3E9BD1;
+  color: #fff;
+  padding: 0.6rem 1rem;
+  border-radius: 0.75rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(0,0,0,.18);
+  transition: top .18s ease;
+}
+.dc-skip:focus { top: 1rem; outline: none; }
+
+/* Clear, consistent keyboard focus (mouse clicks don't trigger :focus-visible). */
+a:focus-visible, button:focus-visible, input:focus-visible,
+select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid #3E9BD1;
+  outline-offset: 2px;
+  border-radius: 6px;
+}

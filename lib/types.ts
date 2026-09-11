@@ -28,6 +28,12 @@ export interface Product {
   meta_description?: string | null;
   rating?: number | null;        // 0–5 (shown as stars on the card)
   review_count?: number | null;  // e.g. 250
+  // Optional rich product-page content (see supabase-migration-product-rich.sql).
+  highlights?: string[] | null;
+  specs?: { label: string; value: string }[] | null;
+  how_to_use?: string | null;
+  faq?: { q: string; a: string }[] | null;
+  video_url?: string | null;
 }
 
 export interface Category {

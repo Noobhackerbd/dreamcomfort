@@ -43,7 +43,12 @@ export default async function EditProduct({
           images: p.images ?? [],
           rating: p.rating ?? null,
           review_count: p.review_count ?? null,
-        }}
+          highlights_text: Array.isArray(p.highlights) ? p.highlights.join("\n") : "",
+          specs_text: Array.isArray(p.specs) ? p.specs.map((s: any) => `${s.label}: ${s.value}`).join("\n") : "",
+          how_to_use: p.how_to_use ?? "",
+          faq_text: Array.isArray(p.faq) ? p.faq.map((f: any) => `${f.q} | ${f.a}`).join("\n") : "",
+          video_url: p.video_url ?? "",
+        } as any}
       />
     </div>
   );

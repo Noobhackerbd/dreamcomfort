@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useDeferredValue, useEffect, useRef, useState } from "react";
 import { HeroSlider } from "@/components/funnel/HeroSlider";
 import { OrderForm } from "@/components/funnel/OrderForm";
+import { StickyOrderButton } from "@/components/funnel/StickyOrderButton";
 import { fireEvent } from "@/components/track";
 import { taka } from "@/lib/format";
 import { playSelect } from "@/lib/sound";
@@ -32,11 +33,6 @@ function toFunnel(p: Product): FunnelProduct {
 export function ProductFunnel({
   products,
   shipping,
-  headline,
-  subheadline,
-  urgencyText,
-  statText,
-  badges,
   ctaText,
   initialProductId,
 }: {
@@ -59,6 +55,8 @@ export function ProductFunnel({
       ? initialProductId
       : list[0]?.id ?? "";
   const [selectedId, setSelectedId] = useState<string>(initialId);
+  // Show the price on the sticky bar only after the customer actively picks a colour.
+  const [hasPicked, setHasPicked] = useState(false);
   const viewed = useRef<Set<string>>(new Set());
 
   const p = list.find((x) => x.id === selectedId) ?? list[0];
@@ -87,6 +85,7 @@ export function ProductFunnel({
       const id = (e as CustomEvent).detail as string;
       if (products.some((x) => x.id === id)) {
         setSelectedId(id);
+        setHasPicked(true);
         setTimeout(() => {
           document.getElementById("order-form")?.scrollIntoView({ behavior: "smooth", block: "center" });
         }, 60);
@@ -102,7 +101,8 @@ export function ProductFunnel({
   const off = hasDiscount ? Math.round((1 - p.price / (p.compare_at_price as number)) * 100) : 0;
 
   return (
-    <section className="grid lg:grid-cols-2 gap-8 py-8 lg:py-12 items-start max-w-full">
+    <>
+    <section className="grid lg:grid-cols-2 gap-6 pt-1 pb-8 lg:pb-12 items-start max-w-full">
       <div className="lg:sticky lg:top-8 min-w-0">
         <div className={"w-full max-w-full " + (switching ? "opacity-80 transition-opacity duration-200" : "transition-opacity duration-200")}>
           <HeroSlider images={heroP.images} alt={heroP.name} />
@@ -114,44 +114,29 @@ export function ProductFunnel({
             <label className="block text-center text-lg font-bold text-brand-dark mb-3">একটি কালার বেছে নিন 👇</label>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {list.map((x) => (
-                <ProductChip key={x.id} p={x} on={x.id === selectedId} onSelect={() => { setSelectedId(x.id); playSelect(); }} />
+                <ProductChip key={x.id} p={x} on={x.id === selectedId} onSelect={() => { setSelectedId(x.id); setHasPicked(true); playSelect(); }} />
               ))}
             </div>
+            <button
+              type="button"
+              onClick={() => document.getElementById("order-form")?.scrollIntoView({ behavior: "smooth", block: "center" })}
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-accent to-accent-dark px-6 py-3.5 text-base font-bold text-white shadow-lg transition hover:scale-[1.02]"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 shrink-0" aria-hidden><circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" /><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6" /></svg>
+              <span className="inline-flex flex-wrap items-center justify-center gap-x-2">
+                অর্ডার কনফার্ম করুন · {taka(p.price)}
+                {hasDiscount && <span className="text-sm font-normal line-through opacity-75">{taka(p.compare_at_price as number)}</span>}
+                {hasDiscount && <span className="rounded-full bg-white/25 px-2 py-0.5 text-xs font-bold">{off}% ছাড়</span>}
+              </span>
+              <span aria-hidden>→</span>
+            </button>
           </div>
         )}
       </div>
 
       <div className="min-w-0">
-        {urgencyText && (
-          <span className="inline-block rounded-full bg-accent-soft text-accent-dark text-sm px-3 py-1 mb-3">
-            {urgencyText}
-          </span>
-        )}
-        <h1 className="font-display text-3xl md:text-4xl font-bold leading-tight">{headline}</h1>
-        <p className="mt-3 text-gray-600 text-lg">{subheadline}</p>
 
-        <div className="mt-4 flex items-end gap-3">
-          <span className="font-display text-4xl font-bold text-accent-dark">{taka(p.price)}</span>
-          {hasDiscount && (
-            <>
-              <span className="text-gray-400 line-through text-lg mb-1">{taka(p.compare_at_price as number)}</span>
-              <span className="mb-1 rounded-full bg-accent text-white text-sm px-2 py-0.5 font-bold">{off}% ছাড়</span>
-            </>
-          )}
-        </div>
 
-        <div className="mt-4 flex flex-wrap gap-2">
-          {badges.map((b, i) => (
-            <span key={i} className="rounded-full bg-white shadow-sm text-brand-dark text-xs px-3 py-1.5 ring-1 ring-brand/10">✓ {b}</span>
-          ))}
-        </div>
-
-        <div className="mt-4 flex items-center gap-2 text-sm">
-          <span className="text-amber-400 text-base tracking-tight">★★★★★</span>
-          <span className="font-semibold text-gray-800">৪.৯</span>
-          <span className="text-gray-300">·</span>
-          <span className="text-gray-500">{statText}</span>
-        </div>
 
         <div className="mt-6">
           <OrderForm
@@ -169,6 +154,18 @@ export function ProductFunnel({
         </div>
       </div>
     </section>
+    <StickyOrderButton
+      product={
+        hasPicked
+          ? {
+              priceText: taka(p.price),
+              compareText: hasDiscount ? taka(p.compare_at_price as number) : null,
+              offText: hasDiscount ? `${off}% ছাড়` : null,
+            }
+          : undefined
+      }
+    />
+    </>
   );
 }
 

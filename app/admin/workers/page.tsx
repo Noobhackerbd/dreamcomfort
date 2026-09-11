@@ -5,6 +5,7 @@ import { isMissingTable, summarize, setCost, WorkerItem, ProductionRow, Adjustme
 import { taka } from "@/lib/format";
 import { Icon } from "@/components/admin/icons";
 import { AddWorker } from "./AddWorker";
+import { CopyWorkerLink } from "./CopyWorkerLink";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +46,9 @@ export default async function WorkersPage() {
     <div>
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
         <h1 className="text-2xl font-bold">Workers</h1>
-        <Link href="/admin/workers/items" className="dc-btn"><Icon name="settings" className="h-4 w-4" /> Cost settings</Link>
+        <div className="flex items-center gap-2">
+          <Link href="/admin/workers/items" className="dc-btn"><Icon name="settings" className="h-4 w-4" /> Cost settings</Link>
+        </div>
       </div>
 
       <div className="dc-card p-3 mb-4 text-sm dc-muted flex flex-wrap items-center gap-x-5 gap-y-1">
@@ -54,6 +57,8 @@ export default async function WorkersPage() {
         <span>Total dues: <b style={{ color: "#16a34a" }}>{taka(totalDue)}</b></span>
         <Link href="/admin/workers/items" className="underline" style={{ color: "var(--a-brand)" }}>Change cost</Link>
       </div>
+
+      <p className="text-xs dc-muted mb-3">প্রতিটি কর্মীর নিজস্ব <b>🔗 লিংক</b> আছে — কপি করে শুধু ওই কর্মীকে দিন; সে শুধু নিজের হিসাব দেখবে।</p>
 
       <AddWorker />
 
@@ -65,23 +70,26 @@ export default async function WorkersPage() {
             const { prod: p, adj: a } = byWorker(w.id);
             const sum = summarize(p, a);
             return (
-              <Link key={w.id} href={`/admin/workers/${w.id}`} className="dc-card p-3.5 flex items-center gap-4 hover:shadow-sm transition">
-                <div className="h-12 w-12 rounded-full overflow-hidden shrink-0 flex items-center justify-center" style={{ background: "var(--a-surface-2)", boxShadow: "inset 0 0 0 1px var(--a-border)" }}>
-                  {w.photo ? (
-                    <Image src={w.photo} alt={w.name} width={48} height={48} className="h-full w-full object-cover" />
-                  ) : (
-                    <span className="text-xl">🧑‍🏭</span>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-bold truncate">{w.name}{!w.active && <span className="ml-2 text-xs dc-muted">(inactive)</span>}</p>
-                  <p className="text-xs dc-muted mt-0.5">{sum.sets} sets · {sum.pieces} pcs · earned {taka(sum.earned)}</p>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="text-xs dc-muted">Due</p>
-                  <p className="font-bold text-lg" style={{ color: sum.due > 0 ? "#16a34a" : "var(--a-muted)" }}>{taka(sum.due)}</p>
-                </div>
-              </Link>
+              <div key={w.id} className="dc-card p-3.5 flex items-center gap-3 sm:gap-4">
+                <Link href={`/admin/workers/${w.id}`} className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0 hover:opacity-80">
+                  <div className="h-12 w-12 rounded-full overflow-hidden shrink-0 flex items-center justify-center" style={{ background: "var(--a-surface-2)", boxShadow: "inset 0 0 0 1px var(--a-border)" }}>
+                    {w.photo ? (
+                      <Image src={w.photo} alt={w.name} width={48} height={48} className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="text-xl">🧑‍🏭</span>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold truncate">{w.name}{!w.active && <span className="ml-2 text-xs dc-muted">(inactive)</span>}</p>
+                    <p className="text-xs dc-muted mt-0.5">{sum.sets} sets · {sum.pieces} pcs · earned {taka(sum.earned)}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-xs dc-muted">Due</p>
+                    <p className="font-bold text-lg" style={{ color: sum.due > 0 ? "#16a34a" : "var(--a-muted)" }}>{taka(sum.due)}</p>
+                  </div>
+                </Link>
+                <CopyWorkerLink id={w.id} />
+              </div>
             );
           })}
         </div>

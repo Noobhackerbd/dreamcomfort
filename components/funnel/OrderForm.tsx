@@ -220,10 +220,10 @@ export function OrderForm({
   }
 
   const fieldCls = (bad: boolean) =>
-    "w-full rounded-2xl border px-4 py-3 outline-none transition " +
+    "w-full rounded-2xl border px-4 py-3.5 outline-none transition placeholder:text-gray-400 " +
     (bad
       ? "border-red-400 bg-red-50/50 ring-4 ring-red-100 dc-shake"
-      : "border-brand/20 bg-white focus:border-brand focus:ring-4 focus:ring-brand/10");
+      : "border-accent/25 bg-white focus:border-accent focus:ring-4 focus:ring-accent/15");
 
   return (
     <form
@@ -232,9 +232,11 @@ export function OrderForm({
       onFocusCapture={onFormEngage}
       className="rounded-[2rem] border border-white bg-white/80 backdrop-blur p-5 md:p-6 shadow-soft ring-1 ring-brand/10"
     >
-      <div className="flex items-center gap-2 mb-4">
-        <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-brand to-brand-dark text-white">🛒</span>
-        <h3 className="font-display text-lg font-bold">অর্ডার করতে ফর্মটি পূরণ করুন</h3>
+      <div className="flex items-center gap-2.5 mb-5">
+        <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-dark text-white shadow-sm">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden><circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" /><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6" /></svg>
+        </span>
+        <h3 className="font-display text-lg font-bold text-gray-900">অর্ডার করতে ফর্মটি পূরণ করুন</h3>
       </div>
 
       {variants.length > 0 && (
@@ -270,12 +272,12 @@ export function OrderForm({
         </div>
       )}
 
-      <div className="mb-4 flex items-center justify-between">
-        <label className="text-sm font-medium">পরিমাণ</label>
+      <div className="mb-4 flex items-center justify-between rounded-2xl bg-accent-light/20 px-4 py-2.5">
+        <label className="text-sm font-semibold text-gray-700">পরিমাণ</label>
         <div className="flex items-center gap-3">
-          <button type="button" onClick={() => { setQty((q) => Math.max(1, q - 1)); playPop(); }} className="h-9 w-9 rounded-xl border border-brand/20 text-lg hover:bg-brand-soft">−</button>
-          <span className="w-8 text-center font-bold">{qty}</span>
-          <button type="button" onClick={() => { setQty((q) => q + 1); playPop(); }} className="h-9 w-9 rounded-xl border border-brand/20 text-lg hover:bg-brand-soft">+</button>
+          <button type="button" onClick={() => { setQty((q) => Math.max(1, q - 1)); playPop(); }} className="grid h-9 w-9 place-items-center rounded-full border border-accent/30 bg-white text-lg font-bold text-accent-dark transition hover:bg-accent-soft">−</button>
+          <span className="w-8 text-center text-lg font-bold">{qty}</span>
+          <button type="button" onClick={() => { setQty((q) => q + 1); playPop(); }} className="grid h-9 w-9 place-items-center rounded-full border border-accent/30 bg-white text-lg font-bold text-accent-dark transition hover:bg-accent-soft">+</button>
         </div>
       </div>
 
@@ -323,7 +325,7 @@ export function OrderForm({
         </div>
       </div>
 
-      <div className="mt-4 rounded-2xl bg-cream-deep/60 p-4 text-sm space-y-1.5">
+      <div className="mt-4 rounded-2xl bg-accent-light/20 ring-1 ring-accent/10 p-4 text-sm space-y-1.5">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             {thumb && (
@@ -348,9 +350,9 @@ export function OrderForm({
               playTick();
               document.getElementById("product-picker")?.scrollIntoView({ behavior: "smooth", block: "center" });
             }}
-            className="text-xs text-brand-dark underline underline-offset-2 hover:text-accent-dark"
+            className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-brand-light/50 px-3 py-1 text-xs font-semibold text-brand-dark transition hover:bg-brand-light"
           >
-            🔄 পণ্য পরিবর্তন করুন
+            🔄 অন্য কালার বেছে নিন
           </button>
         )}
         <div className="flex justify-between">
@@ -379,26 +381,23 @@ export function OrderForm({
         id="order-submit"
         type="submit"
         disabled={submitting}
-        className="dc-btn mt-4 w-full rounded-2xl px-6 py-4 text-lg font-bold disabled:opacity-60 flex items-center justify-center gap-2"
+        className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-accent to-accent-dark px-6 py-4 text-lg font-bold text-white shadow-[0_14px_30px_-8px_rgba(224,105,154,0.55)] transition hover:scale-[1.01] active:translate-y-px disabled:opacity-60"
       >
         {submitting ? (
           "অর্ডার হচ্ছে..."
         ) : (
           <>
-            <span className="text-2xl">🛒</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6 shrink-0" aria-hidden><circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" /><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6" /></svg>
             <span>{ctaText}</span>
             <span className="rounded-full bg-white/25 px-2 py-0.5 text-base">{taka(total)}</span>
           </>
         )}
       </button>
-      <div className="mt-3 rounded-xl bg-green-50 border border-green-300 px-3 py-2.5 text-center shadow-sm">
-        <p className="text-sm font-bold text-green-800 flex flex-wrap items-center justify-center gap-1.5">
-          <span className="text-base">💵</span>
-          <span>
-            সম্পূর্ণ{" "}
-            <span className="rounded-md bg-green-600 text-white px-1.5 py-0.5">ফ্রি</span>{" "}
-            ক্যাশ অন ডেলিভারি, কোন অগ্রিম টাকা দিতে হবে না
-          </span>
+      <div className="mt-3 rounded-xl border border-accent/25 bg-accent-light/25 px-3 py-2.5 text-center shadow-sm">
+        <p className="text-[12.5px] font-bold leading-relaxed text-accent-dark sm:text-sm">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1 -mt-0.5 inline-block h-4 w-4 align-middle text-accent" aria-hidden><rect x="2" y="6" width="20" height="12" rx="2" /><circle cx="12" cy="12" r="2" /><path d="M6 12h.01M18 12h.01" /></svg>সম্পূর্ণ{" "}
+          <span className="whitespace-nowrap rounded-md bg-accent px-1.5 py-0.5 text-white">ফ্রি</span>{" "}
+          ক্যাশ অন ডেলিভারি, কোনো অগ্রিম টাকা দিতে হবে না
         </p>
       </div>
 

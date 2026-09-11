@@ -34,6 +34,7 @@ export function SiteMain({ children }: { children: React.ReactNode }) {
   const isAdmin = pathname.startsWith("/admin");
   return (
     <main
+      id="main"
       className={
         isAdmin
           ? "w-full flex-1 mx-auto max-w-[1400px] px-3 sm:px-5 lg:px-6 py-5"

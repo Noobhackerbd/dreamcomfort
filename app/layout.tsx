@@ -29,6 +29,8 @@ import { STORE, STORE_NAME } from "@/lib/config";
 import { getLandingConfig } from "@/lib/landing";
 import { StorefrontTabBar } from "@/components/store/StorefrontTabBar";
 import { SourceTracker } from "@/components/SourceTracker";
+import { SupportFab } from "@/components/store/SupportFab";
+import { CartDrawer } from "@/components/store/CartDrawer";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://dreamcomfortbd.com";
 
@@ -53,14 +55,30 @@ export const viewport: Viewport = {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const [landing, meta, store, tiktok] = await Promise.all([getLandingConfig(), getMetaSettings(), getStoreSettings(), getTikTokSettings()]);
+  const orgJsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        name: STORE_NAME,
+        url: SITE_URL,
+        logo: `${SITE_URL}${landing.logoUrl || "/logo.png"}`,
+        ...(store.phone ? { contactPoint: { "@type": "ContactPoint", telephone: store.phone, contactType: "customer service", areaServed: "BD" } } : {}),
+        ...(store.facebook ? { sameAs: [store.facebook] } : {}),
+      },
+      { "@type": "WebSite", name: STORE_NAME, url: SITE_URL },
+    ],
+  };
   return (
     <html lang="bn" className={`${display.variable} ${notoBengali.variable}`}>
       <head>
         {/* Connect to Meta Pixel origin early → faster tracking load, better LCP/TBT. */}
         <link rel="preconnect" href="https://connect.facebook.net" crossOrigin="" />
         <link rel="dns-prefetch" href="https://connect.facebook.net" />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }} />
       </head>
       <body className="min-h-screen antialiased flex flex-col">
+        <a href="#main" className="dc-skip">মূল কন্টেন্টে যান</a>
         <HeaderGate>
           <Header logoUrl={landing.logoUrl || "/logo.png"} phone={store.phone} />
         </HeaderGate>
@@ -68,11 +86,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <SiteMain>{children}</SiteMain>
 
         <HideOnAdmin>
-        <footer className="mt-16 border-t border-black/5 bg-white/60">
-          <div className="mx-auto max-w-6xl px-4 py-10 grid gap-8 md:grid-cols-4 text-sm">
-            <div>
-              <Image src={landing.logoUrl || "/logo.png"} alt={STORE_NAME} width={180} height={64} sizes="180px" className="h-16 w-auto object-contain" />
-              <p className="mt-3 text-gray-500">{STORE.tagline}</p>
+        <footer className="mt-10 border-t border-black/5 bg-white/60">
+          <div className="mx-auto max-w-6xl px-4 py-6 grid grid-cols-2 gap-x-4 gap-y-5 md:grid-cols-4 md:gap-8 text-[13px]">
+            <div className="col-span-2 md:col-span-1">
+              <Image src={landing.logoUrl || "/logo.png"} alt={STORE_NAME} width={180} height={64} sizes="150px" className="h-11 w-auto object-contain" />
+              <p className="mt-2 text-gray-500">{STORE.tagline}</p>
             </div>
             <div>
               <p className="font-semibold mb-2">শপ</p>
@@ -112,6 +130,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
         {/* Mobile bottom tab bar — storefront only (self-hides on admin/order/landing). */}
         <StorefrontTabBar />
+
+        {/* Slide-out cart drawer (opens from the header cart icon / add-to-cart). */}
+        <CartDrawer />
+
+        {/* Elegant floating support button — storefront only (self-hides elsewhere). */}
+        <SupportFab phone={store.phone} facebook={STORE.facebook} />
 
         {/* Trackers only on the storefront — never on /admin (keeps visitor &
             Pixel data clean, no admin noise). */}

@@ -1,6 +1,7 @@
 "use server";
 
 import { getServerSupabase } from "@/lib/supabase/server";
+import { getCustomerSession } from "@/lib/customer-auth";
 import { getServerMatchSignals, getExternalId } from "@/lib/meta/fb-cookies";
 import { headers, cookies } from "next/headers";
 import { newEventId } from "@/lib/meta/event-id";
@@ -15,17 +16,25 @@ import { markLeadConverted } from "./lead-actions";
 import { refreshAndCacheCourierRatio, getCachedRatios, getRatioForDecision } from "@/lib/bdcourier";
 import { sendOrderPush } from "@/lib/push";
 import { validateCoupon, redeemCoupon, type CouponResult } from "@/lib/coupons";
-import { waitUntil } from "@vercel/functions";
 import type { DeliveryArea } from "@/lib/config";
 
 /**
  * Keep a background task alive until it finishes, WITHOUT delaying the response.
  * On Vercel a plain `void promise` after a Server Action returns can be killed
  * before it completes — which is why the server Purchase used to be missing.
- * waitUntil tells the platform to wait for it. Falls back to best-effort locally.
+ *
+ * We read Vercel's request-context `waitUntil` directly from the global symbol
+ * (the same thing `@vercel/functions` exposes) so there's NO extra dependency to
+ * install; if it isn't present (local dev / other host) we fall back to a
+ * best-effort fire-and-forget.
  */
 function keepAlive(p: Promise<unknown>) {
-  try { waitUntil(p); } catch { void Promise.resolve(p).catch(() => {}); }
+  try {
+    const ctx = (globalThis as any)[Symbol.for("@vercel/request-context")]?.get?.();
+    const waitUntil = ctx?.waitUntil as ((pr: Promise<unknown>) => void) | undefined;
+    if (typeof waitUntil === "function") { waitUntil(Promise.resolve(p).catch(() => {})); return; }
+  } catch { /* fall through to best-effort */ }
+  void Promise.resolve(p).catch(() => {});
 }
 
 export interface PlaceOrderInput {
@@ -70,6 +79,26 @@ function toLocalBdPhone(raw: string): string | null {
 }
 
 /** Normalize a BD phone to 8801XXXXXXXXX for storage/matching. */
+/** Prefill data for a logged-in customer: their profile + saved addresses. */
+export async function getCheckoutPrefill() {
+  const session = await getCustomerSession();
+  if (!session) return { loggedIn: false as const };
+  let addresses: any[] = [];
+  try {
+    const svc = getServerSupabase();
+    const { data } = await svc.from("customer_addresses")
+      .select("id, label, name, phone, address_line, area, city, is_default")
+      .eq("user_id", session.userId).order("is_default", { ascending: false }).order("created_at", { ascending: false });
+    addresses = (data ?? []).map((a: any) => ({ ...a, phone: (a.phone || "").replace(/^88/, "") }));
+  } catch { /* table not migrated */ }
+  return {
+    loggedIn: true as const,
+    name: session.profile?.name || "",
+    phone: (session.profile?.phone || "").replace(/^88/, ""),
+    addresses,
+  };
+}
+
 function normalizePhone(raw: string): string {
   const local = toLocalBdPhone(raw);
   if (local) return "88" + local; // 8801XXXXXXXXX
@@ -303,20 +332,31 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
       // background refresh above already filled it), live fallback otherwise. Shared by
       // both server events; result persisted so the confirmation page agrees.
       const suppressServer: Promise<boolean> = (async () => {
-        if (trackSuppressed) return true; // cache already said "below threshold"
+        let decided = false, reason = "", ratioVal: number | null = null, thrVal = 0;
         try {
           const bc2 = await getBdCourierSettings();
-          const thr = Number(bc2.suppressBelowRatio) || 0;
-          if (thr <= 0) return false;
-          const r = await getRatioForDecision(phone);
-          if (r && r.total > 0 && r.ratio < thr) {
-            try { await supabase.from("orders").update({ track_suppressed: true }).eq("id", order.id); } catch {}
-            return true;
+          thrVal = Number(bc2.suppressBelowRatio) || 0;
+          if (trackSuppressed) { decided = true; reason = "cache-hit-below"; }
+          else if (thrVal <= 0) { reason = "threshold-off"; }
+          else {
+            const r = await getRatioForDecision(phone);
+            ratioVal = r ? r.ratio : null;
+            if (!r || r.total <= 0) reason = "no-courier-history";
+            else if (r.ratio < thrVal) { decided = true; reason = "below-threshold"; }
+            else reason = "above-threshold";
           }
-          return false;
-        } catch {
-          return false; // unknown → send (don't punish legit customers)
+          if (decided) { try { await supabase.from("orders").update({ track_suppressed: true }).eq("id", order.id); } catch {} }
+        } catch (e: any) {
+          reason = "error:" + (e?.message || "unknown"); decided = false;
         }
+        // Record WHY, so "why did it fire / not fire" is visible on the Tracking Health page.
+        try {
+          await logEvent({
+            event_name: "Purchase-SuppressCheck", event_id: eventId, source: "server",
+            payload: { suppressed: decided, reason, ratio: ratioVal, threshold: thrVal, phone_tail: (phone || "").slice(-4) },
+          });
+        } catch {}
+        return decided;
       })();
       keepAlive(suppressServer);
 
