@@ -170,14 +170,14 @@ export async function LandingScreen({
   const initialProductId = resolvePreselect(products, colorRaw);
 
   const Hero = (
-    <section className="relative z-10 mx-auto max-w-6xl px-2 sm:px-3 pt-4">
+    <section className="relative z-10 mx-auto max-w-6xl px-0 pt-2 sm:px-3 sm:pt-4">
       {/* DESKTOP — exact mockup image */}
       <a href="#order-form" aria-label="এখনই অর্ডার করুন" className="hidden md:block overflow-hidden rounded-[1.4rem] shadow-soft ring-1 ring-black/5">
         <Image src="/hero-full.jpg" alt="ড্রিম কমফোর্ট — প্রিমিয়াম ডাবল লেয়ার প্রেগনেন্সি পিলো সেট" width={2000} height={760} priority sizes="1152px" className="w-full h-auto" />
       </a>
 
       {/* MOBILE — same content, re-laid for readability */}
-      <div className="md:hidden overflow-hidden rounded-[1.4rem] bg-gradient-to-br from-accent-light/70 via-accent-light/50 to-brand-light/50 px-5 pt-6 pb-6 shadow-soft ring-1 ring-black/5">
+      <div className="md:hidden overflow-hidden rounded-b-[1.6rem] bg-gradient-to-br from-accent-light/70 via-accent-light/50 to-brand-light/50 px-5 pt-6 pb-6 shadow-sm sm:rounded-[1.4rem] sm:ring-1 sm:ring-black/5">
         <span className="inline-flex items-center gap-2 rounded-full bg-accent/20 px-3.5 py-1.5 text-[12px] font-bold text-accent-dark">
           <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-accent" aria-hidden><path d="M12 21s-6.7-4.4-9.3-8.2C.9 10 1.6 6.5 4.4 5.3c1.9-.8 3.9-.2 5.2 1.3L12 9l2.4-2.4c1.3-1.5 3.3-2.1 5.2-1.3 2.8 1.2 3.5 4.7 1.7 7.5C18.7 16.6 12 21 12 21z"/></svg>
           মায়েদের জন্য বিশেষভাবে ডিজাইন করা
@@ -235,7 +235,7 @@ export async function LandingScreen({
   }
 
   return (
-    <div className="-mt-6 relative">
+    <div className="-mt-6 relative overflow-x-clip">
       <LandingBodyClass />
 
       <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden -z-10">
