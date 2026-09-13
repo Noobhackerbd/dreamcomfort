@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { saveShippingSettings, saveStoreSettings, saveCarryBeeSettings, saveAiSettings, saveMetaSettings, saveTikTokSettings, saveMobileSettings, saveBdCourierSettings } from "./actions";
-import type { ShippingSettings, StoreSettings, CarryBeeSettings, AiSettings, MetaSettings, TikTokSettings, MobileSettings, BdCourierSettings } from "@/lib/settings";
+import { saveShippingSettings, saveStoreSettings, saveCarryBeeSettings, saveAiSettings, saveMetaSettings, saveTikTokSettings, saveMobileSettings, saveBdCourierSettings, saveNavIcons } from "./actions";
+import type { ShippingSettings, StoreSettings, CarryBeeSettings, AiSettings, MetaSettings, TikTokSettings, MobileSettings, BdCourierSettings, NavIconsSettings } from "@/lib/settings";
 
 const cls = "dc-input";
 const lbl = "block text-[13px] font-medium dc-muted mb-1";
@@ -69,6 +69,7 @@ export function SettingsForm({
   tiktok,
   mobile,
   bdcourier,
+  navIcons,
 }: {
   shipping: ShippingSettings;
   store: StoreSettings;
@@ -78,6 +79,7 @@ export function SettingsForm({
   tiktok: TikTokSettings;
   mobile: MobileSettings;
   bdcourier: BdCourierSettings;
+  navIcons: NavIconsSettings;
 }) {
   const router = useRouter();
 
@@ -120,6 +122,21 @@ export function SettingsForm({
   const [bcErr, setBcErr] = useState<string | null>(null);
   const [bcBusy, setBcBusy] = useState(false);
 
+  const [ni, setNi] = useState(navIcons);
+  const [niSaved, setNiSaved] = useState(false);
+  const [niErr, setNiErr] = useState<string | null>(null);
+  const [niBusy, setNiBusy] = useState(false);
+  const catIconUrl = ni.category ? `data:image/svg+xml,${encodeURIComponent(ni.category)}` : "";
+  async function onCategorySvg(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    if (f.size > 100000) { setNiErr("ফাইলটি অনেক বড় (১০০KB এর নিচে দিন)।"); return; }
+    const text = await f.text();
+    if (!/<svg[\s\S]*<\/svg>/i.test(text)) { setNiErr("এটি সঠিক SVG ফাইল নয়।"); return; }
+    setNiErr(null); setNiSaved(false); setNi({ ...ni, category: text });
+  }
+
   return (
     <div className="space-y-5 max-w-2xl">
       {/* Delivery charges */}
@@ -151,6 +168,28 @@ export function SettingsForm({
           <div><label className={lbl}>Address</label><input value={s.address} onChange={(e) => setS({ ...s, address: e.target.value })} placeholder="Store address" className={cls} /></div>
         </div>
         <SaveRow saved={storeSaved} onSave={async () => { await saveStoreSettings(s); setStoreSaved(true); router.refresh(); }} />
+      </Card>
+
+      {/* Navigation icon — Category (custom SVG upload) */}
+      <Card icon="🧭" iconBg="#eef2ff" iconColor="#4f46e5" title="ন্যাভ আইকন — ক্যাটাগরি"
+        desc="নিচের ন্যাভ বার-এর “ক্যাটাগরি” আইকন। নিজের SVG আপলোড করুন। খালি রাখলে ডিফল্ট বক্স আইকন থাকবে।">
+        <div className="flex items-center gap-4">
+          <span className="inline-grid place-items-center h-14 w-14 rounded-xl bg-white ring-1 ring-black/10 shrink-0">
+            {catIconUrl
+              ? <img src={catIconUrl} alt="" className="h-7 w-7 object-contain" />
+              : <svg viewBox="0 0 24 24" fill="none" stroke="#9a94a1" strokeWidth="1.8" className="h-7 w-7"><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z" /></svg>}
+          </span>
+          <div className="space-y-1.5">
+            <input type="file" accept=".svg,image/svg+xml" onChange={onCategorySvg}
+              className="block text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-1.5 file:text-indigo-600 file:font-medium file:cursor-pointer" />
+            {ni.category
+              ? <button type="button" onClick={() => { setNi({ ...ni, category: "" }); setNiSaved(false); }} className="text-xs underline" style={{ color: "#dc2626" }}>ডিফল্ট আইকনে ফিরে যান</button>
+              : <p className="text-xs dc-muted">শুধু .svg ফাইল · ১০০KB এর নিচে</p>}
+          </div>
+        </div>
+        <SaveRow busy={niBusy} saved={niSaved} err={niErr}
+          onSave={async () => { setNiErr(null); setNiSaved(false); setNiBusy(true); const res = await saveNavIcons({ category: ni.category }); setNiBusy(false); if (!res.ok) { setNiErr(res.error ?? "Save failed."); return; } setNiSaved(true); router.refresh(); }} />
+        <StatusPill ok={!!ni.category} okText="কাস্টম আইকন সেট করা আছে" badText="ডিফল্ট বক্স আইকন" />
       </Card>
 
       {/* CarryBee courier */}

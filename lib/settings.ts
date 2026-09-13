@@ -50,6 +50,25 @@ export interface MobileSettings {
   apiKey: string; // access token the Android app uses (Bearer). Empty = mobile API disabled.
 }
 
+export interface NavIconsSettings {
+  category: string; // raw SVG markup for the bottom-nav "category" tab. "" = default box icon.
+}
+
+export interface FlashSaleSettings {
+  title: string;        // heading shown above the flash-sale row
+  productIds: string[]; // product ids (order preserved) shown in the homepage flash-sale strip
+  endsAt: string;       // ISO end time for the countdown. "" = no timer / never ends
+}
+
+export interface HomeStripSettings {
+  gif: string;   // URL of a slim GIF/image strip shown right under the hero banner. "" = hidden
+  link: string;  // optional destination when the strip is tapped
+}
+
+export interface FeaturedSettings {
+  productIds: string[]; // admin hand-picked "featured" products (order preserved). Best-sellers fill the rest.
+}
+
 export interface BdCourierSettings {
   apiToken: string; // bdcourier.com API token for the customer courier-ratio (fraud) check
   suppressBelowRatio: number; // 0 = off. Orders from customers whose courier success rate
@@ -150,6 +169,26 @@ export function getBdCourierSettings(): Promise<BdCourierSettings> {
 /** Store-homepage banner images (hero slider + offer slider). Editable from admin. */
 export function getHomeBanners(): Promise<HomeBannersSettings> {
   return readSetting<HomeBannersSettings>("home_banners", { hero: [], offers: [] });
+}
+
+/** Custom bottom-nav icons uploaded from the admin panel (SVG). Empty = built-in default. */
+export function getNavIcons(): Promise<NavIconsSettings> {
+  return readSetting<NavIconsSettings>("nav_icons", { category: "" });
+}
+
+/** Homepage flash-sale strip — title + the products chosen from the admin panel. */
+export function getFlashSale(): Promise<FlashSaleSettings> {
+  return readSetting<FlashSaleSettings>("flash_sale", { title: "ফ্ল্যাশ সেল", productIds: [], endsAt: "" });
+}
+
+/** Slim GIF/image strip shown right under the hero banner. Uploaded from admin. */
+export function getHomeStrip(): Promise<HomeStripSettings> {
+  return readSetting<HomeStripSettings>("home_strip", { gif: "", link: "" });
+}
+
+/** Admin hand-picked featured products (order preserved). Best-sellers fill remaining slots. */
+export function getFeatured(): Promise<FeaturedSettings> {
+  return readSetting<FeaturedSettings>("featured", { productIds: [] });
 }
 
 /** Anthropic API settings for the AI order-screenshot reader. */

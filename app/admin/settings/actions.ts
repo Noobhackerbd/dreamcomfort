@@ -55,6 +55,28 @@ export async function saveMetaSettings(meta: { pixelId: string; capiToken: strin
   return { ok: true };
 }
 
+export async function saveNavIcons(icons: { category: string }) {
+  await requireAdmin();
+  try {
+    let svg = (icons.category || "").trim();
+    if (svg) {
+      // Hardening (admin-only, but keep it clean): drop scripts and inline event handlers.
+      svg = svg
+        .replace(/<script[\s\S]*?<\/script>/gi, "")
+        .replace(/\son\w+\s*=\s*"[^"]*"/gi, "")
+        .replace(/\son\w+\s*=\s*'[^']*'/gi, "");
+      if (!/<svg[\s\S]*<\/svg>/i.test(svg)) return { ok: false, error: "সঠিক SVG দিন।" };
+      if (svg.length > 100000) return { ok: false, error: "SVG ফাইলটি অনেক বড় (১০০KB এর নিচে দিন)।" };
+    }
+    await saveSetting("nav_icons", { category: svg });
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? "সেভ ব্যর্থ। settings টেবিল আছে কিনা দেখুন।" };
+  }
+  revalidatePath("/admin/settings");
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
 export async function saveMobileSettings(m: { apiKey: string }) {
   await requireAdmin();
   try {

@@ -6,7 +6,7 @@ import { MetaPixel } from "@/components/MetaPixel";
 import { TikTokPixel } from "@/components/TikTokPixel";
 import { VisitTracker } from "@/components/VisitTracker";
 import { ScrollTracker } from "@/components/ScrollTracker";
-import { getMetaSettings, getStoreSettings, getTikTokSettings } from "@/lib/settings";
+import { getMetaSettings, getStoreSettings, getTikTokSettings, getNavIcons } from "@/lib/settings";
 
 // Self-hosted via next/font — no render-blocking Google Fonts request, auto-preloaded.
 // Premium, serious type: geometric Jakarta for Latin/numbers, clean Hind Siliguri for
@@ -54,7 +54,7 @@ export const viewport: Viewport = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const [landing, meta, store, tiktok] = await Promise.all([getLandingConfig(), getMetaSettings(), getStoreSettings(), getTikTokSettings()]);
+  const [landing, meta, store, tiktok, navIcons] = await Promise.all([getLandingConfig(), getMetaSettings(), getStoreSettings(), getTikTokSettings(), getNavIcons()]);
   const orgJsonLd = {
     "@context": "https://schema.org",
     "@graph": [
@@ -129,7 +129,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         </HideOnAdmin>
 
         {/* Mobile bottom tab bar — storefront only (self-hides on admin/order/landing). */}
-        <StorefrontTabBar />
+        <StorefrontTabBar categoryIcon={navIcons.category} />
 
         {/* Slide-out cart drawer (opens from the header cart icon / add-to-cart). */}
         <CartDrawer />

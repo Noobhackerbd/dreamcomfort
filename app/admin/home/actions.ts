@@ -5,6 +5,47 @@ import { saveSetting } from "@/lib/settings";
 import type { HomeBannersSettings } from "@/lib/settings";
 import { revalidatePath } from "next/cache";
 
+export async function saveFeatured(input: { productIds: string[] }) {
+  await requireAdmin();
+  try {
+    const productIds = Array.from(new Set((input.productIds || []).filter((x) => typeof x === "string" && x))).slice(0, 30);
+    await saveSetting("featured", { productIds });
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? "Save failed. Is the settings table present (supabase-migration-2.sql)?" };
+  }
+  revalidatePath("/admin/home");
+  revalidatePath("/");
+  return { ok: true };
+}
+
+export async function saveHomeStrip(input: { gif: string; link?: string }) {
+  await requireAdmin();
+  try {
+    await saveSetting("home_strip", { gif: (input.gif || "").trim(), link: (input.link || "").trim() });
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? "Save failed. Is the settings table present (supabase-migration-2.sql)?" };
+  }
+  revalidatePath("/admin/home");
+  revalidatePath("/");
+  return { ok: true };
+}
+
+export async function saveFlashSale(input: { title: string; productIds: string[]; endsAt?: string }) {
+  await requireAdmin();
+  try {
+    const title = (input.title || "").trim().slice(0, 60) || "ফ্ল্যাশ সেল";
+    const productIds = Array.from(new Set((input.productIds || []).filter((x) => typeof x === "string" && x))).slice(0, 30);
+    let endsAt = "";
+    if (input.endsAt) { const t = new Date(input.endsAt); if (!isNaN(t.getTime())) endsAt = t.toISOString(); }
+    await saveSetting("flash_sale", { title, productIds, endsAt });
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? "Save failed. Is the settings table present (supabase-migration-2.sql)?" };
+  }
+  revalidatePath("/admin/home");
+  revalidatePath("/");
+  return { ok: true };
+}
+
 export async function saveHomeBanners(banners: HomeBannersSettings) {
   await requireAdmin();
   const clean = (arr: any[]) =>

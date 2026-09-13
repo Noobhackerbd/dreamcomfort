@@ -84,8 +84,10 @@ export default async function ProductPage({ params }: { params: { slug: string }
   const related = await getRelated(p.category_id, p.id);
   const rev = await getReviews(p.id);
   // Prefer REAL customer reviews for the rating when we have them; else the admin-set value.
-  const rating = rev.count > 0 ? rev.average : (typeof p.rating === "number" && p.rating > 0 ? p.rating : 4.9);
   const reviews = rev.count > 0 ? rev.count : (typeof p.review_count === "number" ? p.review_count : 0);
+  const rating = rev.count > 0 ? rev.average : (typeof p.rating === "number" && p.rating > 0 ? p.rating : 0);
+  // No reviews & no rating → don't show a (fake) rating at all.
+  const showRating = reviews > 0 && rating > 0;
 
   const highlights = Array.isArray(p.highlights) && p.highlights.length ? p.highlights.filter(Boolean) : DEFAULT_HIGHLIGHTS;
   const specs = Array.isArray(p.specs) ? p.specs.filter((s) => s && s.label) : [];
@@ -117,10 +119,12 @@ export default async function ProductPage({ params }: { params: { slug: string }
         <div>
           <h1 className="text-2xl lg:text-3xl font-bold font-display leading-snug">{name}</h1>
 
-          <div className="mt-2.5 flex items-center gap-2">
-            <Stars rating={rating} />
-            <span className="text-sm text-gray-500">{rating.toFixed(1)}{reviews > 0 ? ` · ${reviews} রিভিউ` : ""}</span>
-          </div>
+          {showRating && (
+            <div className="mt-2.5 flex items-center gap-2">
+              <Stars rating={rating} />
+              <span className="text-sm text-gray-500">{rating.toFixed(1)} · {reviews} রিভিউ</span>
+            </div>
+          )}
 
           <div className="mt-4 flex items-center gap-3 flex-wrap">
             <span className="text-3xl font-extrabold text-accent-dark">{taka(p.price)}</span>

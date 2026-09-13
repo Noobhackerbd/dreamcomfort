@@ -3,12 +3,16 @@
 // badges, categories, featured products and an offer banner.
 import type { Metadata } from "next";
 import { getServerSupabase } from "@/lib/supabase/server";
-import { getHomeBanners } from "@/lib/settings";
+import { getHomeBanners, getFlashSale, getHomeStrip } from "@/lib/settings";
 import { STORE, STORE_NAME } from "@/lib/config";
 import type { Product, Category } from "@/lib/types";
 import { ProductCard } from "@/components/ProductCard";
 import { BannerSlider, type Slide } from "@/components/store/BannerSlider";
 import { NewsletterSignup } from "@/components/store/NewsletterSignup";
+import { FlashCountdown } from "@/components/store/FlashCountdown";
+import { ForYou } from "@/components/store/ForYou";
+import { getForYou } from "@/app/for-you-actions";
+import { getFeaturedProducts } from "@/lib/featured";
 
 export const dynamic = "force-dynamic";
 
@@ -35,18 +39,36 @@ function SectionHead({ title, href }: { title: string; href?: string }) {
 
 export default async function HomePage() {
   const supabase = getServerSupabase();
-  const [{ data: cats }, { data: prods }, banners, reviewsRes] = await Promise.all([
+  const [{ data: cats }, { data: prods }, banners, reviewsRes, flash, strip] = await Promise.all([
     supabase.from("categories").select("*").order("sort_order", { ascending: true }),
     supabase.from("products").select("*").eq("is_active", true).order("created_at", { ascending: false }).limit(24),
     getHomeBanners(),
     supabase.from("product_reviews").select("id, name, rating, body, products(name_bn, name_en, slug)").eq("status", "approved").not("body", "is", null).order("created_at", { ascending: false }).limit(9),
+    getFlashSale(),
+    getHomeStrip(),
   ]);
 
   const categories = (cats as Category[]) ?? [];
   const products = (prods as Product[]) ?? [];
+
+  // Flash sale — products chosen in admin, in the admin-set order.
+  let flashProducts: Product[] = [];
+  if (flash.productIds.length) {
+    const { data: fp } = await supabase.from("products").select("*").in("id", flash.productIds).eq("is_active", true);
+    const map = Object.fromEntries(((fp as Product[]) ?? []).map((p) => [p.id, p]));
+    flashProducts = flash.productIds.map((id) => map[id]).filter(Boolean) as Product[];
+  }
+  // Hide the flash sale once its countdown has passed (page is force-dynamic → fresh each request).
+  const flashEndsMs = flash.endsAt ? new Date(flash.endsAt).getTime() : 0;
+  const flashEnded = flashEndsMs > 0 && flashEndsMs <= Date.now();
+  const showFlash = flashProducts.length > 0 && !flashEnded;
   const reviews = ((reviewsRes as any)?.data ?? []) as any[];
-  const featured = products.slice(0, 8);
-  const rest = products.slice(8, 20);
+
+  // Featured — admin picks first, then best-sellers, then newest (in-stock only).
+  const featured = await getFeaturedProducts(8);
+
+  // "For You" — personalized feed (first page here; client re-ranks by view history).
+  const forYou = await getForYou({ offset: 0, limit: 8 });
 
   // Hero slides: uploaded banners, else fall back to featured product images.
   const heroSlides: Slide[] = banners.hero.length
@@ -56,22 +78,50 @@ export default async function HomePage() {
   return (
     <div>
       {/* Hero */}
-      {heroSlides.length > 0 && <BannerSlider slides={heroSlides} aspect="16 / 9" arrows interval={4000} />}
+      {heroSlides.length > 0 && <BannerSlider slides={heroSlides} aspect="16 / 9" arrows rounded="0" interval={4000} />}
 
-      {/* Trust badges */}
-      <div className="mt-4 grid grid-cols-3 rounded-2xl border border-black/5 bg-white overflow-hidden">
-        {[
-          { c: "#3E9BD1", t: "দ্রুত ডেলিভারি", s: "সারা দেশে ২-৩ দিনে", d: "M1 3h15v13H1zM16 8h4l3 3v5h-7M5.5 18.5a2.5 2.5 0 105 0M18.5 18.5a2.5 2.5 0 105 0" },
-          { c: "#16a34a", t: "ক্যাশ অন ডেলিভারি", s: "হাতে পেয়ে টাকা দিন", d: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10zM9 12l2 2 4-4" },
-          { c: "#E77BA6", t: "সহজ রিটার্ন", s: "সমস্যা হলে বদলে নিন", d: "M3 12a9 9 0 103-6.7L3 8M3 3v5h5" },
-        ].map((b, i) => (
-          <div key={i} className={"px-2 py-3.5 text-center " + (i > 0 ? "border-l border-black/5" : "")}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={b.c} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="mx-auto mb-1.5"><path d={b.d} /></svg>
-            <p className="text-[12.5px] font-semibold leading-tight">{b.t}</p>
-            <p className="text-[10.5px] text-gray-400">{b.s}</p>
+      {/* Slim GIF/image strip below the hero (admin-uploaded) */}
+      {strip.gif && (
+        strip.link ? (
+          <a href={strip.link} className="mt-4 block overflow-hidden rounded-2xl">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={strip.gif} alt="" className="w-full h-auto" />
+          </a>
+        ) : (
+          <div className="mt-4 overflow-hidden rounded-2xl">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={strip.gif} alt="" className="w-full h-auto" />
           </div>
-        ))}
-      </div>
+        )
+      )}
+
+      {/* Flash sale — single horizontal-scrolling row (PC + mobile) */}
+      {showFlash && (
+        <section>
+          <div className="mb-3 mt-6">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-xl font-bold font-display inline-flex items-center gap-2">
+                <span className="inline-grid place-items-center h-7 w-7 rounded-lg text-white" style={{ background: "#F0530E" }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M13 2L4.5 13.5H11l-1 8.5L19.5 10H13z" /></svg>
+                </span>
+                {flash.title || "ফ্ল্যাশ সেল"}
+              </h2>
+              <a href="/products" className="text-sm font-semibold text-brand-dark inline-flex items-center gap-1 shrink-0">
+                সব দেখুন
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6" /></svg>
+              </a>
+            </div>
+            {flash.endsAt && <div className="mt-2"><FlashCountdown endsAt={flash.endsAt} /></div>}
+          </div>
+          <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1" style={{ scrollbarWidth: "none" }}>
+            {flashProducts.map((p) => (
+              <div key={p.id} className="shrink-0 w-[150px] sm:w-[190px]">
+                <ProductCard p={p} />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Categories */}
       {categories.length > 0 && (
@@ -149,13 +199,11 @@ export default async function HomePage() {
         </>
       )}
 
-      {/* All products */}
-      {rest.length > 0 && (
+      {/* For You — personalized recommendations with load-more */}
+      {forYou.products.length > 0 && (
         <>
-          <SectionHead title="সব পণ্য" href="/products" />
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {rest.map((p) => <ProductCard key={p.id} p={p} />)}
-          </div>
+          <SectionHead title="আপনার জন্য" />
+          <ForYou initial={forYou.products} initialHasMore={forYou.hasMore} pageSize={8} />
         </>
       )}
 
