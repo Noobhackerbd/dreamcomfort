@@ -2,8 +2,9 @@
 // funnel now lives at /landing. This is a normal shop home: hero slider, trust
 // badges, categories, featured products and an offer banner.
 import type { Metadata } from "next";
+import Image from "next/image";
 import { getServerSupabase } from "@/lib/supabase/server";
-import { getHomeBanners, getFlashSale, getHomeStrip } from "@/lib/settings";
+import { getHomeBanners, getFlashSale, getHomeStrip, getCategoryImages } from "@/lib/settings";
 import { STORE, STORE_NAME } from "@/lib/config";
 import type { Product, Category } from "@/lib/types";
 import { ProductCard } from "@/components/ProductCard";
@@ -39,13 +40,14 @@ function SectionHead({ title, href }: { title: string; href?: string }) {
 
 export default async function HomePage() {
   const supabase = getServerSupabase();
-  const [{ data: cats }, { data: prods }, banners, reviewsRes, flash, strip] = await Promise.all([
+  const [{ data: cats }, { data: prods }, banners, reviewsRes, flash, strip, catImages] = await Promise.all([
     supabase.from("categories").select("*").order("sort_order", { ascending: true }),
     supabase.from("products").select("*").eq("is_active", true).order("created_at", { ascending: false }).limit(24),
     getHomeBanners(),
     supabase.from("product_reviews").select("id, name, rating, body, products(name_bn, name_en, slug)").eq("status", "approved").not("body", "is", null).order("created_at", { ascending: false }).limit(9),
     getFlashSale(),
     getHomeStrip(),
+    getCategoryImages(),
   ]);
 
   const categories = (cats as Category[]) ?? [];
@@ -127,13 +129,19 @@ export default async function HomePage() {
       {categories.length > 0 && (
         <>
           <SectionHead title="ক্যাটাগরি" href="/products" />
-          <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1" style={{ scrollbarWidth: "none" }}>
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5">
             {categories.map((c, i) => (
-              <a key={c.id} href={`/products?category=${c.slug}`} className="shrink-0 w-[80px] text-center">
-                <div className="w-[80px] h-[80px] rounded-2xl border border-black/5 bg-white flex items-center justify-center mb-1.5" style={{ color: CAT_COLORS[i % CAT_COLORS.length] }}>
-                  <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20.6 6.6l-8-4a2 2 0 00-1.9 0l-8 4M3 6.6v10.8a2 2 0 001.1 1.8l7 3.4a2 2 0 001.8 0l7-3.4a2 2 0 001.1-1.8V6.6M3 6.6l9 4.4 9-4.4M12 22V11" /></svg>
+              <a key={c.id} href={`/products?category=${c.slug}`} className="group rounded-xl border border-black/5 bg-white overflow-hidden hover:shadow-sm transition">
+                <div className="relative aspect-square bg-[#f6f6f6] overflow-hidden">
+                  {catImages[c.id] ? (
+                    <Image src={catImages[c.id]} alt={c.name_bn || c.name_en} fill sizes="(max-width:768px) 33vw, 140px" className="object-cover group-hover:scale-105 transition-transform duration-300" />
+                  ) : (
+                    <span className="absolute inset-0 grid place-items-center" style={{ color: CAT_COLORS[i % CAT_COLORS.length] }}>
+                      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20.6 6.6l-8-4a2 2 0 00-1.9 0l-8 4M3 6.6v10.8a2 2 0 001.1 1.8l7 3.4a2 2 0 001.8 0l7-3.4a2 2 0 001.1-1.8V6.6M3 6.6l9 4.4 9-4.4M12 22V11" /></svg>
+                    </span>
+                  )}
                 </div>
-                <span className="text-[11.5px] font-semibold leading-tight block line-clamp-2">{c.name_bn || c.name_en}</span>
+                <span className="block px-1.5 py-2 text-center text-[11.5px] font-semibold leading-tight line-clamp-2">{c.name_bn || c.name_en}</span>
               </a>
             ))}
           </div>

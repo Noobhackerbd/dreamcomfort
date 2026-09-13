@@ -2,7 +2,24 @@
 
 import { getServerSupabase } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/admin-auth";
+import { getCategoryImages, saveSetting } from "@/lib/settings";
 import { revalidatePath } from "next/cache";
+
+/** Set (or clear, when url is empty) a category's image. Stored in settings — no DB migration. */
+export async function setCategoryImage(id: string, url: string) {
+  await requireAdmin();
+  try {
+    const map = await getCategoryImages();
+    const next: Record<string, string> = { ...map };
+    if (url && url.trim()) next[id] = url.trim(); else delete next[id];
+    await saveSetting("category_images", next);
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? "Save failed." };
+  }
+  revalidatePath("/admin/categories");
+  revalidatePath("/");
+  return { ok: true };
+}
 
 function slugify(input: string): string {
   const base = input

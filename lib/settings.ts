@@ -191,6 +191,11 @@ export function getFeatured(): Promise<FeaturedSettings> {
   return readSetting<FeaturedSettings>("featured", { productIds: [] });
 }
 
+/** Per-category image URLs (uploaded from admin), keyed by category id. */
+export function getCategoryImages(): Promise<Record<string, string>> {
+  return readSetting<Record<string, string>>("category_images", {});
+}
+
 /** Anthropic API settings for the AI order-screenshot reader. */
 export function getAiSettings(): Promise<AiSettings> {
   return readSetting<AiSettings>("ai", {

@@ -31,8 +31,8 @@ export function ProductCard({ p }: { p: Product }) {
   const off = hasDiscount ? Math.round((1 - p.price / (p.compare_at_price as number)) * 100) : 0;
   const rating = typeof p.rating === "number" && p.rating > 0 ? p.rating : 0;
   const reviews = typeof p.review_count === "number" ? p.review_count : 0;
-  // Only show a rating when there are real reviews — no fake default stars.
-  const showRating = reviews > 0 && rating > 0;
+  // Show stars whenever a rating is set (admin or reviews). Count shown only if > 0.
+  const showRating = rating > 0;
 
   return (
     <a href={`/product/${p.slug}`}
@@ -56,7 +56,7 @@ export function ProductCard({ p }: { p: Product }) {
         {showRating && (
           <div className="mt-1 flex items-center gap-1">
             <Stars rating={rating} />
-            <span className="text-[11.5px] text-gray-400">({reviews})</span>
+            {reviews > 0 && <span className="text-[11.5px] text-gray-400">({reviews})</span>}
           </div>
         )}
       </div>

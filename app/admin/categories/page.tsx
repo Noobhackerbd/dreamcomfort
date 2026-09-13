@@ -1,14 +1,16 @@
 import { getServerSupabase } from "@/lib/supabase/server";
 import { Category } from "@/lib/types";
+import { getCategoryImages } from "@/lib/settings";
 import { CategoryManager, type CategoryRow } from "./CategoryManager";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminCategories() {
   const supabase = getServerSupabase();
-  const [{ data: cats }, { data: prods }] = await Promise.all([
+  const [{ data: cats }, { data: prods }, images] = await Promise.all([
     supabase.from("categories").select("*").order("sort_order", { ascending: true }),
     supabase.from("products").select("category_id, is_active"),
+    getCategoryImages(),
   ]);
 
   // Count products per category (total + active).
@@ -36,7 +38,7 @@ export default async function AdminCategories() {
     <div>
       <h1 className="text-2xl font-bold mb-1">Categories</h1>
       <p className="text-sm dc-muted mb-5">Group your products. Drag order with the arrows; the store shows them in this order.</p>
-      <CategoryManager categories={rows} />
+      <CategoryManager categories={rows} images={images} />
     </div>
   );
 }

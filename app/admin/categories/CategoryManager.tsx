@@ -3,7 +3,42 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/admin/icons";
-import { saveCategory, deleteCategory, reorderCategory } from "./actions";
+import { getSupabaseBrowserClient } from "@/lib/supabase/ssr-browser";
+import { saveCategory, deleteCategory, reorderCategory, setCategoryImage } from "./actions";
+
+async function uploadCatImage(file: File): Promise<string | null> {
+  const supabase = getSupabaseBrowserClient();
+  const ext = file.name.split(".").pop() || "jpg";
+  const path = `categories/${Date.now()}-${Math.floor(Math.random() * 1e6)}.${ext}`;
+  const { error } = await supabase.storage.from("product-images").upload(path, file, { cacheControl: "3600" });
+  if (error) return null;
+  return supabase.storage.from("product-images").getPublicUrl(path).data.publicUrl;
+}
+
+function CatImageCell({ id, url }: { id: string; url?: string }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]; e.target.value = "";
+    if (!f) return;
+    if (f.size > 3 * 1024 * 1024) { alert("ছবিটি ৩MB এর নিচে দিন।"); return; }
+    setBusy(true);
+    const u = await uploadCatImage(f);
+    if (u) await setCategoryImage(id, u);
+    setBusy(false); router.refresh();
+  }
+  async function remove() { setBusy(true); await setCategoryImage(id, ""); setBusy(false); router.refresh(); }
+  return (
+    <div className="shrink-0 text-center">
+      <label className="relative block h-12 w-12 rounded-lg overflow-hidden ring-1 ring-black/10 bg-[#f3f3f3] cursor-pointer grid place-items-center" title="ছবি আপলোড করুন">
+        {url ? <img src={url} alt="" className="h-full w-full object-cover" /> : <Icon name="image" className="h-4 w-4 text-gray-400" />}
+        {busy && <span className="absolute inset-0 grid place-items-center bg-white/60 text-[10px]">…</span>}
+        <input type="file" accept="image/*" className="hidden" onChange={onFile} disabled={busy} />
+      </label>
+      {url && <button onClick={remove} disabled={busy} className="mt-0.5 text-[10px] underline" style={{ color: "#dc2626" }}>মুছুন</button>}
+    </div>
+  );
+}
 
 export interface CategoryRow {
   id: string;
@@ -64,7 +99,7 @@ function DeleteButton({ id, name, onDone }: { id: string; name: string; onDone: 
   );
 }
 
-export function CategoryManager({ categories }: { categories: CategoryRow[] }) {
+export function CategoryManager({ categories, images = {} }: { categories: CategoryRow[]; images?: Record<string, string> }) {
   const router = useRouter();
   const [nameBn, setNameBn] = useState("");
   const [nameEn, setNameEn] = useState("");
@@ -123,6 +158,7 @@ export function CategoryManager({ categories }: { categories: CategoryRow[] }) {
                 <EditRow c={c} onDone={() => { setEditId(null); router.refresh(); }} />
               ) : (
                 <>
+                  <CatImageCell id={c.id} url={images[c.id]} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-semibold text-[14px] truncate">{c.name_bn || c.name_en}</p>

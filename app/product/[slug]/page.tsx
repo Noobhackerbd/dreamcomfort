@@ -86,8 +86,8 @@ export default async function ProductPage({ params }: { params: { slug: string }
   // Prefer REAL customer reviews for the rating when we have them; else the admin-set value.
   const reviews = rev.count > 0 ? rev.count : (typeof p.review_count === "number" ? p.review_count : 0);
   const rating = rev.count > 0 ? rev.average : (typeof p.rating === "number" && p.rating > 0 ? p.rating : 0);
-  // No reviews & no rating → don't show a (fake) rating at all.
-  const showRating = reviews > 0 && rating > 0;
+  // Show the rating whenever one exists (real reviews or admin-set); hide only when none.
+  const showRating = rating > 0;
 
   const highlights = Array.isArray(p.highlights) && p.highlights.length ? p.highlights.filter(Boolean) : DEFAULT_HIGHLIGHTS;
   const specs = Array.isArray(p.specs) ? p.specs.filter((s) => s && s.label) : [];
@@ -122,7 +122,7 @@ export default async function ProductPage({ params }: { params: { slug: string }
           {showRating && (
             <div className="mt-2.5 flex items-center gap-2">
               <Stars rating={rating} />
-              <span className="text-sm text-gray-500">{rating.toFixed(1)} · {reviews} রিভিউ</span>
+              <span className="text-sm text-gray-500">{rating.toFixed(1)}{reviews > 0 ? ` · ${reviews} রিভিউ` : ""}</span>
             </div>
           )}
 
