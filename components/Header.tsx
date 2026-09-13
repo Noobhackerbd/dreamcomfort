@@ -1,8 +1,10 @@
 import { HeaderIcons } from "@/components/store/HeaderIcons";
 import { PredictiveSearch } from "@/components/store/PredictiveSearch";
 import { ImageSearchButton } from "@/components/store/ImageSearchButton";
+import { HeaderMenu } from "@/components/store/HeaderMenu";
+import { AccountButton } from "@/components/store/AccountButton";
 
-// Slim storefront header: wordmark + search field + image-search + cart.
+// Slim storefront header: wordmark + search + (desktop) menu & account + image-search + cart.
 export function Header(_props: { logoUrl?: string; phone?: string }) {
   return (
     <header className="site-header sticky top-0 z-40 bg-cream/90 backdrop-blur border-b border-black/5">
@@ -15,9 +17,12 @@ export function Header(_props: { logoUrl?: string; phone?: string }) {
 
         <PredictiveSearch />
 
-        <ImageSearchButton />
-
-        <HeaderIcons />
+        <div className="flex items-center gap-0.5 sm:gap-1 shrink-0 sm:ml-auto">
+          <HeaderMenu />
+          <AccountButton className="hidden md:grid place-items-center h-9 w-9 rounded-full text-gray-700 hover:bg-black/5 transition" />
+          <ImageSearchButton />
+          <HeaderIcons />
+        </div>
       </div>
     </header>
   );

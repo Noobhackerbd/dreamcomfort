@@ -74,12 +74,22 @@ export function StorefrontTabBar({ categoryIcon }: { categoryIcon?: string }) {
         {TABS.map((t) => {
           const active = t.href === "/" ? pathname === "/" : pathname.startsWith(t.href);
           const useCustom = t.href === "/products" && catIconUrl;
+          const icon = useCustom
+            ? <img src={catIconUrl} alt="" width={22} height={22} className="h-[22px] w-[22px] object-contain" style={{ opacity: active ? 1 : 0.75 }} />
+            : <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={t.d} /></svg>;
+          // Account opens the login popup (redirects to /account if already signed in).
+          if (t.href === "/account") {
+            return (
+              <button key={t.href} onClick={() => window.dispatchEvent(new Event("dc:open-login"))}
+                className="flex-1 flex flex-col items-center gap-0.5 text-[10.5px] font-semibold" style={{ color: active ? "#3E9BD1" : "#9a94a1" }}>
+                {icon}{t.label}
+              </button>
+            );
+          }
           return (
             <a key={t.href} href={t.href} className="flex-1 flex flex-col items-center gap-0.5 text-[10.5px] font-semibold"
               style={{ color: active ? "#3E9BD1" : "#9a94a1" }}>
-              {useCustom
-                ? <img src={catIconUrl} alt="" width={22} height={22} className="h-[22px] w-[22px] object-contain" style={{ opacity: active ? 1 : 0.75 }} />
-                : <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={t.d} /></svg>}
+              {icon}
               {t.label}
             </a>
           );

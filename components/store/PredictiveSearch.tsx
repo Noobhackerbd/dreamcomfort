@@ -37,7 +37,7 @@ export function PredictiveSearch() {
     <>
       {/* Field-shaped search trigger — visible on mobile & desktop */}
       <button onClick={() => setOpen(true)} aria-label="Search"
-        className="ml-2.5 sm:ml-4 mr-0.5 flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2 h-8 sm:h-9 rounded-full bg-white/70 ring-1 ring-black/10 pl-2.5 pr-3 sm:pl-3 sm:pr-4 text-left text-gray-400 hover:bg-white hover:ring-black/20 transition">
+        className="ml-2.5 sm:ml-4 mr-0.5 flex min-w-0 flex-1 sm:flex-none sm:w-56 items-center gap-1.5 sm:gap-2 h-8 sm:h-9 rounded-full bg-white/70 ring-1 ring-black/10 pl-2.5 pr-3 sm:pl-3 sm:pr-4 text-left text-gray-400 hover:bg-white hover:ring-black/20 transition">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className="h-4 w-4 sm:h-[18px] sm:w-[18px] shrink-0 text-gray-500"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" /></svg>
         <span className="truncate text-[12px] sm:text-sm">পণ্য খুঁজুন...</span>
       </button>

@@ -29,8 +29,8 @@ import { STORE, STORE_NAME } from "@/lib/config";
 import { getLandingConfig } from "@/lib/landing";
 import { StorefrontTabBar } from "@/components/store/StorefrontTabBar";
 import { SourceTracker } from "@/components/SourceTracker";
-import { SupportFab } from "@/components/store/SupportFab";
 import { CartDrawer } from "@/components/store/CartDrawer";
+import { LoginModal } from "@/components/store/LoginModal";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://dreamcomfortbd.com";
 
@@ -134,8 +134,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {/* Slide-out cart drawer (opens from the header cart icon / add-to-cart). */}
         <CartDrawer />
 
-        {/* Elegant floating support button — storefront only (self-hides elsewhere). */}
-        <SupportFab phone={store.phone} facebook={STORE.facebook} />
+        {/* Login popup — opens when the account icon/tab is tapped. */}
+        <LoginModal />
 
         {/* Trackers only on the storefront — never on /admin (keeps visitor &
             Pixel data clean, no admin noise). */}
