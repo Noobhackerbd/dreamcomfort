@@ -41,10 +41,24 @@ export async function submitReview(input: { productId: string; name: string; rat
       name, rating, body, images: (input.images || []).slice(0, 4), status: "approved",
     });
     if (error) return { ok: false, error: error.message };
+    // Keep products.rating (avg) + review_count in sync so the PRODUCT CARD shows
+    // the rating too — the card reads products.rating, not the reviews table.
+    await syncProductRating(svc, input.productId);
     return { ok: true };
   } catch (e: any) {
     return { ok: false, error: e?.message ?? "ব্যর্থ।" };
   }
+}
+
+/** Recompute a product's average rating + review count from approved reviews. */
+async function syncProductRating(svc: ReturnType<typeof getServerSupabase>, productId: string) {
+  try {
+    const { data } = await svc.from("product_reviews").select("rating").eq("product_id", productId).eq("status", "approved");
+    const ratings = (data ?? []).map((r: any) => Number(r.rating) || 0).filter((n: number) => n > 0);
+    const count = ratings.length;
+    const avg = count ? Math.round((ratings.reduce((a: number, b: number) => a + b, 0) / count) * 10) / 10 : null;
+    await svc.from("products").update({ rating: avg, review_count: count }).eq("id", productId);
+  } catch {}
 }
 
 export async function getReviews(productId: string): Promise<{ reviews: Review[]; count: number; average: number }> {
