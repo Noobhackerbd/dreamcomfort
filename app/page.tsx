@@ -40,11 +40,10 @@ function SectionHead({ title, href }: { title: string; href?: string }) {
 
 export default async function HomePage() {
   const supabase = getServerSupabase();
-  const [{ data: cats }, { data: prods }, banners, reviewsRes, flash, strip, catImages] = await Promise.all([
+  const [{ data: cats }, { data: prods }, banners, flash, strip, catImages] = await Promise.all([
     supabase.from("categories").select("*").order("sort_order", { ascending: true }),
     supabase.from("products").select("*").eq("is_active", true).order("created_at", { ascending: false }).limit(24),
     getHomeBanners(),
-    supabase.from("product_reviews").select("id, name, rating, body, products(name_bn, name_en, slug)").eq("status", "approved").not("body", "is", null).order("created_at", { ascending: false }).limit(9),
     getFlashSale(),
     getHomeStrip(),
     getCategoryImages(),
@@ -64,7 +63,6 @@ export default async function HomePage() {
   const flashEndsMs = flash.endsAt ? new Date(flash.endsAt).getTime() : 0;
   const flashEnded = flashEndsMs > 0 && flashEndsMs <= Date.now();
   const showFlash = flashProducts.length > 0 && !flashEnded;
-  const reviews = ((reviewsRes as any)?.data ?? []) as any[];
 
   // Featured — admin picks first, then best-sellers, then newest (in-stock only).
   const featured = await getFeaturedProducts(8);
@@ -164,47 +162,6 @@ export default async function HomePage() {
           <SectionHead title="বিশেষ অফার" />
           <BannerSlider slides={banners.offers} aspect="16 / 7" interval={4500} />
         </div>
-      )}
-
-      {/* Why choose us */}
-      <SectionHead title="কেন আমাদের বেছে নেবেন" />
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {[
-          { c: "#3E9BD1", t: "১০০% অরিজিনাল পণ্য", s: "যাচাই করা মানসম্পন্ন পণ্য", d: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10zM9 12l2 2 4-4" },
-          { c: "#16a34a", t: "ক্যাশ অন ডেলিভারি", s: "হাতে পেয়ে টাকা দিন", d: "M2 7h20v10H2zM2 11h20M6 15h4" },
-          { c: "#E77BA6", t: "সারা দেশে ডেলিভারি", s: "৬৪ জেলায় পৌঁছে যাই", d: "M1 3h15v13H1zM16 8h4l3 3v5h-7M5.5 18.5a2.5 2.5 0 105 0M18.5 18.5a2.5 2.5 0 105 0" },
-          { c: "#9a7be0", t: "সহজ সাপোর্ট", s: "যেকোনো সময় পাশে আছি", d: "M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z" },
-        ].map((b, i) => (
-          <div key={i} className="rounded-2xl bg-white ring-1 ring-black/5 p-4 text-center">
-            <span className="mx-auto mb-2 grid place-items-center h-11 w-11 rounded-full" style={{ background: b.c + "1a", color: b.c }}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d={b.d} /></svg>
-            </span>
-            <p className="text-[13px] font-semibold text-gray-900 leading-tight">{b.t}</p>
-            <p className="text-[11px] text-gray-400 mt-0.5">{b.s}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Real customer reviews — social proof */}
-      {reviews.length > 0 && (
-        <>
-          <SectionHead title="গ্রাহকরা যা বলছেন" />
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {reviews.slice(0, 6).map((r) => (
-              <div key={r.id} className="rounded-2xl bg-white ring-1 ring-black/5 p-4">
-                <div className="flex items-center gap-1 text-amber-400 text-sm">{"★".repeat(r.rating)}<span className="text-gray-200">{"★".repeat(5 - r.rating)}</span></div>
-                <p className="mt-2 text-sm text-gray-700 leading-relaxed line-clamp-4">{r.body}</p>
-                <div className="mt-3 flex items-center gap-2">
-                  <span className="h-7 w-7 rounded-full bg-brand-soft text-brand-dark grid place-items-center text-xs font-bold">{(r.name || "?").charAt(0).toUpperCase()}</span>
-                  <span className="text-xs">
-                    <span className="font-semibold text-gray-900 block leading-tight">{r.name || "গ্রাহক"}</span>
-                    {r.products?.slug && <a href={`/product/${r.products.slug}`} className="text-gray-400 hover:text-brand">{r.products.name_bn || r.products.name_en}</a>}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
       )}
 
       {/* For You — personalized recommendations with load-more */}

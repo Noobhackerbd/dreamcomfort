@@ -9,8 +9,7 @@ import { RecordView } from "@/components/store/RecordView";
 import { ProductGallery } from "./ProductGallery";
 import { ProductCard } from "@/components/ProductCard";
 import { FaqAccordion } from "@/components/store/FaqAccordion";
-import { MobileBuyBar } from "@/components/store/MobileBuyBar";
-import { RecentViewedStrip } from "@/components/store/RecentViewedStrip";
+import { WishlistButton } from "@/components/store/WishlistButton";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { ProductReviews } from "@/components/store/ProductReviews";
 import { getReviews } from "@/app/product/review-actions";
@@ -103,7 +102,7 @@ export default async function ProductPage({ params }: { params: { slug: string }
   };
 
   return (
-    <div className="pb-24 md:pb-0">
+    <div>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <ViewContentPixel id={p.id} value={p.price} name={name} />
       <RecordView id={p.id} />
@@ -148,8 +147,13 @@ export default async function ProductPage({ params }: { params: { slug: string }
 
           <p className="mt-5 text-gray-700 leading-relaxed whitespace-pre-line">{p.description_bn || p.description_en || "বিস্তারিত শীঘ্রই যোগ করা হবে।"}</p>
 
-          <div className="mt-6 hidden md:block">
-            <BuyButtons product={{ id: p.id, slug: p.slug, name, price: p.price, image: images[0] }} />
+          <div className="mt-6">
+            <div className="flex items-stretch gap-2">
+              <div className="flex-1 min-w-0">
+                <BuyButtons product={{ id: p.id, slug: p.slug, name, price: p.price, image: images[0] }} />
+              </div>
+              <WishlistButton id={p.id} className="shrink-0 w-[70px] grid place-items-center rounded-lg border border-black/10 bg-white hover:border-accent transition" />
+            </div>
             <p className="mt-3 text-xs text-gray-400">স্টক: {p.stock > 0 ? `${p.stock} টি` : "স্টকে নেই"}</p>
           </div>
 
@@ -214,16 +218,12 @@ export default async function ProductPage({ params }: { params: { slug: string }
 
       {related.length > 0 && (
         <section className="mt-14">
-          <h2 className="text-xl font-bold font-display mb-4">সম্পর্কিত পণ্য</h2>
+          <h2 className="text-xl font-bold font-display mb-4">আপনার পছন্দ হতে পারে</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {related.map((r) => <ProductCard key={r.id} p={r} />)}
           </div>
         </section>
       )}
-
-      <RecentViewedStrip excludeId={p.id} />
-
-      <MobileBuyBar product={{ id: p.id, slug: p.slug, name, price: p.price, image: images[0] }} compareAt={p.compare_at_price} />
     </div>
   );
 }

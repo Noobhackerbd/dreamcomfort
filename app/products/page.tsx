@@ -1,6 +1,8 @@
 // app/products/page.tsx — all products with category filter + search.
 import type { Metadata } from "next";
+import Image from "next/image";
 import { getServerSupabase } from "@/lib/supabase/server";
+import { getCategoryImages } from "@/lib/settings";
 import { Product, Category } from "@/lib/types";
 import { ProductCard } from "@/components/ProductCard";
 
@@ -39,9 +41,11 @@ async function getData(sp: SearchParams) {
   else query = query.order("created_at", { ascending: false });
 
   const { data: products } = await query.limit(100);
+  const catImages = await getCategoryImages();
   return {
     categories: (categories as Category[]) ?? [],
     products: (products as Product[]) ?? [],
+    catImages,
   };
 }
 
@@ -50,34 +54,25 @@ export default async function ProductsPage({
 }: {
   searchParams: SearchParams;
 }) {
-  const { categories, products } = await getData(searchParams);
+  const { categories, products, catImages } = await getData(searchParams);
   const activeCat = searchParams.category ?? "";
 
   return (
     <div>
       <h1 className="text-2xl font-bold mb-6">সব পণ্য</h1>
 
-      {/* Search */}
-      <form method="get" className="mb-5 flex gap-2">
-        {activeCat && <input type="hidden" name="category" value={activeCat} />}
-        <input
-          name="q"
-          defaultValue={searchParams.q ?? ""}
-          placeholder="পণ্য খুঁজুন..."
-          className="flex-1 rounded-lg border px-4 py-2.5 outline-none focus:border-brand"
-        />
-        <button className="rounded-lg bg-brand text-white px-5 py-2.5 text-sm">খুঁজুন</button>
-      </form>
-
-      {/* Category chips */}
+      {/* Category chips (with images) */}
       <div className="flex flex-wrap gap-2 mb-6">
         <a
           href="/products"
           className={
-            "rounded-full border px-4 py-1.5 text-sm " +
-            (!activeCat ? "border-brand text-brand bg-brand/5" : "")
+            "inline-flex items-center gap-2 rounded-full border pl-2 pr-4 py-1.5 text-sm font-medium transition " +
+            (!activeCat ? "border-brand text-brand bg-brand/5" : "border-black/10 text-gray-700 hover:border-black/20")
           }
         >
+          <span className="grid place-items-center h-7 w-7 rounded-full bg-brand/10 text-brand">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z" /></svg>
+          </span>
           সব
         </a>
         {categories.map((c) => (
@@ -85,10 +80,19 @@ export default async function ProductsPage({
             key={c.id}
             href={`/products?category=${c.slug}`}
             className={
-              "rounded-full border px-4 py-1.5 text-sm " +
-              (activeCat === c.slug ? "border-brand text-brand bg-brand/5" : "")
+              "inline-flex items-center gap-2 rounded-full border pl-2 pr-4 py-1.5 text-sm font-medium transition " +
+              (activeCat === c.slug ? "border-brand text-brand bg-brand/5" : "border-black/10 text-gray-700 hover:border-black/20")
             }
           >
+            <span className="relative h-7 w-7 rounded-full overflow-hidden bg-[#f3f3f3] ring-1 ring-black/5 shrink-0">
+              {catImages[c.id] ? (
+                <Image src={catImages[c.id]} alt="" fill sizes="28px" className="object-cover" />
+              ) : (
+                <span className="absolute inset-0 grid place-items-center text-gray-400">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M20.6 6.6l-8-4a2 2 0 00-1.9 0l-8 4M3 6.6v10.8a2 2 0 001.1 1.8l7 3.4a2 2 0 001.8 0l7-3.4a2 2 0 001.1-1.8V6.6M3 6.6l9 4.4 9-4.4" /></svg>
+                </span>
+              )}
+            </span>
             {c.name_bn || c.name_en}
           </a>
         ))}

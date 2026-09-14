@@ -21,25 +21,25 @@ export function BuyButtons({ product }: { product: Omit<CartItem, "qty"> }) {
   }
 
   return (
-    <div className="flex flex-col sm:flex-row gap-3">
+    <div className="flex flex-row items-stretch gap-2">
       <button
         onClick={() => {
           add(product, 1);
           trackAddToCart();
           router.push("/checkout");
         }}
-        className="rounded-lg bg-brand text-white px-8 py-3 font-medium hover:bg-brand-dark"
+        className="flex-1 rounded-lg bg-brand text-white px-2 py-2 text-[12px] font-semibold hover:bg-brand-dark whitespace-nowrap"
       >
-        এখনি অর্ডার করুন (ক্যাশ অন ডেলিভারি)
+        অর্ডার করুন
       </button>
       <button
         onClick={() => {
           add(product, 1);
           trackAddToCart();
         }}
-        className="rounded-lg border border-brand text-brand px-8 py-3 font-medium hover:bg-brand/5"
+        className="flex-1 rounded-lg border border-brand text-brand px-2 py-2 text-[12px] font-semibold hover:bg-brand/5 whitespace-nowrap"
       >
-        কার্টে যোগ করুন
+        কার্টে যোগ
       </button>
     </div>
   );
