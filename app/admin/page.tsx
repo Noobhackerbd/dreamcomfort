@@ -5,6 +5,7 @@ import { taka } from "@/lib/format";
 import { Icon } from "@/components/admin/icons";
 import { ResetDailyButton } from "@/components/admin/ResetDailyButton";
 import { AutoRefresh } from "@/components/admin/AutoRefresh";
+import { LiveVisitors } from "@/components/admin/LiveVisitors";
 import { RangeTabs } from "@/components/admin/RangeTabs";
 import { OrdersStatusChart, RevenueChart, VisitorsByHourChart, VisitsVsPurchasesChart } from "@/components/admin/DashboardCharts";
 import { SourceIcon, normalizeSource, SOURCE_LABEL, type SourceKind } from "@/components/admin/SourceIcon";
@@ -341,6 +342,9 @@ export default async function AdminDashboard({ searchParams }: { searchParams?: 
         <h1 className="font-display text-2xl font-bold tracking-tight">{greeting()}{name ? `, ${name}` : ""} 👋</h1>
         <p className="text-[13px] dc-muted mt-0.5">Here&apos;s what&apos;s happening today</p>
       </div>
+
+      {/* Live visitor counter (Social-Blade style) — admin only, polls every 15s. */}
+      <LiveVisitors />
 
       <RangeTabs active={activeTab} from={searchParams?.from} to={searchParams?.to} />
 
