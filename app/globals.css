@@ -3,8 +3,24 @@
 @tailwind utilities;
 
 :root {
-  --background: #fbf3ea;
-  --foreground: #3a3340;
+  /* Clean modern off-white — soft, premium, works with the brand blue + pink.
+     (The landing page keeps its original cream via body.dc-landing below.) */
+  --background: #f7f6f4;
+  --foreground: #35313c;
+}
+
+/* Landing pages keep the original cream look — untouched. */
+body.dc-landing {
+  background: #fbf3ea;
+}
+
+/* Tasteful entrance animation — content settles in, never parked hidden. */
+@keyframes dcFadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .dc-fade-up { animation: dcFadeUp 0.45s cubic-bezier(0.22, 1, 0.36, 1) both; }
 }
 
 html {

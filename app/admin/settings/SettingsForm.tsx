@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { saveShippingSettings, saveStoreSettings, saveCarryBeeSettings, saveAiSettings, saveMetaSettings, saveTikTokSettings, saveMobileSettings, saveBdCourierSettings, saveNavIcons } from "./actions";
-import type { ShippingSettings, StoreSettings, CarryBeeSettings, AiSettings, MetaSettings, TikTokSettings, MobileSettings, BdCourierSettings, NavIconsSettings } from "@/lib/settings";
+import { saveShippingSettings, saveStoreSettings, saveCarryBeeSettings, saveAiSettings, saveGeminiSettings, saveMetaSettings, saveTikTokSettings, saveMobileSettings, saveBdCourierSettings, saveNavIcons } from "./actions";
+import type { ShippingSettings, StoreSettings, CarryBeeSettings, AiSettings, GeminiSettings, MetaSettings, TikTokSettings, MobileSettings, BdCourierSettings, NavIconsSettings } from "@/lib/settings";
 
 const cls = "dc-input";
 const lbl = "block text-[13px] font-medium dc-muted mb-1";
@@ -65,6 +65,7 @@ export function SettingsForm({
   store,
   carrybee,
   ai,
+  gemini,
   meta,
   tiktok,
   mobile,
@@ -75,6 +76,7 @@ export function SettingsForm({
   store: StoreSettings;
   carrybee: CarryBeeSettings;
   ai: AiSettings;
+  gemini: GeminiSettings;
   meta: MetaSettings;
   tiktok: TikTokSettings;
   mobile: MobileSettings;
@@ -100,6 +102,11 @@ export function SettingsForm({
   const [aiSaved, setAiSaved] = useState(false);
   const [aiErr, setAiErr] = useState<string | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
+
+  const [gm, setGm] = useState(gemini);
+  const [gmSaved, setGmSaved] = useState(false);
+  const [gmErr, setGmErr] = useState<string | null>(null);
+  const [gmBusy, setGmBusy] = useState(false);
 
   const [mt, setMt] = useState(meta);
   const [mtSaved, setMtSaved] = useState(false);
@@ -345,6 +352,25 @@ export function SettingsForm({
         <SaveRow busy={aiBusy} saved={aiSaved} err={aiErr}
           onSave={async () => { setAiErr(null); setAiSaved(false); setAiBusy(true); const res = await saveAiSettings(aiCfg); setAiBusy(false); if (!res.ok) { setAiErr(res.error ?? "Save failed."); return; } setAiSaved(true); router.refresh(); }} />
         <StatusPill ok={!!aiCfg.apiKey} okText="Configured" badText="Not set" />
+      </Card>
+
+      {/* Gemini — image / visual product search */}
+      <Card icon="📷" iconBg="#e8f2ff" iconColor="#2f80b4" title="Image search (Google Gemini)"
+        desc="Paste a free Google Gemini API key so customers can search products by photo. Get one free at aistudio.google.com/apikey.">
+        <div className="space-y-3">
+          <div>
+            <label className={lbl}>Gemini API key</label>
+            <input type="password" value={gm.apiKey} onChange={(e) => setGm({ ...gm, apiKey: e.target.value })} placeholder="AIza…" autoComplete="new-password" className={cls} />
+          </div>
+          <div>
+            <label className={lbl}>Model</label>
+            <input value={gm.model} onChange={(e) => setGm({ ...gm, model: e.target.value })} placeholder="gemini-2.0-flash" className={cls} />
+            <p className="mt-1 text-xs dc-muted">Default: <b>gemini-2.0-flash</b> (free tier). Leave as-is unless you know otherwise.</p>
+          </div>
+        </div>
+        <SaveRow busy={gmBusy} saved={gmSaved} err={gmErr}
+          onSave={async () => { setGmErr(null); setGmSaved(false); setGmBusy(true); const res = await saveGeminiSettings(gm); setGmBusy(false); if (!res.ok) { setGmErr(res.error ?? "Save failed."); return; } setGmSaved(true); router.refresh(); }} />
+        <StatusPill ok={!!gm.apiKey} okText="Image search enabled" badText="Not set" />
       </Card>
     </div>
   );

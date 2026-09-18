@@ -34,6 +34,11 @@ export interface AiSettings {
   model: string;
 }
 
+export interface GeminiSettings {
+  apiKey: string; // Google Gemini API key for image (visual) product search
+  model: string;  // e.g. gemini-2.0-flash
+}
+
 export interface MetaSettings {
   pixelId: string;
   capiToken: string;
@@ -201,6 +206,14 @@ export function getAiSettings(): Promise<AiSettings> {
   return readSetting<AiSettings>("ai", {
     apiKey: process.env.ANTHROPIC_API_KEY || "",
     model: process.env.AI_MODEL || "claude-sonnet-5",
+  });
+}
+
+/** Google Gemini API settings for image (visual) product search. Admin-editable, env fallback. */
+export function getGeminiSettings(): Promise<GeminiSettings> {
+  return readSetting<GeminiSettings>("gemini", {
+    apiKey: process.env.GEMINI_API_KEY || "",
+    model: process.env.GEMINI_MODEL || "gemini-2.0-flash",
   });
 }
 

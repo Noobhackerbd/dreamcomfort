@@ -8,7 +8,7 @@ function Stars({ rating }: { rating: number }) {
       {[0, 1, 2, 3, 4].map((i) => {
         const fill = Math.max(0, Math.min(1, rating - i));
         return (
-          <svg key={i} width="12" height="12" viewBox="0 0 24 24" aria-hidden>
+          <svg key={i} width="13" height="13" viewBox="0 0 24 24" aria-hidden>
             <defs>
               <linearGradient id={`s${i}-${Math.round(fill * 100)}`}>
                 <stop offset={`${fill * 100}%`} stopColor="#f5b301" />
@@ -27,38 +27,68 @@ function Stars({ rating }: { rating: number }) {
 export function ProductCard({ p }: { p: Product }) {
   const name = p.name_bn || p.name_en;
   const img = p.images?.[0];
-  const hasDiscount = p.compare_at_price && p.compare_at_price > p.price;
+  const hasDiscount = !!(p.compare_at_price && p.compare_at_price > p.price);
   const off = hasDiscount ? Math.round((1 - p.price / (p.compare_at_price as number)) * 100) : 0;
   const rating = typeof p.rating === "number" && p.rating > 0 ? p.rating : 0;
   const reviews = typeof p.review_count === "number" ? p.review_count : 0;
-  // Show stars whenever a rating is set (admin or reviews). Count shown only if > 0.
   const showRating = rating > 0;
+  const soldOut = typeof p.stock === "number" && p.stock <= 0;
 
   return (
-    <a href={`/product/${p.slug}`}
-      className="group flex flex-col rounded-lg border border-black/[0.07] bg-white overflow-hidden hover:shadow-[0_10px_24px_-14px_rgba(0,0,0,.35)] hover:border-black/10 transition">
-      <div className="relative aspect-square bg-[#f6f6f6] overflow-hidden">
+    <a
+      href={`/product/${p.slug}`}
+      className="dc-fade-up group relative flex flex-col rounded-2xl bg-white ring-1 ring-black/[0.06] overflow-hidden transition duration-200 ease-out hover:-translate-y-0.5 hover:ring-black/10 hover:shadow-[0_14px_30px_-14px_rgba(0,0,0,0.30)]"
+    >
+      {/* Image */}
+      <div className="relative aspect-square overflow-hidden bg-gradient-to-b from-[#f7f6f4] to-[#eeecea]">
         {img ? (
-          <Image src={img} alt={name} fill sizes="(max-width:768px) 50vw, 260px" className="object-cover group-hover:scale-[1.03] transition-transform duration-300" />
+          <Image
+            src={img}
+            alt={name}
+            fill
+            sizes="(max-width:768px) 50vw, 260px"
+            className="object-cover transition-transform duration-500 ease-out group-hover:scale-[1.06]"
+          />
         ) : (
           <span className="absolute inset-0 grid place-items-center text-gray-400 text-sm px-2 text-center">{name}</span>
         )}
+
+        {soldOut && (
+          <span className="absolute inset-0 grid place-items-center bg-white/55 backdrop-blur-[1px]">
+            <span className="rounded-full bg-black/75 text-white text-[11px] font-semibold px-3 py-1">স্টকে নেই</span>
+          </span>
+        )}
       </div>
 
+      {/* Body */}
       <div className="p-2.5 sm:p-3 flex flex-col flex-1">
-        <p className="text-[13px] text-gray-700 leading-snug line-clamp-2 min-h-[2.5em]">{name}</p>
+        <p className="text-[13px] text-gray-700 leading-snug line-clamp-2 min-h-[2.5em] transition-colors group-hover:text-gray-900">
+          {name}
+        </p>
 
-        <div className="mt-1.5 flex items-baseline gap-1.5">
-          <span className="font-bold text-[16px]" style={{ color: "#F0530E" }}>{taka(p.price)}</span>
-          {hasDiscount && <span className="text-[12px] text-gray-400">-{off}%</span>}
+        {/* Price */}
+        <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+          <span className="font-extrabold text-[17px] tracking-tight" style={{ color: "#F0530E" }}>
+            {taka(p.price)}
+          </span>
+          {hasDiscount && (
+            <>
+              <span className="text-[12px] text-gray-400 line-through">{taka(p.compare_at_price as number)}</span>
+              <span className="text-[10.5px] font-bold text-[#F0530E] bg-[#F0530E]/10 rounded px-1 py-[1px]">-{off}%</span>
+            </>
+          )}
         </div>
 
-        {showRating && (
-          <div className="mt-1 flex items-center gap-1">
-            <Stars rating={rating} />
-            {reviews > 0 && <span className="text-[11.5px] text-gray-400">({reviews})</span>}
-          </div>
-        )}
+        {/* Rating — the row's space is ALWAYS reserved (even with no rating) so every
+            card is the exact same height, whether or not it has reviews. */}
+        <div className="mt-1.5 h-[16px] flex items-center gap-1">
+          {showRating && (
+            <>
+              <Stars rating={rating} />
+              {reviews > 0 && <span className="text-[11.5px] text-gray-400">({reviews})</span>}
+            </>
+          )}
+        </div>
       </div>
     </a>
   );

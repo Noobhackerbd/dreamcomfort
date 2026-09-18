@@ -118,6 +118,20 @@ export async function saveAiSettings(ai: { apiKey: string; model: string }) {
   return { ok: true };
 }
 
+export async function saveGeminiSettings(g: { apiKey: string; model: string }) {
+  await requireAdmin();
+  try {
+    await saveSetting("gemini", {
+      apiKey: (g.apiKey || "").trim(),
+      model: (g.model || "").trim() || "gemini-2.0-flash",
+    });
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? "সেভ ব্যর্থ। settings টেবিল আছে কিনা দেখুন (supabase-migration-2.sql)।" };
+  }
+  revalidatePath("/admin/settings");
+  return { ok: true };
+}
+
 export async function saveBdCourierSettings(bc: { apiToken: string; suppressBelowRatio?: number }) {
   await requireAdmin();
   try {

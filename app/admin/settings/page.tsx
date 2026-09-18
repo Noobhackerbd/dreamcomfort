@@ -1,15 +1,16 @@
-import { getShippingSettings, getStoreSettings, getCarryBeeSettings, getAiSettings, getMetaSettings, getTikTokSettings, getMobileSettings, getBdCourierSettings, getNavIcons } from "@/lib/settings";
+import { getShippingSettings, getStoreSettings, getCarryBeeSettings, getAiSettings, getGeminiSettings, getMetaSettings, getTikTokSettings, getMobileSettings, getBdCourierSettings, getNavIcons } from "@/lib/settings";
 import { SettingsForm } from "./SettingsForm";
 import { NotificationSetup } from "./NotificationSetup";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminSettings() {
-  const [shipping, store, carrybee, ai, meta, tiktok, mobile, bdcourier, navIcons] = await Promise.all([
+  const [shipping, store, carrybee, ai, gemini, meta, tiktok, mobile, bdcourier, navIcons] = await Promise.all([
     getShippingSettings(),
     getStoreSettings(),
     getCarryBeeSettings(),
     getAiSettings(),
+    getGeminiSettings(),
     getMetaSettings(),
     getTikTokSettings(),
     getMobileSettings(),
@@ -26,7 +27,7 @@ export default async function AdminSettings() {
         <NotificationSetup />
       </div>
 
-      <SettingsForm shipping={shipping} store={store} carrybee={carrybee} ai={ai} meta={meta} tiktok={tiktok} mobile={mobile} bdcourier={bdcourier} navIcons={navIcons} />
+      <SettingsForm shipping={shipping} store={store} carrybee={carrybee} ai={ai} gemini={gemini} meta={meta} tiktok={tiktok} mobile={mobile} bdcourier={bdcourier} navIcons={navIcons} />
     </div>
   );
 }
