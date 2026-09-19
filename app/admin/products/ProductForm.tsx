@@ -41,6 +41,8 @@ export function ProductForm({ initial, categories, landings = [] }: Props) {
   const [faqText, setFaqText] = useState((initial as any)?.faq_text ?? "");
   const [videoUrl, setVideoUrl] = useState((initial as any)?.video_url ?? "");
   const [images, setImages] = useState<string[]>(initial?.images ?? []);
+  const [descImages, setDescImages] = useState<string[]>((initial as any)?.description_images ?? []);
+  const [uploadingDesc, setUploadingDesc] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,6 +87,33 @@ export function ProductForm({ initial, categories, landings = [] }: Props) {
     setUploading(false);
   }
 
+  async function onUploadDesc(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
+    if (!files.length) return;
+    setUploadingDesc(true); setError(null);
+    const supabase = getSupabaseBrowserClient();
+    const uploaded: string[] = [];
+    for (const file of files) {
+      const ext = file.name.split(".").pop();
+      const path = `desc-${Date.now()}-${Math.floor(Math.random() * 1e6)}.${ext}`;
+      const { error } = await supabase.storage.from("product-images").upload(path, file, { cacheControl: "3600", upsert: false });
+      if (error) { setError("Image upload failed: " + error.message); continue; }
+      const { data } = supabase.storage.from("product-images").getPublicUrl(path);
+      uploaded.push(data.publicUrl);
+    }
+    setDescImages((prev) => [...prev, ...uploaded]);
+    setUploadingDesc(false);
+  }
+
+  function moveDesc(idx: number, dir: -1 | 1) {
+    setDescImages((prev) => {
+      const next = [...prev]; const j = idx + dir;
+      if (j < 0 || j >= next.length) return prev;
+      [next[idx], next[j]] = [next[j], next[idx]];
+      return next;
+    });
+  }
+
   function move(idx: number, dir: -1 | 1) {
     setImages((prev) => {
       const next = [...prev]; const j = idx + dir;
@@ -105,6 +134,7 @@ export function ProductForm({ initial, categories, landings = [] }: Props) {
       compare_at_price: compare ? Number(compare) : null, stock: Number(stock), sku,
       category_id: categoryId || null, description_bn: descBn, description_en: descEn,
       meta_title: metaTitle, meta_description: metaDesc, is_active: active, images,
+      description_images: descImages,
       rating: rating.trim() === "" ? null : Number(rating),
       review_count: reviewCount.trim() === "" ? null : Number(reviewCount),
       highlights_text: highlightsText, specs_text: specsText, how_to_use: howToUse, faq_text: faqText, video_url: videoUrl,
@@ -169,6 +199,25 @@ export function ProductForm({ initial, categories, landings = [] }: Props) {
 
       <div><label className={lbl}>Description (Bangla)</label><textarea value={descBn} onChange={(e) => setDescBn(e.target.value)} rows={3} className={cls} /></div>
       <div><label className={lbl}>Description (English)</label><textarea value={descEn} onChange={(e) => setDescEn(e.target.value)} rows={2} className={cls} /></div>
+
+      {/* Description photos — shown as "পণ্যের বিস্তারিত" (long details) on the product page */}
+      <div>
+        <label className={lbl}>Description photos <span className="dc-muted font-normal">(optional — long detail images shown on the product page)</span></label>
+        <input type="file" accept="image/*" multiple onChange={onUploadDesc} className="text-sm" />
+        {uploadingDesc && <p className="text-sm dc-muted mt-1">Uploading…</p>}
+        <div className="flex flex-wrap gap-2 mt-3">
+          {descImages.map((url, idx) => (
+            <div key={url} className="relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={url} alt="" className="h-20 w-20 object-cover rounded-lg border" style={{ borderColor: "var(--a-border)" }} />
+              <div className="absolute -top-2 -right-2 flex gap-1">
+                {idx > 0 && <button type="button" onClick={() => moveDesc(idx, -1)} className="bg-gray-700 text-white rounded-full h-5 w-5 text-xs">‹</button>}
+                <button type="button" onClick={() => setDescImages((p) => p.filter((u) => u !== url))} className="bg-red-500 text-white rounded-full h-5 w-5 text-xs">×</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
 
       {/* Premium product-page content (all optional) */}
       <div className="dc-card p-3.5 space-y-3" style={{ background: "var(--a-surface-2)" }}>

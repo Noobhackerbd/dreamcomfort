@@ -22,7 +22,11 @@ const PROMPT =
 export async function POST(req: NextRequest) {
   const { apiKey, model } = await getGeminiSettings();
   if (!apiKey) return NextResponse.json({ ok: false, reason: "not_configured" });
-  const MODEL = model || "gemini-2.0-flash";
+  // gemini-2.0-flash was retired by Google — default to a current model. Older
+  // saved settings that still say 2.0/1.5 are auto-upgraded so image search keeps
+  // working without needing the admin to touch the settings page.
+  let MODEL = model || "gemini-3.6-flash";
+  if (/gemini-(1\.5|2\.0)/.test(MODEL)) MODEL = "gemini-3.6-flash";
 
   let image = "", mime = "image/jpeg";
   try {
@@ -44,7 +48,14 @@ export async function POST(req: NextRequest) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ parts: [{ text: PROMPT }, { inline_data: { mime_type: mime, data: image } }] }],
-          generationConfig: { temperature: 0, maxOutputTokens: 40 },
+          // thinkingBudget:0 — current Gemini "flash" models think by default, which
+          // would eat a tiny token budget and return empty text. Disable thinking for
+          // this simple keyword task and give the actual answer enough room.
+          generationConfig: {
+            temperature: 0,
+            maxOutputTokens: 128,
+            thinkingConfig: { thinkingBudget: 0 },
+          },
         }),
       }
     );

@@ -56,7 +56,7 @@ export function BannerSlider({
           {slides.map((_, idx) => (
             <button key={idx} onClick={() => setI(idx)} aria-label={`slide ${idx + 1}`}
               className="h-[7px] rounded-full transition-all"
-              style={{ width: idx === i ? 18 : 7, background: idx === i ? "#5FB4E4" : "rgba(0,0,0,.18)" }} />
+              style={{ width: idx === i ? 18 : 7, background: idx === i ? "#2F90CC" : "rgba(0,0,0,.18)" }} />
           ))}
         </div>
       )}

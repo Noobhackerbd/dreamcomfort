@@ -41,6 +41,7 @@ export default async function EditProduct({
           meta_description: p.meta_description ?? "",
           is_active: p.is_active,
           images: p.images ?? [],
+          description_images: p.description_images ?? [],
           rating: p.rating ?? null,
           review_count: p.review_count ?? null,
           highlights_text: Array.isArray(p.highlights) ? p.highlights.join("\n") : "",

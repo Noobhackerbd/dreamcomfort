@@ -46,7 +46,7 @@ export function ProductReviews({ productId, initial, count, average }: { product
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
-  const input = "w-full rounded-xl border border-black/10 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/15 transition";
+  const input = "w-full rounded-lg border border-black/10 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/15 transition";
 
   async function onPhotos(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files || []); e.target.value = "";
@@ -71,11 +71,11 @@ export function ProductReviews({ productId, initial, count, average }: { product
     <section className="mt-14 max-w-3xl">
       <div className="flex items-center justify-between gap-3 mb-4">
         <h2 className="text-xl font-bold font-display">গ্রাহক রিভিউ</h2>
-        <button onClick={() => setOpen((v) => !v)} className="rounded-xl bg-brand text-white px-4 py-2 text-sm font-semibold hover:bg-brand-dark">রিভিউ লিখুন</button>
+        <button onClick={() => setOpen((v) => !v)} className="rounded-lg bg-brand text-white px-4 py-2 text-sm font-semibold hover:bg-brand-dark transition-colors">রিভিউ লিখুন</button>
       </div>
 
       {count > 0 && (
-        <div className="rounded-2xl bg-white ring-1 ring-black/5 p-5 flex items-center gap-5 mb-4">
+        <div className="rounded-lg bg-white border border-black/[0.06] shadow-[0_1px_2px_rgba(0,0,0,0.03)] p-5 flex items-center gap-5 mb-4">
           <div className="text-center shrink-0">
             <p className="text-4xl font-extrabold text-gray-900">{average.toFixed(1)}</p>
             <div className="mt-1"><Stars rating={average} /></div>
@@ -85,10 +85,10 @@ export function ProductReviews({ productId, initial, count, average }: { product
         </div>
       )}
 
-      {done && <p className="rounded-xl bg-green-50 text-green-700 text-sm px-3 py-2 mb-4">ধন্যবাদ! আপনার রিভিউ যোগ হয়েছে ✓</p>}
+      {done && <p className="rounded-lg bg-green-50 text-green-700 text-sm px-3 py-2 mb-4">ধন্যবাদ! আপনার রিভিউ যোগ হয়েছে ✓</p>}
 
       {open && (
-        <form onSubmit={submit} className="rounded-2xl bg-white ring-1 ring-black/5 shadow-sm p-5 space-y-3 mb-5">
+        <form onSubmit={submit} className="rounded-lg bg-white border border-black/[0.06] shadow-[0_1px_2px_rgba(0,0,0,0.03)] p-5 space-y-3 mb-5">
           <div>
             <label className="block text-[12px] font-medium text-gray-600 mb-1">আপনার রেটিং</label>
             <div className="flex items-center gap-1" onMouseLeave={() => setHover(0)}>
@@ -104,13 +104,13 @@ export function ProductReviews({ productId, initial, count, average }: { product
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               {photos.map((u, i) => (
-                <span key={i} className="relative h-14 w-14 rounded-lg overflow-hidden ring-1 ring-black/10">
+                <span key={i} className="relative h-14 w-14 rounded-md overflow-hidden ring-1 ring-black/10">
                   <Image src={u} alt="" fill sizes="56px" className="object-cover" />
                   <button type="button" onClick={() => setPhotos((p) => p.filter((_, j) => j !== i))} className="absolute top-0 right-0 h-5 w-5 bg-black/60 text-white text-xs">×</button>
                 </span>
               ))}
               {photos.length < 4 && (
-                <label className="h-14 w-14 rounded-lg border-2 border-dashed border-gray-300 grid place-items-center cursor-pointer text-gray-400 hover:border-brand">
+                <label className="h-14 w-14 rounded-md border-2 border-dashed border-gray-300 grid place-items-center cursor-pointer text-gray-400 hover:border-brand">
                   {uploading ? "…" : "+"}
                   <input type="file" accept="image/*" multiple className="hidden" onChange={onPhotos} disabled={uploading} />
                 </label>
@@ -118,8 +118,8 @@ export function ProductReviews({ productId, initial, count, average }: { product
             </div>
             <p className="text-[11px] text-gray-400 mt-1">ছবি যোগ করুন (ঐচ্ছিক, সর্বোচ্চ ৪টি)</p>
           </div>
-          {err && <p className="rounded-xl bg-red-50 text-red-600 text-sm px-3 py-2">{err}</p>}
-          <button type="submit" disabled={busy || uploading} className="rounded-xl bg-brand text-white px-6 py-2.5 text-sm font-semibold hover:bg-brand-dark disabled:opacity-60">{busy ? "..." : "রিভিউ জমা দিন"}</button>
+          {err && <p className="rounded-lg bg-red-50 text-red-600 text-sm px-3 py-2">{err}</p>}
+          <button type="submit" disabled={busy || uploading} className="rounded-lg bg-brand text-white px-6 py-2.5 text-sm font-semibold hover:bg-brand-dark disabled:opacity-60 transition-colors">{busy ? "..." : "রিভিউ জমা দিন"}</button>
         </form>
       )}
 
@@ -128,7 +128,7 @@ export function ProductReviews({ productId, initial, count, average }: { product
       ) : (
         <div className="space-y-3">
           {initial.map((r) => (
-            <div key={r.id} className="rounded-2xl bg-white ring-1 ring-black/5 p-4">
+            <div key={r.id} className="rounded-lg bg-white border border-black/[0.06] shadow-[0_1px_2px_rgba(0,0,0,0.03)] p-4">
               <div className="flex items-center gap-2">
                 <span className="h-9 w-9 rounded-full bg-brand-soft text-brand-dark grid place-items-center font-bold text-sm">{(r.name || "?").charAt(0).toUpperCase()}</span>
                 <div>
@@ -140,7 +140,7 @@ export function ProductReviews({ productId, initial, count, average }: { product
               {Array.isArray(r.images) && r.images.length > 0 && (
                 <div className="mt-2 flex gap-2 flex-wrap">
                   {r.images.map((u, i) => (
-                    <a key={i} href={u} target="_blank" rel="noopener" className="relative h-16 w-16 rounded-lg overflow-hidden ring-1 ring-black/10">
+                    <a key={i} href={u} target="_blank" rel="noopener" className="relative h-16 w-16 rounded-md overflow-hidden ring-1 ring-black/10">
                       <Image src={u} alt="" fill sizes="64px" className="object-cover" />
                     </a>
                   ))}

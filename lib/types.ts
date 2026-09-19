@@ -29,6 +29,7 @@ export interface Product {
   rating?: number | null;        // 0–5 (shown as stars on the card)
   review_count?: number | null;  // e.g. 250
   // Optional rich product-page content (see supabase-migration-product-rich.sql).
+  description_images?: string[] | null; // extra photos shown inside the product description
   highlights?: string[] | null;
   specs?: { label: string; value: string }[] | null;
   how_to_use?: string | null;

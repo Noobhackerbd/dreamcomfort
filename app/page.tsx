@@ -40,17 +40,21 @@ function SectionHead({ title, href }: { title: string; href?: string }) {
 
 export default async function HomePage() {
   const supabase = getServerSupabase();
-  const [{ data: cats }, { data: prods }, banners, flash, strip, catImages] = await Promise.all([
+  // One parallel batch — including featured & "for you" — so the homepage does a
+  // single round of work instead of several sequential trips. The empty-store check
+  // fetches only a COUNT (head request), not 24 full product rows → far less egress.
+  const [{ data: cats }, { count: productCount }, banners, flash, strip, catImages, featured, forYou] = await Promise.all([
     supabase.from("categories").select("*").order("sort_order", { ascending: true }),
-    supabase.from("products").select("*").eq("is_active", true).order("created_at", { ascending: false }).limit(24),
+    supabase.from("products").select("id", { count: "exact", head: true }).eq("is_active", true),
     getHomeBanners(),
     getFlashSale(),
     getHomeStrip(),
     getCategoryImages(),
+    getFeaturedProducts(8),
+    getForYou({ offset: 0, limit: 8 }),
   ]);
 
   const categories = (cats as Category[]) ?? [];
-  const products = (prods as Product[]) ?? [];
 
   // Flash sale — products chosen in admin, in the admin-set order.
   let flashProducts: Product[] = [];
@@ -63,12 +67,6 @@ export default async function HomePage() {
   const flashEndsMs = flash.endsAt ? new Date(flash.endsAt).getTime() : 0;
   const flashEnded = flashEndsMs > 0 && flashEndsMs <= Date.now();
   const showFlash = flashProducts.length > 0 && !flashEnded;
-
-  // Featured — admin picks first, then best-sellers, then newest (in-stock only).
-  const featured = await getFeaturedProducts(8);
-
-  // "For You" — personalized feed (first page here; client re-ranks by view history).
-  const forYou = await getForYou({ offset: 0, limit: 8 });
 
   // Hero slides: uploaded banners, else fall back to featured product images.
   const heroSlides: Slide[] = banners.hero.length
@@ -127,21 +125,24 @@ export default async function HomePage() {
       {categories.length > 0 && (
         <>
           <SectionHead title="ক্যাটাগরি" href="/products" />
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5">
-            {categories.map((c, i) => (
-              <a key={c.id} href={`/products?category=${c.slug}`} className="group rounded-xl border border-black/5 bg-white overflow-hidden hover:shadow-sm transition">
-                <div className="relative aspect-square bg-[#f6f6f6] overflow-hidden">
-                  {catImages[c.id] ? (
-                    <Image src={catImages[c.id]} alt={c.name_bn || c.name_en} fill sizes="(max-width:768px) 33vw, 140px" className="object-cover group-hover:scale-105 transition-transform duration-300" />
-                  ) : (
-                    <span className="absolute inset-0 grid place-items-center" style={{ color: CAT_COLORS[i % CAT_COLORS.length] }}>
-                      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20.6 6.6l-8-4a2 2 0 00-1.9 0l-8 4M3 6.6v10.8a2 2 0 001.1 1.8l7 3.4a2 2 0 001.8 0l7-3.4a2 2 0 001.1-1.8V6.6M3 6.6l9 4.4 9-4.4M12 22V11" /></svg>
-                    </span>
-                  )}
-                </div>
-                <span className="block px-1.5 py-2 text-center text-[11.5px] font-semibold leading-tight line-clamp-2">{c.name_bn || c.name_en}</span>
-              </a>
-            ))}
+          <div className="rounded-xl border-l border-t border-black/[0.06] overflow-hidden bg-white">
+            <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8">
+              {categories.map((c, i) => (
+                <a key={c.id} href={`/products?category=${c.slug}`}
+                  className="group flex flex-col items-center gap-1.5 p-2.5 sm:p-3.5 border-r border-b border-black/[0.06] hover:bg-gray-50 transition-colors">
+                  <div className="relative w-full aspect-square">
+                    {catImages[c.id] ? (
+                      <Image src={catImages[c.id]} alt={c.name_bn || c.name_en} fill sizes="(max-width:768px) 25vw, 130px" className="object-contain p-1 transition-transform duration-300 group-hover:scale-105" />
+                    ) : (
+                      <span className="absolute inset-0 grid place-items-center" style={{ color: CAT_COLORS[i % CAT_COLORS.length] }}>
+                        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20.6 6.6l-8-4a2 2 0 00-1.9 0l-8 4M3 6.6v10.8a2 2 0 001.1 1.8l7 3.4a2 2 0 001.8 0l7-3.4a2 2 0 001.1-1.8V6.6M3 6.6l9 4.4 9-4.4M12 22V11" /></svg>
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-center text-[11.5px] sm:text-[13px] text-gray-700 leading-tight line-clamp-2 group-hover:text-brand transition-colors">{c.name_bn || c.name_en}</span>
+                </a>
+              ))}
+            </div>
           </div>
         </>
       )}
@@ -183,7 +184,7 @@ export default async function HomePage() {
         </a>
       </div>
 
-      {products.length === 0 && (
+      {(productCount ?? 0) === 0 && (
         <p className="text-center text-gray-400 py-16">এখনও কোনো পণ্য যোগ করা হয়নি। <a href="/admin/products" className="text-brand-dark underline">পণ্য যোগ করুন</a>।</p>
       )}
     </div>

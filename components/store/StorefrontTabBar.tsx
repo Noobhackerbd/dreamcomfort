@@ -21,6 +21,15 @@ const MENU_LINKS = [
   { href: "/return-policy", label: "রিটার্ন পলিসি" },
 ];
 
+/** Icon in a soft rounded pill that lights up + springs when its tab is active. */
+function IconPill({ active, children }: { active: boolean; children: React.ReactNode }) {
+  return (
+    <span className={"dc-tab-pill grid place-items-center h-9 w-9 rounded-2xl " + (active ? "bg-brand-soft dc-tab-on" : "")}>
+      <span className="dc-tab-ico">{children}</span>
+    </span>
+  );
+}
+
 export function StorefrontTabBar({ categoryIcon }: { categoryIcon?: string }) {
   const pathname = usePathname() || "/";
   const catIconUrl = categoryIcon ? `data:image/svg+xml,${encodeURIComponent(categoryIcon)}` : "";
@@ -44,7 +53,15 @@ export function StorefrontTabBar({ categoryIcon }: { categoryIcon?: string }) {
 
   return (
     <>
-      <style>{`@media (max-width:767px){ body.has-store-tabs{ padding-bottom:66px } } @keyframes dcMenuIn{from{transform:translateX(100%)}to{transform:translateX(0)}}`}</style>
+      <style>{`
+        @media (max-width:767px){ body.has-store-tabs{ padding-bottom:70px } }
+        @keyframes dcMenuIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
+        @keyframes dcTabPop{0%{transform:scale(.8)}55%{transform:scale(1.18)}100%{transform:scale(1)}}
+        .dc-tab-pill{transition:background-color .22s ease}
+        .dc-tab-ico{display:inline-flex;transition:transform .2s ease}
+        .dc-tab-on .dc-tab-ico{animation:dcTabPop .42s cubic-bezier(.34,1.56,.64,1)}
+        @media (prefers-reduced-motion: reduce){ .dc-tab-on .dc-tab-ico{animation:none} }
+      `}</style>
 
       {menuOpen && (
         <div className="md:hidden fixed inset-0 z-[80] bg-black/40 backdrop-blur-sm" onClick={() => setMenuOpen(false)}>
@@ -81,23 +98,25 @@ export function StorefrontTabBar({ categoryIcon }: { categoryIcon?: string }) {
           if (t.href === "/account") {
             return (
               <button key={t.href} onClick={() => window.dispatchEvent(new Event("dc:open-login"))}
-                className="flex-1 flex flex-col items-center gap-0.5 text-[10.5px] font-semibold" style={{ color: active ? "#3E9BD1" : "#9a94a1" }}>
-                {icon}{t.label}
+                className="flex-1 flex flex-col items-center gap-0.5 text-[10.5px] font-semibold" style={{ color: active ? "#2F90CC" : "#9a94a1" }}>
+                <IconPill active={active}>{icon}</IconPill>{t.label}
               </button>
             );
           }
           return (
             <a key={t.href} href={t.href} className="flex-1 flex flex-col items-center gap-0.5 text-[10.5px] font-semibold"
-              style={{ color: active ? "#3E9BD1" : "#9a94a1" }}>
-              {icon}
+              style={{ color: active ? "#2F90CC" : "#9a94a1" }}>
+              <IconPill active={active}>{icon}</IconPill>
               {t.label}
             </a>
           );
         })}
         <button onClick={() => setMenuOpen((v) => !v)} aria-label="মেনু"
           className="flex-1 flex flex-col items-center gap-0.5 text-[10.5px] font-semibold"
-          style={{ color: menuOpen ? "#3E9BD1" : "#9a94a1" }}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+          style={{ color: menuOpen ? "#2F90CC" : "#9a94a1" }}>
+          <IconPill active={menuOpen}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+          </IconPill>
           মেনু
         </button>
       </nav>

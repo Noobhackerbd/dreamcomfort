@@ -8,14 +8,14 @@ const config: Config = {
         // Palette pulled straight from the Dream Comfort logo.
         cream: { DEFAULT: "#FBF3EA", deep: "#F6E9DA" },
         brand: {
-          DEFAULT: "#5FB4E4", // logo blue ("DREAM")
-          dark: "#3E9BD1",
+          DEFAULT: "#2F90CC", // deeper, more confident blue (better contrast on off-white)
+          dark: "#1E7AAF",
           light: "#BFE3F5",
-          soft: "#E7F4FC",
+          soft: "#EAF5FD",
         },
         accent: {
-          DEFAULT: "#F0A0C0", // logo pink ("COMFORT")
-          dark: "#E77BA6",
+          DEFAULT: "#F0A0C0", // soft logo pink ("COMFORT") — identity kept
+          dark: "#DE6699",    // deeper pink for legible price / emphasis text
           light: "#FBD9E7",
           soft: "#FDEDF3",
         },
@@ -25,7 +25,7 @@ const config: Config = {
         sans: ["var(--font-bengali)", "var(--font-display)", "system-ui", "sans-serif"],
       },
       boxShadow: {
-        soft: "0 10px 40px -12px rgba(95,180,228,0.35)",
+        soft: "0 10px 40px -12px rgba(47,144,204,0.35)",
         pink: "0 10px 40px -12px rgba(240,160,192,0.45)",
       },
     },

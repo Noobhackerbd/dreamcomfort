@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import Image from "next/image";
-import { Plus_Jakarta_Sans, Hind_Siliguri } from "next/font/google";
+import { Plus_Jakarta_Sans, Anek_Bangla } from "next/font/google";
 import "./globals.css";
 import { MetaPixel } from "@/components/MetaPixel";
 import { TikTokPixel } from "@/components/TikTokPixel";
@@ -9,15 +8,16 @@ import { ScrollTracker } from "@/components/ScrollTracker";
 import { getMetaSettings, getStoreSettings, getTikTokSettings, getNavIcons } from "@/lib/settings";
 
 // Self-hosted via next/font — no render-blocking Google Fonts request, auto-preloaded.
-// Premium, serious type: geometric Jakarta for Latin/numbers, clean Hind Siliguri for
-// Bangla (matches the admin panel) — replaces the earlier playful, rounded Fredoka.
+// Premium, modern type: geometric Jakarta for Latin/numbers, and Anek Bangla for
+// Bangla — a contemporary, clean Bengali face with refined proportions that reads
+// warmer and more premium than the earlier Hind Siliguri.
 const display = Plus_Jakarta_Sans({
   subsets: ["latin"],
   weight: ["500", "600", "700", "800"],
   variable: "--font-display",
   display: "swap",
 });
-const notoBengali = Hind_Siliguri({
+const notoBengali = Anek_Bangla({
   subsets: ["bengali", "latin"],
   weight: ["400", "500", "600", "700"],
   variable: "--font-bengali",
@@ -87,10 +87,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
         <HideOnAdmin>
         <footer className="mt-10 border-t border-black/5 bg-white/60">
-          <div className="mx-auto max-w-6xl px-4 py-6 grid grid-cols-2 gap-x-4 gap-y-5 md:grid-cols-4 md:gap-8 text-[13px]">
+          <div className="mx-auto max-w-6xl px-4 py-8 grid grid-cols-2 gap-x-6 gap-y-7 sm:gap-x-8 md:grid-cols-4 md:gap-8 text-[13px]">
             <div className="col-span-2 md:col-span-1">
-              <Image src={landing.logoUrl || "/logo.png"} alt={STORE_NAME} width={180} height={64} sizes="150px" className="h-11 w-auto object-contain" />
-              <p className="mt-2 text-gray-500">{STORE.tagline}</p>
+              <a href="/" className="inline-flex items-center" aria-label={STORE_NAME}>
+                <span className="font-display text-lg font-extrabold tracking-wide whitespace-nowrap">
+                  <span className="text-brand">DREAM</span> <span className="text-accent">COMFORT</span>
+                </span>
+              </a>
+              <p className="mt-2.5 text-gray-500 leading-relaxed max-w-[260px]">{STORE.tagline}</p>
             </div>
             <div>
               <p className="font-semibold mb-2">শপ</p>
@@ -110,9 +114,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <li><a href="/terms" className="hover:text-brand">শর্তাবলী</a></li>
               </ul>
             </div>
-            <div>
+            <div className="col-span-2 md:col-span-1">
               <p className="font-semibold mb-2">যোগাযোগ</p>
-              <ul className="space-y-1 text-gray-500">
+              <ul className="space-y-1.5 text-gray-500">
                 <li>📞 <a href={`tel:${STORE.phone}`} className="hover:text-brand">{STORE.phone}</a></li>
                 <li>🌐 <a href={SITE_URL} className="hover:text-brand">DreamcomfortBD.com</a></li>
                 <li>📍 {STORE.address}</li>

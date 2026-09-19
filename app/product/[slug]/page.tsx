@@ -10,6 +10,7 @@ import { ProductGallery } from "./ProductGallery";
 import { ProductCard } from "@/components/ProductCard";
 import { FaqAccordion } from "@/components/store/FaqAccordion";
 import { WishlistButton } from "@/components/store/WishlistButton";
+import { ShareButton } from "@/components/store/ShareButton";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { ProductReviews } from "@/components/store/ProductReviews";
 import { getReviews } from "@/app/product/review-actions";
@@ -70,8 +71,6 @@ const TRUST = [
   { c: "#E77BA6", t: "সহজ রিটার্ন", d: "M3 12a9 9 0 103-6.7L3 8M3 3v5h5" },
 ];
 
-// Fallback highlights when a product has none set.
-const DEFAULT_HIGHLIGHTS = ["প্রিমিয়াম মানের পণ্য", "মা ও শিশুর জন্য নিরাপদ", "সারা দেশে ক্যাশ অন ডেলিভারি", "৩ দিনের মানিব্যাক গ্যারান্টি"];
 
 export default async function ProductPage({ params }: { params: { slug: string } }) {
   const p = await getProduct(params.slug);
@@ -88,7 +87,7 @@ export default async function ProductPage({ params }: { params: { slug: string }
   // Show the rating whenever one exists (real reviews or admin-set); hide only when none.
   const showRating = rating > 0;
 
-  const highlights = Array.isArray(p.highlights) && p.highlights.length ? p.highlights.filter(Boolean) : DEFAULT_HIGHLIGHTS;
+  const highlights = Array.isArray(p.highlights) ? p.highlights.filter(Boolean) : [];
   const specs = Array.isArray(p.specs) ? p.specs.filter((s) => s && s.label) : [];
   const faq = Array.isArray(p.faq) ? p.faq.filter((f) => f && f.q) : [];
   const howTo = (p.how_to_use || "").trim();
@@ -118,48 +117,53 @@ export default async function ProductPage({ params }: { params: { slug: string }
         <div>
           <h1 className="text-2xl lg:text-3xl font-bold font-display leading-snug">{name}</h1>
 
-          {showRating && (
-            <div className="mt-2.5 flex items-center gap-2">
-              <Stars rating={rating} />
-              <span className="text-sm text-gray-500">{rating.toFixed(1)}{reviews > 0 ? ` · ${reviews} রিভিউ` : ""}</span>
+          <div className="mt-2.5 flex items-center gap-3">
+            {showRating && (
+              <div className="flex items-center gap-2">
+                <Stars rating={rating} />
+                <span className="text-sm text-gray-500">{rating.toFixed(1)}{reviews > 0 ? ` · ${reviews} রিভিউ` : ""}</span>
+              </div>
+            )}
+            <div className="ml-auto flex items-center gap-2">
+              <ShareButton title={name} className="h-9 w-9 grid place-items-center rounded-full border border-black/10 bg-white text-gray-500 hover:border-accent hover:text-accent transition" />
+              <WishlistButton id={p.id} iconSize={20} className="h-9 w-9 grid place-items-center rounded-full border border-black/10 bg-white hover:border-accent transition" />
             </div>
-          )}
+          </div>
 
           <div className="mt-4 flex items-center gap-3 flex-wrap">
             <span className="text-3xl font-extrabold text-accent-dark">{taka(p.price)}</span>
             {hasDiscount && (
               <>
                 <span className="text-gray-400 line-through text-lg">{taka(p.compare_at_price as number)}</span>
-                <span className="rounded-lg bg-accent text-white text-xs font-bold px-2 py-1">{Math.round((1 - p.price / (p.compare_at_price as number)) * 100)}% ছাড়</span>
+                <span className="rounded-md bg-accent text-white text-xs font-bold px-2 py-1">{Math.round((1 - p.price / (p.compare_at_price as number)) * 100)}% ছাড়</span>
               </>
             )}
           </div>
 
-          {/* Highlights */}
-          <ul className="mt-5 grid sm:grid-cols-2 gap-2">
-            {highlights.slice(0, 6).map((h, i) => (
-              <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
-                <svg viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.2" className="h-4 w-4 mt-0.5 shrink-0"><path d="M5 13l4 4L19 7" /></svg>
-                <span>{h}</span>
-              </li>
-            ))}
-          </ul>
+          {/* Highlights — only when the product actually has them */}
+          {highlights.length > 0 && (
+            <ul className="mt-5 grid sm:grid-cols-2 gap-2">
+              {highlights.slice(0, 6).map((h, i) => (
+                <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.2" className="h-4 w-4 mt-0.5 shrink-0"><path d="M5 13l4 4L19 7" /></svg>
+                  <span>{h}</span>
+                </li>
+              ))}
+            </ul>
+          )}
 
-          <p className="mt-5 text-gray-700 leading-relaxed whitespace-pre-line">{p.description_bn || p.description_en || "বিস্তারিত শীঘ্রই যোগ করা হবে।"}</p>
+          {(p.description_bn || p.description_en) && (
+            <p className="mt-5 text-gray-700 leading-relaxed whitespace-pre-line">{p.description_bn || p.description_en}</p>
+          )}
 
           <div className="mt-6">
-            <div className="flex items-stretch gap-2">
-              <div className="flex-1 min-w-0">
-                <BuyButtons product={{ id: p.id, slug: p.slug, name, price: p.price, image: images[0] }} />
-              </div>
-              <WishlistButton id={p.id} className="shrink-0 w-[70px] grid place-items-center rounded-lg border border-black/10 bg-white hover:border-accent transition" />
-            </div>
+            <BuyButtons product={{ id: p.id, slug: p.slug, name, price: p.price, image: images[0] }} />
             <p className="mt-3 text-xs text-gray-400">স্টক: {p.stock > 0 ? `${p.stock} টি` : "স্টকে নেই"}</p>
           </div>
 
-          <div className="mt-6 grid grid-cols-3 gap-2 text-center">
+          <div className="mt-6 grid grid-cols-3 gap-2.5 text-center">
             {TRUST.map((b, i) => (
-              <div key={i} className="rounded-xl border border-black/5 bg-white py-3">
+              <div key={i} className="rounded-lg border border-black/[0.07] bg-white py-3 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={b.c} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="mx-auto mb-1"><path d={b.d} /></svg>
                 <span className="text-[11px] font-medium text-gray-600">{b.t}</span>
               </div>
@@ -172,7 +176,7 @@ export default async function ProductPage({ params }: { params: { slug: string }
       {specs.length > 0 && (
         <section className="mt-14 max-w-3xl">
           <h2 className="text-xl font-bold font-display mb-4">স্পেসিফিকেশন</h2>
-          <div className="rounded-2xl bg-white ring-1 ring-black/5 overflow-hidden divide-y divide-black/5">
+          <div className="rounded-lg bg-white border border-black/[0.06] shadow-[0_1px_2px_rgba(0,0,0,0.03)] overflow-hidden divide-y divide-black/5">
             {specs.map((s, i) => (
               <div key={i} className="flex gap-4 px-5 py-3 text-sm">
                 <span className="w-40 shrink-0 text-gray-500">{s.label}</span>
@@ -187,7 +191,20 @@ export default async function ProductPage({ params }: { params: { slug: string }
       {howTo && (
         <section className="mt-14 max-w-3xl">
           <h2 className="text-xl font-bold font-display mb-4">ব্যবহারের নিয়ম</h2>
-          <div className="rounded-2xl bg-brand-soft/50 ring-1 ring-black/5 p-5 text-gray-700 leading-relaxed whitespace-pre-line">{howTo}</div>
+          <div className="rounded-lg bg-brand-soft/50 border border-black/[0.06] p-5 text-gray-700 leading-relaxed whitespace-pre-line">{howTo}</div>
+        </section>
+      )}
+
+      {/* Product description photos (admin-uploaded, Daraz-style long details) */}
+      {Array.isArray(p.description_images) && p.description_images.filter(Boolean).length > 0 && (
+        <section className="mt-14 max-w-3xl">
+          <h2 className="text-xl font-bold font-display mb-4">পণ্যের বিস্তারিত</h2>
+          <div className="space-y-3">
+            {p.description_images.filter(Boolean).map((src, i) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img key={i} src={src} alt={`${name} — ${i + 1}`} loading="lazy" className="w-full rounded-lg border border-black/[0.06]" />
+            ))}
+          </div>
         </section>
       )}
 
@@ -205,13 +222,18 @@ export default async function ProductPage({ params }: { params: { slug: string }
       {/* Shipping & returns info */}
       <section className="mt-14 grid sm:grid-cols-3 gap-3 max-w-4xl">
         {[
-          { t: "ডেলিভারি", d: "ঢাকায় ১–২ দিন, ঢাকার বাইরে ২–৪ দিন।" },
-          { t: "পেমেন্ট", d: "ক্যাশ অন ডেলিভারি — পণ্য হাতে পেয়ে টাকা দিন।" },
-          { t: "রিটার্ন", d: "পণ্যে সমস্যা থাকলে সহজ রিটার্ন সুবিধা।" },
+          { t: "ডেলিভারি", d: "ঢাকায় ১–২ দিন, ঢাকার বাইরে ২–৪ দিন।", c: "#2F90CC", icon: "M1 3h15v13H1zM16 8h4l3 3v5h-7M5.5 18.5a2.5 2.5 0 105 0M18.5 18.5a2.5 2.5 0 105 0" },
+          { t: "পেমেন্ট", d: "ক্যাশ অন ডেলিভারি — পণ্য হাতে পেয়ে টাকা দিন।", c: "#16a34a", icon: "M2 7h20v10H2zM2 11h20M6 15h3" },
+          { t: "রিটার্ন", d: "পণ্যে সমস্যা থাকলে সহজ রিটার্ন সুবিধা।", c: "#E77BA6", icon: "M3 12a9 9 0 103-6.7L3 8M3 3v5h5" },
         ].map((x) => (
-          <div key={x.t} className="rounded-2xl bg-white ring-1 ring-black/5 p-4">
-            <p className="font-semibold text-sm text-gray-900">{x.t}</p>
-            <p className="text-xs text-gray-500 mt-1 leading-relaxed">{x.d}</p>
+          <div key={x.t} className="flex items-start gap-3 rounded-lg bg-white border border-black/[0.06] shadow-[0_1px_2px_rgba(0,0,0,0.03)] p-4">
+            <span className="shrink-0 h-9 w-9 grid place-items-center rounded-lg" style={{ background: `${x.c}14`, color: x.c }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d={x.icon} /></svg>
+            </span>
+            <div>
+              <p className="font-semibold text-sm text-gray-900">{x.t}</p>
+              <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{x.d}</p>
+            </div>
           </div>
         ))}
       </section>

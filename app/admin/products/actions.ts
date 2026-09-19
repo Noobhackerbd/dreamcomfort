@@ -26,6 +26,7 @@ export interface ProductInput {
   meta_description?: string;
   is_active: boolean;
   images: string[];
+  description_images?: string[]; // extra photos shown inside the product description
   rating?: number | null;
   review_count?: number | null;
   // Rich product-page content (optional, entered as text; parsed here).
@@ -36,7 +37,7 @@ export interface ProductInput {
   video_url?: string;
 }
 
-const OPTIONAL_COLS = ["rating", "review_count", "highlights", "specs", "how_to_use", "faq", "video_url"];
+const OPTIONAL_COLS = ["rating", "review_count", "highlights", "specs", "how_to_use", "faq", "video_url", "description_images"];
 /** True when the error is a "column doesn't exist" for one of the optional/newer columns. */
 function isMissingOptionalCol(error: any): boolean {
   return !!error && (error.code === "42703" || new RegExp(OPTIONAL_COLS.join("|"), "i").test(error.message || ""));
@@ -82,6 +83,7 @@ export async function saveProduct(input: ProductInput) {
     meta_description: input.meta_description?.trim() || null,
     is_active: !!input.is_active,
     images: input.images ?? [],
+    description_images: input.description_images && input.description_images.length ? input.description_images : null,
     rating,
     review_count: reviewCount,
     highlights: parseHighlights(input.highlights_text),

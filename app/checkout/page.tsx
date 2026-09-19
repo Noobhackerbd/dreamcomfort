@@ -10,7 +10,7 @@ import { fireEvent } from "@/components/track";
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { items, subtotal, clear } = useCart();
+  const { items, subtotal, clear, setQty, remove } = useCart();
   const [mounted, setMounted] = useState(false);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -178,11 +178,46 @@ export default function CheckoutPage() {
         {/* Right — summary */}
         <div className="rounded-2xl border border-black/5 bg-white p-5 shadow-sm md:sticky md:top-24">
           <h2 className="font-bold text-lg mb-3">অর্ডার সারাংশ</h2>
-          <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+          <div className="space-y-3 max-h-[22rem] overflow-y-auto pr-1 -mr-1">
             {items.map((i) => (
-              <div key={i.id} className="flex justify-between text-sm gap-2">
-                <span className="truncate">{i.name} × {i.qty}</span>
-                <span className="shrink-0 tabular-nums">{taka(i.price * i.qty)}</span>
+              <div key={i.id} className="flex gap-3 items-center">
+                {/* Product image */}
+                <div className="relative h-16 w-16 shrink-0 rounded-xl overflow-hidden border border-black/[0.06] bg-[#fafafa]">
+                  {i.image ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={i.image} alt={i.name} className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="absolute inset-0 grid place-items-center text-gray-300">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M20.6 6.6l-8-4a2 2 0 00-1.9 0l-8 4M3 6.6v10.8a2 2 0 001.1 1.8l7 3.4a2 2 0 001.8 0l7-3.4a2 2 0 001.1-1.8V6.6M3 6.6l9 4.4 9-4.4M12 22V11" /></svg>
+                    </span>
+                  )}
+                </div>
+
+                {/* Name, price, quantity stepper */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-semibold text-gray-800 leading-snug line-clamp-2">{i.name}</p>
+                  <p className="text-[12px] text-gray-400 mt-0.5 tabular-nums">{taka(i.price)} × {i.qty}</p>
+                  <div className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-black/[0.08] bg-white p-0.5">
+                    <button type="button" onClick={() => setQty(i.id, i.qty - 1)} aria-label="কমান"
+                      className="h-6 w-6 grid place-items-center rounded-full text-brand-dark bg-brand-soft hover:bg-brand hover:text-white active:scale-90 transition-all">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M5 12h14" /></svg>
+                    </button>
+                    <span className="min-w-[1.75rem] text-center text-[13px] font-bold tabular-nums select-none">{i.qty}</span>
+                    <button type="button" onClick={() => setQty(i.id, i.qty + 1)} aria-label="বাড়ান"
+                      className="h-6 w-6 grid place-items-center rounded-full text-white bg-gradient-to-b from-brand to-brand-dark hover:brightness-105 active:scale-90 transition-all">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Line total + remove */}
+                <div className="flex flex-col items-end justify-between self-stretch shrink-0">
+                  <button type="button" onClick={() => remove(i.id)} aria-label="সরান"
+                    className="h-7 w-7 grid place-items-center rounded-full text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2m2 0v14a1 1 0 01-1 1H7a1 1 0 01-1-1V6" /></svg>
+                  </button>
+                  <span className="text-[13px] font-bold text-gray-800 tabular-nums whitespace-nowrap">{taka(i.price * i.qty)}</span>
+                </div>
               </div>
             ))}
           </div>
