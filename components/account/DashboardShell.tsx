@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { logoutCustomer } from "@/app/account/actions";
 
 type NavKey = "overview" | "orders" | "wishlist" | "recent" | "coupons" | "addresses" | "support" | "profile";
@@ -37,6 +37,12 @@ export function DashboardShell({ active, name, email, children }: { active: NavK
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const initial = (name || email || "?").trim().charAt(0).toUpperCase();
+  const activeRef = useRef<HTMLAnchorElement>(null);
+
+  // Keep the active pill in view on mobile.
+  useEffect(() => {
+    activeRef.current?.scrollIntoView({ inline: "center", block: "nearest" });
+  }, []);
 
   async function logout() {
     setBusy(true);
@@ -46,50 +52,58 @@ export function DashboardShell({ active, name, email, children }: { active: NavK
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 md:py-10">
-      <div className="grid gap-6 md:grid-cols-[260px_1fr]">
+    <div className="mx-auto max-w-6xl px-4 py-5 md:py-10">
+      <div className="grid gap-5 md:gap-6 md:grid-cols-[260px_1fr]">
         {/* Sidebar / profile card */}
         <aside className="md:sticky md:top-24 h-max">
-          <div className="rounded-3xl bg-white ring-1 ring-black/5 shadow-sm p-5">
-            <div className="flex items-center gap-3">
-              <div className="h-12 w-12 rounded-full bg-brand-soft text-brand-dark grid place-items-center font-display text-lg font-bold">{initial}</div>
+          <div className="rounded-2xl bg-white border border-black/[0.06] shadow-[0_1px_2px_rgba(0,0,0,0.04)] overflow-hidden">
+            {/* Profile header with brand gradient */}
+            <div className="flex items-center gap-3 p-4 bg-gradient-to-br from-brand-soft to-white">
+              <div className="h-12 w-12 shrink-0 rounded-full bg-gradient-to-br from-brand to-brand-dark text-white grid place-items-center font-display text-lg font-bold shadow-[0_4px_10px_-3px_rgba(47,144,204,0.55)]">{initial}</div>
               <div className="min-w-0">
                 <p className="font-semibold text-gray-900 truncate">{name || "গ্রাহক"}</p>
-                <p className="text-xs text-gray-400 truncate">{email}</p>
+                <p className="text-xs text-gray-500 truncate">{email}</p>
               </div>
             </div>
 
             {/* Desktop nav */}
-            <nav className="mt-5 hidden md:flex md:flex-col gap-1">
+            <nav className="hidden md:flex md:flex-col gap-0.5 p-2.5 pt-1 border-t border-black/[0.05]">
               {NAV.map((n) => (
                 <a key={n.key} href={n.href}
-                  className={"flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition " +
-                    (active === n.key ? "bg-brand text-white shadow-sm" : "text-gray-600 hover:bg-gray-50")}>
+                  className={"flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors " +
+                    (active === n.key ? "bg-brand text-white shadow-[0_4px_12px_-4px_rgba(47,144,204,0.6)]" : "text-gray-600 hover:bg-brand-soft/60 hover:text-brand-dark")}>
                   {n.icon}{n.label}
                 </a>
               ))}
-              <a href="/track-order" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50">
+              <a href="/track-order" className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-600 hover:bg-brand-soft/60 hover:text-brand-dark transition-colors">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-[18px] w-[18px]"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
                 অর্ডার ট্র্যাক
               </a>
               <button onClick={logout} disabled={busy}
-                className="mt-1 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-60 text-left">
+                className="mt-0.5 flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-60 text-left transition-colors">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-[18px] w-[18px]"><path d="M15 12H4M9 7l-5 5 5 5M14 4h5v16h-5" /></svg>
                 {busy ? "..." : "লগ আউট"}
               </button>
             </nav>
           </div>
 
-          {/* Mobile nav: horizontal scroll tabs */}
-          <div className="md:hidden mt-3 -mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
+          {/* Mobile nav: horizontal scrolling icon + label pills */}
+          <div className="md:hidden mt-3 -mx-4 px-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
             {NAV.map((n) => (
-              <a key={n.key} href={n.href}
-                className={"shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[13px] font-medium ring-1 transition " +
-                  (active === n.key ? "bg-brand text-white ring-brand" : "bg-white text-gray-600 ring-black/5")}>
-                {n.label}
+              <a key={n.key} href={n.href} ref={active === n.key ? activeRef : undefined}
+                className={"shrink-0 inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-2 text-[13px] font-semibold border transition-colors " +
+                  (active === n.key ? "bg-brand text-white border-brand shadow-[0_4px_12px_-4px_rgba(47,144,204,0.6)]" : "bg-white text-gray-600 border-black/[0.08]")}>
+                {n.icon}{n.label}
               </a>
             ))}
-            <button onClick={logout} disabled={busy} className="shrink-0 whitespace-nowrap rounded-full px-4 py-2 text-[13px] font-medium ring-1 ring-red-200 text-red-600 bg-white">লগ আউট</button>
+            <a href="/track-order" className="shrink-0 inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-2 text-[13px] font-semibold border border-black/[0.08] bg-white text-gray-600">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-4 w-4"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
+              ট্র্যাক
+            </a>
+            <button onClick={logout} disabled={busy} className="shrink-0 inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-2 text-[13px] font-semibold border border-red-200 text-red-600 bg-white">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-4 w-4"><path d="M15 12H4M9 7l-5 5 5 5M14 4h5v16h-5" /></svg>
+              লগ আউট
+            </button>
           </div>
         </aside>
 

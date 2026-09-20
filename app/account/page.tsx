@@ -23,49 +23,55 @@ export default async function AccountOverview() {
   const recent = orders.slice(0, 5);
 
   const stats = [
-    { label: "মোট অর্ডার", value: String(total) },
-    { label: "চলমান", value: String(active) },
-    { label: "ডেলিভারড", value: String(delivered) },
-    { label: "মোট কেনাকাটা", value: taka(spent) },
+    { label: "মোট অর্ডার", value: String(total), c: "#2F90CC", icon: "M6 2h9l5 5v15H6zM14 2v6h6M9 13h6M9 17h6" },
+    { label: "চলমান", value: String(active), c: "#f59e0b", icon: "M1 3h15v13H1zM16 8h4l3 3v5h-7M5.5 18.5a2.5 2.5 0 105 0M18.5 18.5a2.5 2.5 0 105 0" },
+    { label: "ডেলিভারড", value: String(delivered), c: "#16a34a", icon: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10zM9 12l2 2 4-4" },
+    { label: "মোট কেনাকাটা", value: taka(spent), c: "#DE6699", icon: "M3 7h18v10H3zM3 11h18M7 15h3" },
   ];
 
   return (
     <DashboardShell active="overview" name={name} email={session.email || ""}>
-      <div className="mb-6">
+      <div className="mb-5">
         <h1 className="font-display text-2xl font-bold text-gray-900">স্বাগতম{name ? `, ${name.split(" ")[0]}` : ""} 👋</h1>
         <p className="mt-1 text-sm text-gray-500">আপনার অর্ডার ও অ্যাকাউন্টের সারসংক্ষেপ।</p>
       </div>
 
+      {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {stats.map((s) => (
-          <div key={s.label} className="rounded-2xl bg-white ring-1 ring-black/5 shadow-sm p-4">
-            <p className="text-[22px] font-extrabold tracking-tight text-gray-900 tabular-nums">{s.value}</p>
-            <p className="mt-1 text-[12px] text-gray-500">{s.label}</p>
+          <div key={s.label} className="rounded-xl bg-white border border-black/[0.06] shadow-[0_1px_2px_rgba(0,0,0,0.04)] p-4">
+            <span className="inline-grid place-items-center h-9 w-9 rounded-lg mb-2.5" style={{ background: `${s.c}14`, color: s.c }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d={s.icon} /></svg>
+            </span>
+            <p className="text-[22px] font-extrabold tracking-tight text-gray-900 tabular-nums leading-none">{s.value}</p>
+            <p className="mt-1.5 text-[12px] text-gray-500">{s.label}</p>
           </div>
         ))}
       </div>
 
-      <div className="mt-6 rounded-3xl bg-white ring-1 ring-black/5 shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-black/5">
+      {/* Recent orders */}
+      <div className="mt-6 rounded-2xl bg-white border border-black/[0.06] shadow-[0_1px_2px_rgba(0,0,0,0.04)] overflow-hidden">
+        <div className="flex items-center justify-between px-4 sm:px-5 py-4 border-b border-black/5">
           <h2 className="font-semibold text-gray-900">সাম্প্রতিক অর্ডার</h2>
-          <a href="/account/orders" className="text-sm font-medium text-brand hover:underline">সব দেখুন</a>
+          <a href="/account/orders" className="text-sm font-semibold text-brand-dark hover:underline">সব দেখুন</a>
         </div>
         {recent.length === 0 ? (
           <div className="px-5 py-12 text-center">
             <p className="text-gray-500">এখনো কোনো অর্ডার নেই।</p>
-            <a href="/products" className="mt-3 inline-block rounded-xl bg-brand text-white px-5 py-2.5 text-sm font-semibold hover:bg-brand-dark">শপিং শুরু করুন</a>
+            <a href="/products" className="mt-3 inline-block rounded-lg bg-brand text-white px-5 py-2.5 text-sm font-semibold hover:bg-brand-dark transition-colors">শপিং শুরু করুন</a>
           </div>
         ) : (
           <ul className="divide-y divide-black/5">
             {recent.map((o) => (
               <li key={o.id}>
-                <a href={`/account/orders/${o.order_number}`} className="flex items-center gap-3 px-5 py-3.5 hover:bg-gray-50 transition">
+                <a href={`/account/orders/${o.order_number}`} className="flex items-center gap-3 px-4 sm:px-5 py-3.5 hover:bg-brand-soft/40 transition-colors">
                   <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-sm text-gray-900">#{o.order_number}</p>
+                    <p className="font-semibold text-sm text-gray-900 truncate">#{o.order_number}</p>
                     <p className="text-xs text-gray-400 mt-0.5">{new Date(new Date(o.created_at).getTime() + 6 * 3600000).toISOString().slice(0, 10)}</p>
                   </div>
                   <OrderStatusBadge status={o.status} />
-                  <p className="font-bold text-sm text-gray-900 whitespace-nowrap">{taka(Number(o.total))}</p>
+                  <p className="font-bold text-sm text-gray-900 whitespace-nowrap tabular-nums">{taka(Number(o.total))}</p>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4 text-gray-300 shrink-0"><path d="M9 6l6 6-6 6" /></svg>
                 </a>
               </li>
             ))}
