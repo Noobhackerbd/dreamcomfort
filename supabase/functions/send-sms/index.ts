@@ -1,17 +1,19 @@
-// Supabase Auth "Send SMS Hook" — delivers phone OTP codes through a Bangladeshi
-// SMS gateway (default: bulksmsbd.net). Supabase POSTs { user, sms:{ otp } } here
-// whenever a customer requests a login/verify code; we forward it to the gateway.
+// Supabase Auth "Send SMS Hook" — delivers phone OTP codes through the Automas
+// Bangladeshi SMS gateway (api.automas.com.bd). Supabase POSTs { user, sms:{ otp } }
+// here whenever a customer requests a login/verify code; we forward it to Automas.
 //
-// Deploy:  supabase functions deploy send-sms --no-verify-jwt
-// Secrets (set in Supabase → Project Settings → Edge Functions → Secrets, or via CLI):
-//   BULKSMSBD_API_KEY      = your bulksmsbd API key
-//   BULKSMSBD_SENDER_ID    = your approved sender/masking id (or numeric)
-//   SEND_SMS_HOOK_SECRET   = the secret Supabase shows when you enable the hook
+// Deploy:  supabase functions deploy send-sms --no-verify-jwt --project-ref zsmcmofuiteovgvjaeds
+// Secrets (Supabase → Project Settings → Edge Functions → Secrets, or via CLI):
+//   AUTOMAS_API_KEY       = your Automas API key (panel → Generate Api Key)
+//   AUTOMAS_SENDER_ID     = your approved Automas sender id (e.g. 8809617641677)
+//   SEND_SMS_HOOK_SECRET  = the secret Supabase shows when you enable the hook
 //
 // Then: Auth → Hooks → "Send SMS hook" → enable → URL =
-//   https://<project-ref>.supabase.co/functions/v1/send-sms
+//   https://zsmcmofuiteovgvjaeds.supabase.co/functions/v1/send-sms
 
 import { Webhook } from "https://esm.sh/standardwebhooks@1.0.0";
+
+const AUTOMAS_URL = "https://api.automas.com.bd/smsapiv4";
 
 Deno.serve(async (req) => {
   const raw = await req.text();
@@ -38,26 +40,44 @@ Deno.serve(async (req) => {
   }
   if (!phone || !otp) return json({ error: { message: "missing phone/otp" } }, 400);
 
-  // 3) Send it through the BD gateway.
-  const apiKey = Deno.env.get("BULKSMSBD_API_KEY") || "";
-  const senderId = Deno.env.get("BULKSMSBD_SENDER_ID") || "";
-  const message = `DreamComfort OTP: ${otp}\nএই কোডটি কাউকে দেবেন না।`;
+  // Automas accepts 8801XXXXXXXXX or local 01XXXXXXXXX. Normalise to local 01…
+  const contact = phone.replace(/^\+?88/, "");
 
-  const url = "https://bulksmsbd.net/api/smsapi"
-    + `?api_key=${encodeURIComponent(apiKey)}`
-    + `&type=text`
-    + `&number=${encodeURIComponent(phone)}`
-    + `&senderid=${encodeURIComponent(senderId)}`
-    + `&message=${encodeURIComponent(message)}`;
+  // 3) Send it through Automas (JSON single-SMS endpoint, ASCII text = cheapest).
+  const apiKey = Deno.env.get("AUTOMAS_API_KEY") || "";
+  const senderId = Deno.env.get("AUTOMAS_SENDER_ID") || "";
+  const message = `DreamComfort login code: ${otp}. Valid 5 minutes. Do not share this code.`;
 
   try {
-    const res = await fetch(url);
+    const res = await fetch(AUTOMAS_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        api_key: apiKey,
+        senderid: senderId,
+        type: "text",
+        scheduledDateTime: "",
+        msg: message,
+        contacts: contact,
+      }),
+    });
     const text = await res.text();
-    // bulksmsbd returns response_code 202 on success.
-    let code: number | null = null;
-    try { code = JSON.parse(text)?.response_code ?? null; } catch { code = /(^|[^0-9])202([^0-9]|$)/.test(text) ? 202 : null; }
-    if (!res.ok || code !== 202) {
-      return json({ error: { message: `gateway: ${text}` } }, 502);
+
+    // Automas success == status 0. The live API returns a BARE array
+    // [ { "status":0, "id":..., "msisdn":"..." } ] (the docs' { "response":[…] }
+    // wrapper is not what the endpoint actually sends), so handle both shapes.
+    let status: number | null = null;
+    try {
+      const j = JSON.parse(text);
+      let first: any = null;
+      if (Array.isArray(j)) first = j[0];
+      else if (Array.isArray(j?.response)) first = j.response[0];
+      else first = j?.response ?? j;
+      status = typeof first?.status === "number" ? first.status : null;
+    } catch { status = null; }
+
+    if (!res.ok || status !== 0) {
+      return json({ error: { message: `automas: ${text}` } }, 502);
     }
     return json({}, 200);
   } catch (e) {
@@ -68,15 +88,3 @@ Deno.serve(async (req) => {
 function json(body: unknown, status: number) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
-
-/* ─────────────────────────────────────────────────────────────────────────
-   USING A DIFFERENT BD GATEWAY?  Replace the block in step 3 above.
-
-   Alpha SMS (sms.net.bd):
-     const url = `https://api.sms.net.bd/sendsms?api_key=${apiKey}&to=${phone}&msg=${encodeURIComponent(message)}`;
-     // success: JSON { "error": 0, ... }
-
-   SSL Wireless:
-     POST https://smsplus.sslwireless.com/api/v3/send-sms
-     body: { api_token, sid, msisdn: phone, sms: message, csms_id: crypto.randomUUID() }
-   ───────────────────────────────────────────────────────────────────────── */

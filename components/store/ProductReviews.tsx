@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { submitReview, uploadReviewPhoto, type Review } from "@/app/product/review-actions";
@@ -45,6 +45,23 @@ export function ProductReviews({ productId, initial, count, average }: { product
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+
+  // Photo lightbox: clicking a review photo opens a full popup with prev/next.
+  const [lb, setLb] = useState<{ imgs: string[]; i: number } | null>(null);
+  const lbPrev = () => setLb((s) => (s ? { ...s, i: (s.i - 1 + s.imgs.length) % s.imgs.length } : s));
+  const lbNext = () => setLb((s) => (s ? { ...s, i: (s.i + 1) % s.imgs.length } : s));
+
+  useEffect(() => {
+    if (!lb) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLb(null);
+      else if (e.key === "ArrowLeft") lbPrev();
+      else if (e.key === "ArrowRight") lbNext();
+    };
+    window.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = ""; };
+  }, [lb]);
 
   const input = "w-full rounded-lg border border-black/10 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand/15 transition";
 
@@ -137,17 +154,58 @@ export function ProductReviews({ productId, initial, count, average }: { product
                 </div>
               </div>
               {r.body && <p className="mt-2 text-sm text-gray-700 leading-relaxed">{r.body}</p>}
-              {Array.isArray(r.images) && r.images.length > 0 && (
+              {Array.isArray(r.images) && r.images.filter(Boolean).length > 0 && (
                 <div className="mt-2 flex gap-2 flex-wrap">
-                  {r.images.map((u, i) => (
-                    <a key={i} href={u} target="_blank" rel="noopener" className="relative h-16 w-16 rounded-md overflow-hidden ring-1 ring-black/10">
+                  {r.images.filter(Boolean).map((u, i, arr) => (
+                    <button key={i} type="button" onClick={() => setLb({ imgs: arr as string[], i })}
+                      aria-label="ছবি বড় করে দেখুন"
+                      className="relative h-16 w-16 rounded-md overflow-hidden ring-1 ring-black/10 cursor-zoom-in transition-transform hover:scale-[1.04]">
                       <Image src={u} alt="" fill sizes="64px" className="object-cover" />
-                    </a>
+                    </button>
                   ))}
                 </div>
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Photo lightbox popup with prev / next */}
+      {lb && (
+        <div className="fixed inset-0 z-[120] bg-black/85 backdrop-blur-sm grid place-items-center px-4 select-none"
+          onClick={() => setLb(null)}>
+          {/* Close */}
+          <button type="button" onClick={() => setLb(null)} aria-label="বন্ধ"
+            className="absolute top-4 right-4 h-11 w-11 grid place-items-center rounded-full bg-white/10 text-white hover:bg-white/20 transition">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-6 w-6"><path d="M6 6l12 12M18 6L6 18" /></svg>
+          </button>
+
+          {/* Prev */}
+          {lb.imgs.length > 1 && (
+            <button type="button" onClick={(e) => { e.stopPropagation(); lbPrev(); }} aria-label="আগের ছবি"
+              className="absolute left-3 sm:left-6 top-1/2 -translate-y-1/2 h-12 w-12 grid place-items-center rounded-full bg-white/10 text-white hover:bg-white/25 transition">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-7 w-7"><path d="M15 18l-6-6 6-6" /></svg>
+            </button>
+          )}
+
+          {/* Image */}
+          <div className="relative max-w-3xl max-h-[82vh] w-full flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={lb.imgs[lb.i]} alt="" className="max-h-[78vh] w-auto max-w-full rounded-lg object-contain shadow-2xl" />
+            {lb.imgs.length > 1 && (
+              <div className="mt-3 rounded-full bg-white/12 text-white text-[13px] font-medium px-3 py-1 tabular-nums">
+                {lb.i + 1} / {lb.imgs.length}
+              </div>
+            )}
+          </div>
+
+          {/* Next */}
+          {lb.imgs.length > 1 && (
+            <button type="button" onClick={(e) => { e.stopPropagation(); lbNext(); }} aria-label="পরের ছবি"
+              className="absolute right-3 sm:right-6 top-1/2 -translate-y-1/2 h-12 w-12 grid place-items-center rounded-full bg-white/10 text-white hover:bg-white/25 transition">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-7 w-7"><path d="M9 18l6-6-6-6" /></svg>
+            </button>
+          )}
         </div>
       )}
     </section>
