@@ -53,9 +53,9 @@ export function DashboardShell({ active, name, email, children }: { active: NavK
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-5 md:py-10">
-      <div className="grid gap-5 md:gap-6 md:grid-cols-[260px_1fr]">
+      <div className="grid gap-5 md:gap-6 md:grid-cols-[260px_minmax(0,1fr)] min-w-0">
         {/* Sidebar / profile card */}
-        <aside className="md:sticky md:top-24 h-max">
+        <aside className="min-w-0 md:sticky md:top-24 h-max">
           <div className="rounded-2xl bg-white border border-black/[0.06] shadow-[0_1px_2px_rgba(0,0,0,0.04)] overflow-hidden">
             {/* Profile header with brand gradient */}
             <div className="flex items-center gap-3 p-4 bg-gradient-to-br from-brand-soft to-white">

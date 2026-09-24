@@ -204,6 +204,46 @@ export default async function AdminOrders({
     }
   }
 
+  // Repeat-customer sequence — how many times this phone has ordered, and which
+  // number THIS order is (1 = new customer, 2 = second order, …). Read-only, admin
+  // display only. Matches by the 10-digit subscriber number so 01…/88…/+88… all
+  // group together. This does NOT touch the Meta Pixel / CAPI in any way.
+  if (rows.length) {
+    const coreOf = (p: string) => {
+      let d = (p || "").replace(/\D/g, "");
+      if (d.startsWith("88")) d = d.slice(2);
+      if (d.startsWith("0")) d = d.slice(1);
+      return d; // e.g. 1712345678
+    };
+    const cores = Array.from(new Set(rows.map((r) => coreOf(r.customer_phone)).filter((c) => c.length >= 9)));
+    if (cores.length) {
+      const orFilter = cores.map((c) => `customer_phone.ilike.%${c}%`).join(",");
+      const { data: hist } = await supabase
+        .from("orders")
+        .select("customer_phone, created_at")
+        .or(orFilter)
+        .limit(3000);
+      if (hist && hist.length) {
+        const byCore = new Map<string, number[]>();
+        for (const h of hist as any[]) {
+          const key = coreOf(h.customer_phone || "");
+          if (key.length < 9) continue;
+          const arr = byCore.get(key) ?? [];
+          arr.push(new Date(h.created_at).getTime());
+          byCore.set(key, arr);
+        }
+        for (const r of rows) {
+          const arr = byCore.get(coreOf(r.customer_phone));
+          if (arr && arr.length) {
+            const t = new Date(r.created_at).getTime();
+            r.customerSeq = arr.filter((x) => x <= t).length; // ordinal of THIS order
+            r.customerTotal = arr.length;                     // all-time total
+          }
+        }
+      }
+    }
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between gap-3 mb-5">

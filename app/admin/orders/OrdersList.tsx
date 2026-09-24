@@ -98,6 +98,15 @@ export interface OrderRow {
   items: { product_name: string; quantity: number; image?: string | null }[];
   courierRatio?: import("@/lib/bdcourier").CourierRatio | null;
   courierCheckedAt?: number | null;
+  // Repeat-customer info (computed from order history — admin display only).
+  customerSeq?: number;   // this order is the customer's Nth order (1 = new)
+  customerTotal?: number; // customer's all-time order count
+}
+
+/** 1→"1st", 2→"2nd", 3→"3rd", 4→"4th" … */
+function ordinal(n: number): string {
+  const s = ["th", "st", "nd", "rd"], v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
 // Small colored pill for the saved courier tracking status.
@@ -393,6 +402,16 @@ export function OrdersList({ orders, cbReady, bdcReady, isTrash }: { orders: Ord
                       <span className="text-[10px] font-medium whitespace-nowrap" style={{ color: "var(--a-faint)" }}>· {bdDateTime(o.created_at)}</span>
                       {lastCalled && <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: "#fbf1dd", color: "#a5710f" }}>Last call</span>}
                       {o.is_booked && <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: "var(--a-warn-soft)", color: "var(--a-warn)" }}>Booked</span>}
+                      {(o.customerSeq ?? 0) >= 2 && (
+                        <span
+                          title={`Repeat customer — ${o.customerTotal ?? o.customerSeq} orders total`}
+                          className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                          style={{ background: "#f3e8ff", color: "#7c3aed" }}
+                        >
+                          <Icon name="refresh" className="h-2.5 w-2.5" />
+                          {ordinal(o.customerSeq as number)} order
+                        </span>
+                      )}
                       <CourierStatusPill status={o.courier_status} pickupAt={o.courier_pickup_at} />
                     </div>
                     <p className="font-bold text-[14px] whitespace-nowrap shrink-0">{taka(Number(o.total))}</p>
