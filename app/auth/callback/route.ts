@@ -15,7 +15,8 @@ export async function GET(req: NextRequest) {
     try {
       const sb = getSupabaseServerClient();
       const { data } = await sb.auth.exchangeCodeForSession(code);
-      const user = data?.user ?? data?.session?.user;
+      const d = data as any;
+      const user = d?.user ?? d?.session?.user ?? null;
       // Save the Google/Facebook account's name (and email) into the customer
       // profile so the dashboard greets them by name. Never overwrite a name the
       // customer set themselves; only fill it in when it's empty.
