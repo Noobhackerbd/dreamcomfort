@@ -6,9 +6,9 @@ import { useEffect, useRef, useState } from "react";
 export interface Slide { image: string; link?: string }
 
 export function BannerSlider({
-  slides, aspect = "16 / 10", arrows = false, rounded = "1.25rem", interval = 4000,
+  slides, arrows = false, rounded = "1.25rem", interval = 4000, priority = false,
 }: {
-  slides: Slide[]; aspect?: string; arrows?: boolean; rounded?: string; interval?: number;
+  slides: Slide[]; aspect?: string; arrows?: boolean; rounded?: string; interval?: number; priority?: boolean;
 }) {
   const [i, setI] = useState(0);
   const n = slides.length;
@@ -27,11 +27,12 @@ export function BannerSlider({
     <div className="relative overflow-hidden" style={{ borderRadius: rounded }}>
       <div className="flex transition-transform duration-500 ease-out" style={{ transform: `translateX(-${i * 100}%)` }}>
         {slides.map((s, idx) => {
-          // Mobile: show the WHOLE banner (object-contain, no crop). Desktop: clean
-          // full-bleed strip (object-cover). The soft gradient fills any letterbox.
+          // Show the banner at its OWN aspect ratio — full width, edge to edge, with
+          // NO crop and NO side letterbox gaps. next/image still optimizes it (WebP,
+          // resized to the display width) via the width/height=0 + h-auto pattern.
           const inner = (
-            <div className="relative w-full" style={{ aspectRatio: aspect, background: "linear-gradient(135deg,#E7F4FC,#FDEDF3)" }}>
-              <Image src={s.image} alt="" fill sizes="(max-width:768px) 100vw, 1024px" className="object-contain md:object-cover" priority={idx === 0} />
+            <div className="relative w-full bg-black/[0.03]">
+              <Image src={s.image} alt="" width={0} height={0} sizes="(max-width:768px) 100vw, 1152px" className="block w-full h-auto" priority={priority && idx === 0} loading={priority && idx === 0 ? undefined : "lazy"} />
             </div>
           );
           return (

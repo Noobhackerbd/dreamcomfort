@@ -3,6 +3,7 @@
 // badges, categories, featured products and an offer banner.
 import type { Metadata } from "next";
 import Image from "next/image";
+import Link from "next/link";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { getHomeBanners, getFlashSale, getHomeStrip, getCategoryImages } from "@/lib/settings";
 import { STORE, STORE_NAME } from "@/lib/config";
@@ -29,10 +30,10 @@ function SectionHead({ title, href }: { title: string; href?: string }) {
     <div className="flex items-center justify-between mb-3.5 mt-8">
       <h2 className="text-xl font-bold font-display">{title}</h2>
       {href && (
-        <a href={href} className="text-sm font-semibold text-brand-dark inline-flex items-center gap-1">
+        <Link href={href} prefetch className="text-sm font-semibold text-brand-dark inline-flex items-center gap-1">
           সব দেখুন
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6" /></svg>
-        </a>
+        </Link>
       )}
     </div>
   );
@@ -76,22 +77,23 @@ export default async function HomePage() {
   return (
     <div>
       {/* Hero */}
-      {heroSlides.length > 0 && <BannerSlider slides={heroSlides} aspect="16 / 9" arrows rounded="0" interval={4000} />}
+      {heroSlides.length > 0 && <BannerSlider slides={heroSlides} aspect="16 / 9" arrows rounded="0" interval={4000} priority />}
 
       {/* Slim GIF/image strip below the hero (admin-uploaded) */}
-      {strip.gif && (
-        strip.link ? (
-          <a href={strip.link} className="mt-4 block overflow-hidden rounded-2xl">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={strip.gif} alt="" className="w-full h-auto" />
-          </a>
+      {strip.gif && (() => {
+        const isVideo = /\.(mp4|webm|mov)(\?|$)/i.test(strip.gif);
+        const media = isVideo ? (
+          <video src={strip.gif} className="w-full h-auto" autoPlay muted loop playsInline preload="none" />
         ) : (
-          <div className="mt-4 overflow-hidden rounded-2xl">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={strip.gif} alt="" className="w-full h-auto" />
-          </div>
-        )
-      )}
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={strip.gif} alt="" className="w-full h-auto" loading="lazy" decoding="async" />
+        );
+        return strip.link ? (
+          <a href={strip.link} className="mt-4 block overflow-hidden rounded-2xl">{media}</a>
+        ) : (
+          <div className="mt-4 overflow-hidden rounded-2xl">{media}</div>
+        );
+      })()}
 
       {/* Flash sale — single horizontal-scrolling row (PC + mobile) */}
       {showFlash && (
@@ -104,10 +106,10 @@ export default async function HomePage() {
                 </span>
                 {flash.title || "ফ্ল্যাশ সেল"}
               </h2>
-              <a href="/products" className="text-sm font-semibold text-brand-dark inline-flex items-center gap-1 shrink-0">
+              <Link href="/products" prefetch className="text-sm font-semibold text-brand-dark inline-flex items-center gap-1 shrink-0">
                 সব দেখুন
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6" /></svg>
-              </a>
+              </Link>
             </div>
             {flash.endsAt && <div className="mt-2"><FlashCountdown endsAt={flash.endsAt} /></div>}
           </div>
@@ -128,7 +130,7 @@ export default async function HomePage() {
           <div className="rounded-xl border-l border-t border-black/[0.06] overflow-hidden bg-white">
             <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8">
               {categories.map((c, i) => (
-                <a key={c.id} href={`/products?category=${c.slug}`}
+                <Link key={c.id} href={`/products?category=${c.slug}`} prefetch
                   className="group flex flex-col items-center gap-1.5 p-2.5 sm:p-3.5 border-r border-b border-black/[0.06] hover:bg-gray-50 transition-colors">
                   <div className="relative w-full aspect-square">
                     {catImages[c.id] ? (
@@ -140,7 +142,7 @@ export default async function HomePage() {
                     )}
                   </div>
                   <span className="text-center text-[11.5px] sm:text-[13px] text-gray-700 leading-tight line-clamp-2 group-hover:text-brand transition-colors">{c.name_bn || c.name_en}</span>
-                </a>
+                </Link>
               ))}
             </div>
           </div>
@@ -179,9 +181,9 @@ export default async function HomePage() {
       </div>
 
       <div className="text-center mt-8">
-        <a href="/products" className="inline-block rounded-xl border border-brand text-brand-dark font-bold text-sm px-7 py-3 hover:bg-brand-soft">
+        <Link href="/products" prefetch className="inline-block rounded-xl border border-brand text-brand-dark font-bold text-sm px-7 py-3 hover:bg-brand-soft">
           সব পণ্য দেখুন →
-        </a>
+        </Link>
       </div>
 
       {(productCount ?? 0) === 0 && (

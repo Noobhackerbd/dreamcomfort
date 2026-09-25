@@ -6,11 +6,13 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/ssr-browser";
 import { saveHomeStrip } from "./actions";
 import type { HomeStripSettings } from "@/lib/settings";
 
+const isVideoUrl = (u: string) => /\.(mp4|webm|mov)(\?|$)/i.test(u || "");
+
 async function uploadGif(file: File): Promise<string | null> {
   const supabase = getSupabaseBrowserClient();
   const ext = file.name.split(".").pop() || "gif";
   const path = `home/strip-${Date.now()}-${Math.floor(Math.random() * 1e6)}.${ext}`;
-  const { error } = await supabase.storage.from("product-images").upload(path, file, { cacheControl: "3600", contentType: file.type || "image/gif" });
+  const { error } = await supabase.storage.from("product-images").upload(path, file, { cacheControl: "604800", contentType: file.type || "image/gif" });
   if (error) return null;
   return supabase.storage.from("product-images").getPublicUrl(path).data.publicUrl;
 }
@@ -29,7 +31,7 @@ export function StripManager({ initial }: { initial: HomeStripSettings }) {
     e.target.value = "";
     if (!file) return;
     setErr(null);
-    if (file.size > 5 * 1024 * 1024) { setErr("ফাইলটি অনেক বড় (৫MB এর নিচে দিন)।"); return; }
+    if (file.size > 10 * 1024 * 1024) { setErr("ফাইলটি অনেক বড় (১০MB এর নিচে দিন)।"); return; }
     setBusy(true);
     const url = await uploadGif(file);
     setBusy(false);
@@ -53,23 +55,28 @@ export function StripManager({ initial }: { initial: HomeStripSettings }) {
       </div>
       <p className="text-xs dc-muted mb-1 leading-relaxed">হিরো ব্যানারের ঠিক নিচে একটি স্লিম GIF/ছবি দেখানো হবে (আগের ট্রাস্ট-ব্যাজ সেকশনের জায়গায়)।</p>
       <p className="text-xs mb-4 leading-relaxed" style={{ color: "#F0530E" }}>
-        <b>সাইজ:</b> প্রস্থ ১২০০px × উচ্চতা ~২০০px (স্লিম ওয়াইড ব্যানার) · ফরম্যাট GIF/JPG/PNG · সর্বোচ্চ ৫MB
+        <b>সাইজ:</b> প্রস্থ ১২০০px × উচ্চতা ~২০০px (স্লিম ওয়াইড ব্যানার) · ফরম্যাট GIF/JPG/PNG বা ভিডিও (MP4/WebM) · সর্বোচ্চ ১০MB<br />
+        <span className="text-gray-500">💡 GIF এর বদলে ছোট MP4 ভিডিও দিলে সাইট অনেক দ্রুত লোড হয় (একই অ্যানিমেশন, ১০× কম সাইজ)।</span>
       </p>
 
       {gif ? (
         <div className="mb-3">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={gif} alt="strip preview" className="w-full h-auto rounded-xl ring-1 ring-black/5" />
-          <button type="button" onClick={() => { setGif(""); setSaved(false); }} className="mt-2 text-xs underline" style={{ color: "#dc2626" }}>GIF সরান</button>
+          {isVideoUrl(gif) ? (
+            <video src={gif} className="w-full h-auto rounded-xl ring-1 ring-black/5" autoPlay muted loop playsInline />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={gif} alt="strip preview" className="w-full h-auto rounded-xl ring-1 ring-black/5" />
+          )}
+          <button type="button" onClick={() => { setGif(""); setSaved(false); }} className="mt-2 text-xs underline" style={{ color: "#dc2626" }}>সরান</button>
         </div>
       ) : (
-        <p className="text-sm dc-muted mb-3">এখনো কোনো GIF যোগ করা হয়নি।</p>
+        <p className="text-sm dc-muted mb-3">এখনো কিছু যোগ করা হয়নি।</p>
       )}
 
       <div className="flex flex-wrap items-center gap-2">
         <label className="inline-flex items-center gap-2 dc-btn cursor-pointer">
-          {busy ? "Uploading…" : (gif ? "GIF পরিবর্তন করুন" : "GIF আপলোড করুন")}
-          <input type="file" accept="image/gif,image/png,image/jpeg,image/webp" onChange={onUpload} className="hidden" disabled={busy} />
+          {busy ? "Uploading…" : (gif ? "পরিবর্তন করুন" : "GIF / ভিডিও আপলোড করুন")}
+          <input type="file" accept="image/gif,image/png,image/jpeg,image/webp,video/mp4,video/webm" onChange={onUpload} className="hidden" disabled={busy} />
         </label>
       </div>
 

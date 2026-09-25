@@ -173,7 +173,7 @@ export async function LandingScreen({
     <section className="relative z-10 mx-auto max-w-6xl px-0 pt-2 sm:px-3 sm:pt-4">
       {/* DESKTOP — exact mockup image */}
       <a href="#order-form" aria-label="এখনই অর্ডার করুন" className="hidden md:block overflow-hidden rounded-[1.4rem] shadow-soft ring-1 ring-black/5">
-        <Image src="/hero-full.jpg" alt="ড্রিম কমফোর্ট — প্রিমিয়াম ডাবল লেয়ার প্রেগনেন্সি পিলো সেট" width={2000} height={760} priority sizes="1152px" className="w-full h-auto" />
+        <Image src="/hero-full.jpg" alt="ড্রিম কমফোর্ট — প্রিমিয়াম ডাবল লেয়ার প্রেগনেন্সি পিলো সেট" width={2000} height={760} priority sizes="(min-width: 768px) 1152px, 1px" className="w-full h-auto" />
       </a>
 
       {/* MOBILE — same content, re-laid for readability */}
@@ -189,7 +189,7 @@ export async function LandingScreen({
         <p className="mt-2.5 text-[15px] text-gray-600">আরামদায়ক ঘুম, সুস্থ মা ও সুস্থ শিশুর জন্য</p>
 
         <div className="mt-4 overflow-hidden rounded-[1.1rem] shadow-md">
-          <Image src="/hero-pillow.jpg" alt="ড্রিম কমফোর্ট প্রেগনেন্সি পিলো" width={1000} height={760} priority sizes="100vw" className="h-auto w-full" />
+          <Image src="/hero-pillow.jpg" alt="ড্রিম কমফোর্ট প্রেগনেন্সি পিলো" width={1000} height={760} priority sizes="(min-width: 768px) 1px, 100vw" className="h-auto w-full" />
         </div>
 
         <div className="mt-5 grid grid-cols-4 gap-2">

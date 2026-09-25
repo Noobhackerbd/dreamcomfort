@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { HeaderIcons } from "@/components/store/HeaderIcons";
 import { PredictiveSearch } from "@/components/store/PredictiveSearch";
 import { ImageSearchButton } from "@/components/store/ImageSearchButton";
@@ -20,11 +21,11 @@ export function Header(_props: { logoUrl?: string; phone?: string }) {
                  data-[scrolled=true]:shadow-[0_8px_28px_-16px_rgba(20,40,70,0.35)]"
     >
       <div className="mx-auto max-w-6xl px-3 sm:px-4 h-full flex items-center gap-1.5 sm:gap-3">
-        <a href="/" className="flex items-center shrink-0 group" aria-label="DREAM COMFORT">
+        <Link href="/" prefetch className="flex items-center shrink-0 group" aria-label="DREAM COMFORT">
           <span className="font-display text-[15px] sm:text-xl font-extrabold tracking-wide whitespace-nowrap origin-left transition-transform duration-200 group-hover:scale-[1.03]">
             <span className="text-brand">DREAM</span> <span className="text-accent">COMFORT</span>
           </span>
-        </a>
+        </Link>
 
         <PredictiveSearch />
 

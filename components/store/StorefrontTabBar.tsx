@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -76,11 +77,11 @@ export function StorefrontTabBar({ categoryIcon }: { categoryIcon?: string }) {
             </div>
             <nav className="flex-1 overflow-y-auto py-1">
               {MENU_LINKS.map((l) => (
-                <a key={l.href + l.label} href={l.href}
+                <Link key={l.href + l.label} href={l.href} prefetch
                   className="flex items-center justify-between px-4 py-3.5 text-[14px] font-semibold text-gray-700 border-b border-black/5 hover:bg-cream/60 transition">
                   {l.label}
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4 text-gray-300"><path d="M9 6l6 6-6 6" /></svg>
-                </a>
+                </Link>
               ))}
             </nav>
           </div>
@@ -104,11 +105,11 @@ export function StorefrontTabBar({ categoryIcon }: { categoryIcon?: string }) {
             );
           }
           return (
-            <a key={t.href} href={t.href} className="flex-1 flex flex-col items-center gap-0.5 text-[10.5px] font-semibold"
+            <Link key={t.href} href={t.href} prefetch className="flex-1 flex flex-col items-center gap-0.5 text-[10.5px] font-semibold"
               style={{ color: active ? "#2F90CC" : "#9a94a1" }}>
               <IconPill active={active}>{icon}</IconPill>
               {t.label}
-            </a>
+            </Link>
           );
         })}
         <button onClick={() => setMenuOpen((v) => !v)} aria-label="মেনু"

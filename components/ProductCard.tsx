@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 import { taka } from "@/lib/format";
 import type { Product } from "@/lib/types";
 
@@ -35,8 +36,9 @@ export function ProductCard({ p }: { p: Product }) {
   const soldOut = typeof p.stock === "number" && p.stock <= 0;
 
   return (
-    <a
+    <Link
       href={`/product/${p.slug}`}
+      prefetch
       className="dc-fade-up group flex flex-col bg-white rounded-md border border-black/[0.07] overflow-hidden transition-shadow duration-200 hover:shadow-[0_6px_18px_-8px_rgba(0,0,0,0.22)]"
     >
       {/* Image — clean white, square (Daraz style) */}
@@ -79,6 +81,6 @@ export function ProductCard({ p }: { p: Product }) {
           )}
         </div>
       </div>
-    </a>
+    </Link>
   );
 }
