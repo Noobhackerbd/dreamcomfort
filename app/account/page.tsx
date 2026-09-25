@@ -31,26 +31,26 @@ export default async function AccountOverview() {
 
   return (
     <DashboardShell active="overview" name={name} email={session.email || ""}>
-      <div className="mb-5">
+      <div className="mb-4">
         <h1 className="font-display text-2xl font-bold text-gray-900">স্বাগতম{name ? `, ${name.split(" ")[0]}` : ""} 👋</h1>
         <p className="mt-1 text-sm text-gray-500">আপনার অর্ডার ও অ্যাকাউন্টের সারসংক্ষেপ।</p>
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
         {stats.map((s) => (
-          <div key={s.label} className="rounded-xl bg-white border border-black/[0.06] shadow-[0_1px_2px_rgba(0,0,0,0.04)] p-4">
-            <span className="inline-grid place-items-center h-9 w-9 rounded-lg mb-2.5" style={{ background: `${s.c}14`, color: s.c }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d={s.icon} /></svg>
+          <div key={s.label} className="rounded-xl bg-white border border-black/[0.06] shadow-[0_1px_2px_rgba(0,0,0,0.04)] p-3">
+            <span className="inline-grid place-items-center h-8 w-8 rounded-lg mb-2" style={{ background: `${s.c}14`, color: s.c }}>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d={s.icon} /></svg>
             </span>
-            <p className="text-[22px] font-extrabold tracking-tight text-gray-900 tabular-nums leading-none">{s.value}</p>
-            <p className="mt-1.5 text-[12px] text-gray-500">{s.label}</p>
+            <p className="text-[20px] font-extrabold tracking-tight text-gray-900 tabular-nums leading-none">{s.value}</p>
+            <p className="mt-1 text-[11.5px] text-gray-500">{s.label}</p>
           </div>
         ))}
       </div>
 
       {/* Recent orders */}
-      <div className="mt-6 rounded-2xl bg-white border border-black/[0.06] shadow-[0_1px_2px_rgba(0,0,0,0.04)] overflow-hidden">
+      <div className="mt-5 rounded-2xl bg-white border border-black/[0.06] shadow-[0_1px_2px_rgba(0,0,0,0.04)] overflow-hidden">
         <div className="flex items-center justify-between px-4 sm:px-5 py-4 border-b border-black/5">
           <h2 className="font-semibold text-gray-900">সাম্প্রতিক অর্ডার</h2>
           <a href="/account/orders" className="text-sm font-semibold text-brand-dark hover:underline">সব দেখুন</a>

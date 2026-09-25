@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { logoutCustomer } from "@/app/account/actions";
 
 type NavKey = "overview" | "orders" | "wishlist" | "recent" | "coupons" | "addresses" | "support" | "profile";
@@ -37,12 +37,12 @@ export function DashboardShell({ active, name, email, children }: { active: NavK
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const initial = (name || email || "?").trim().charAt(0).toUpperCase();
-  const activeRef = useRef<HTMLAnchorElement>(null);
 
-  // Keep the active pill in view on mobile.
-  useEffect(() => {
-    activeRef.current?.scrollIntoView({ inline: "center", block: "nearest" });
-  }, []);
+  // Short labels for the mobile tile grid (fit on one line under each icon).
+  const SHORT: Record<NavKey, string> = {
+    overview: "ড্যাশবোর্ড", orders: "অর্ডার", wishlist: "উইশলিস্ট", recent: "সম্প্রতি",
+    coupons: "কুপন", addresses: "ঠিকানা", support: "সাপোর্ট", profile: "প্রোফাইল",
+  };
 
   async function logout() {
     setBusy(true);
@@ -52,8 +52,8 @@ export function DashboardShell({ active, name, email, children }: { active: NavK
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-5 md:py-10">
-      <div className="grid gap-5 md:gap-6 md:grid-cols-[260px_minmax(0,1fr)] min-w-0">
+    <div className="mx-auto max-w-6xl px-4 py-4 md:py-8">
+      <div className="grid gap-4 md:gap-6 md:grid-cols-[260px_minmax(0,1fr)] min-w-0">
         {/* Sidebar / profile card */}
         <aside className="min-w-0 md:sticky md:top-24 h-max">
           <div className="rounded-2xl bg-white border border-black/[0.06] shadow-[0_1px_2px_rgba(0,0,0,0.04)] overflow-hidden">
@@ -87,22 +87,30 @@ export function DashboardShell({ active, name, email, children }: { active: NavK
             </nav>
           </div>
 
-          {/* Mobile nav: horizontal scrolling icon + label pills */}
-          <div className="md:hidden mt-3 -mx-4 px-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-            {NAV.map((n) => (
-              <a key={n.key} href={n.href} ref={active === n.key ? activeRef : undefined}
-                className={"shrink-0 inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-2 text-[13px] font-semibold border transition-colors " +
-                  (active === n.key ? "bg-brand text-white border-brand shadow-[0_4px_12px_-4px_rgba(47,144,204,0.6)]" : "bg-white text-gray-600 border-black/[0.08]")}>
-                {n.icon}{n.label}
-              </a>
-            ))}
-            <a href="/track-order" className="shrink-0 inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-2 text-[13px] font-semibold border border-black/[0.08] bg-white text-gray-600">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-4 w-4"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
-              ট্র্যাক
+          {/* Mobile nav: icon-tile grid (wraps, no horizontal scroll) */}
+          <div className="md:hidden mt-3 grid grid-cols-4 gap-2">
+            {NAV.map((n) => {
+              const on = active === n.key;
+              return (
+                <a key={n.key} href={n.href}
+                  className={"flex flex-col items-center justify-start gap-1.5 rounded-xl border py-2.5 px-1 transition-colors " +
+                    (on ? "border-brand bg-brand-soft" : "border-black/[0.06] bg-white")}>
+                  <span className={"h-9 w-9 grid place-items-center rounded-full shrink-0 " + (on ? "bg-brand text-white" : "bg-brand-soft text-brand-dark")}>{n.icon}</span>
+                  <span className="text-[10.5px] font-semibold text-center leading-tight text-gray-700 line-clamp-2">{SHORT[n.key]}</span>
+                </a>
+              );
+            })}
+            <a href="/track-order" className="flex flex-col items-center justify-start gap-1.5 rounded-xl border border-black/[0.06] bg-white py-2.5 px-1">
+              <span className="h-9 w-9 grid place-items-center rounded-full bg-brand-soft text-brand-dark shrink-0">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-[18px] w-[18px]"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
+              </span>
+              <span className="text-[10.5px] font-semibold text-center leading-tight text-gray-700">ট্র্যাক</span>
             </a>
-            <button onClick={logout} disabled={busy} className="shrink-0 inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-2 text-[13px] font-semibold border border-red-200 text-red-600 bg-white">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-4 w-4"><path d="M15 12H4M9 7l-5 5 5 5M14 4h5v16h-5" /></svg>
-              লগ আউট
+            <button onClick={logout} disabled={busy} className="flex flex-col items-center justify-start gap-1.5 rounded-xl border border-red-100 bg-white py-2.5 px-1 disabled:opacity-60">
+              <span className="h-9 w-9 grid place-items-center rounded-full bg-red-50 text-red-500 shrink-0">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-[18px] w-[18px]"><path d="M15 12H4M9 7l-5 5 5 5M14 4h5v16h-5" /></svg>
+              </span>
+              <span className="text-[10.5px] font-semibold text-center leading-tight text-red-500">লগ আউট</span>
             </button>
           </div>
         </aside>
