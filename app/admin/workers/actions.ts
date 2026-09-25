@@ -52,6 +52,27 @@ export async function updateWorker(id: string, patch: { name?: string; photo?: s
   return { ok: true };
 }
 
+/** Set (or clear) a worker's personal login PIN for the /worker self-service panel. */
+export async function setWorkerLoginPin(workerId: string, pin: string) {
+  await requireAdmin();
+  const clean = (pin || "").replace(/\D/g, "").slice(0, 8);
+  const supabase = getServerSupabase();
+  // Guard against two workers sharing the same PIN (they'd collide at login).
+  if (clean) {
+    const { data: clash } = await supabase.from("workers").select("id").eq("pin", clean).neq("id", workerId).limit(1);
+    if (clash && clash.length) return { ok: false, error: "এই পিন অন্য কর্মীর আছে — অন্য পিন দিন।" };
+  }
+  const { error } = await supabase.from("workers").update({ pin: clean || null }).eq("id", workerId);
+  if (error) {
+    if ((error as any).code === "42703" || /pin/i.test(error.message || "")) {
+      return { ok: false, error: "প্রথমে worker-PIN migration চালান (workers টেবিলে pin কলাম)।" };
+    }
+    return { ok: false, error: error.message };
+  }
+  revalidatePath(`/admin/workers/${workerId}`);
+  return { ok: true };
+}
+
 export async function deleteWorker(id: string) {
   await requireAdmin();
   const supabase = getServerSupabase();

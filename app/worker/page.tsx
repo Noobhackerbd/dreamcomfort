@@ -1,21 +1,41 @@
-// app/worker/page.tsx — the worker panel has NO shared list. Each worker opens their
-// OWN private link (/worker/<id>) that the owner shares individually.
+// app/worker/page.tsx — worker self-service entry point. Each worker logs in
+// with their own PIN and lands directly on their live panel.
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
+import { getServerSupabase } from "@/lib/supabase/server";
+import { setCost as computeSetCost, type Worker, type WorkerItem, type ProductionRow, type AdjustmentRow } from "@/lib/workers";
+import { WorkerLogin } from "@/components/worker/WorkerLogin";
+import { WorkerPanel } from "@/components/worker/WorkerPanel";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "কর্মী প্যানেল", robots: { index: false, follow: false } };
 
-export default function WorkerIndex() {
-  return (
-    <div className="max-w-md mx-auto px-4 py-16 text-center">
-      <div className="mx-auto mb-4 h-14 w-14 rounded-full bg-brand-soft text-brand-dark grid place-items-center">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-7 w-7"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1" /><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" /></svg>
-      </div>
-      <h1 className="font-display text-2xl font-bold text-gray-900">কর্মী প্যানেল</h1>
-      <p className="mt-2 text-gray-500 leading-relaxed">
-        আপনার নিজের ব্যক্তিগত লিংক দিয়ে প্রবেশ করুন।<br />
-        লিংক না থাকলে মালিকের কাছ থেকে সংগ্রহ করুন।
-      </p>
-    </div>
-  );
+export default async function WorkerIndex() {
+  const workerId = cookies().get("dc_worker")?.value || null;
+
+  if (workerId) {
+    const svc = getServerSupabase();
+    const [wRes, iRes, pRes, aRes] = await Promise.all([
+      svc.from("workers").select("*").eq("id", workerId).single(),
+      svc.from("worker_items").select("*").order("sort_order", { ascending: true }),
+      svc.from("worker_production").select("*").eq("worker_id", workerId).order("created_at", { ascending: false }).limit(500),
+      svc.from("worker_adjustments").select("*").eq("worker_id", workerId).order("created_at", { ascending: false }).limit(500),
+    ]);
+    const w = wRes.data as Worker | null;
+    if (w && (w as any).active !== false) {
+      const items = ((iRes.data as WorkerItem[]) ?? []).filter((i) => i.active);
+      return (
+        <WorkerPanel
+          worker={{ id: w.id, name: w.name, photo: w.photo, phone: w.phone }}
+          items={items}
+          setCost={computeSetCost((iRes.data as WorkerItem[]) ?? [])}
+          initialProduction={(pRes.data as ProductionRow[]) ?? []}
+          initialAdjustments={(aRes.data as AdjustmentRow[]) ?? []}
+        />
+      );
+    }
+    // Stale / inactive — fall through to the login screen.
+  }
+
+  return <WorkerLogin />;
 }

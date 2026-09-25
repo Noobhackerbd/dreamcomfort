@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { taka } from "@/lib/format";
 import { Icon } from "@/components/admin/icons";
 import type { Worker, WorkerItem, ProductionRow, AdjustmentRow, WorkerSummary } from "@/lib/workers";
-import { addProduction, deleteProduction, addAdjustment, deleteAdjustment, deleteWorker } from "../actions";
+import { addProduction, deleteProduction, addAdjustment, deleteAdjustment, deleteWorker, setWorkerLoginPin } from "../actions";
 
 export function WorkerDetail({
   worker, items, production, adjustments, summary, setCost,
@@ -30,6 +30,17 @@ export function WorkerDetail({
   const [akind, setAkind] = useState<"damage" | "bonus" | "payment">("payment");
   const [aamt, setAamt] = useState("");
   const [anote, setAnote] = useState("");
+
+  const [pinVal, setPinVal] = useState<string>((worker as any).pin ?? "");
+  const [pinBusy, setPinBusy] = useState(false);
+  const [pinMsg, setPinMsg] = useState<string | null>(null);
+  async function savePin() {
+    setPinBusy(true); setPinMsg(null);
+    const res = await setWorkerLoginPin(worker.id, pinVal);
+    setPinBusy(false);
+    setPinMsg(res.ok ? "✓ Saved" : (res.error || "Failed"));
+    if (res.ok) router.refresh();
+  }
 
   const pieceCost = items.find((i) => i.id === pitem)?.pcs_cost ?? 0;
   const previewAmount = pkind === "set" ? (Number(pqty) || 0) * setCost : (Number(pqty) || 0) * Number(pieceCost);
@@ -96,7 +107,18 @@ export function WorkerDetail({
         <Stat label="Paid" value={taka(summary.paid)} tone="#2563eb" />
         <Stat label="Due" value={taka(summary.due)} tone={summary.due > 0 ? "#16a34a" : "var(--a-muted)"} big />
       </div>
-      <p className="text-xs dc-muted mb-6">{summary.sets} sets · {summary.pieces} separate pieces made</p>
+      <p className="text-xs dc-muted mb-4">{summary.sets} sets · {summary.pieces} separate pieces made</p>
+
+      {/* Worker login PIN */}
+      <section className="dc-card p-4 mb-4">
+        <h2 className="font-bold text-[15px] mb-1">🔑 Worker login PIN</h2>
+        <p className="text-xs dc-muted mb-3">কর্মী <b>/worker</b> এ এই পিন দিয়ে লগইন করে নিজের লাইভ প্যানেলে এন্ট্রি দেবে।</p>
+        <div className="flex gap-2">
+          <input value={pinVal} onChange={(e) => setPinVal(e.target.value.replace(/\D/g, "").slice(0, 8))} inputMode="numeric" placeholder="e.g. 2580" className="dc-input flex-1 tracking-[0.3em] font-bold" />
+          <button onClick={savePin} disabled={pinBusy} className="dc-btn dc-btn-solid disabled:opacity-60">Save</button>
+        </div>
+        {pinMsg && <p className="text-xs mt-1.5" style={{ color: pinMsg.startsWith("✓") ? "#16a34a" : "#dc2626" }}>{pinMsg}</p>}
+      </section>
 
       {/* Add production */}
       <section className="dc-card p-4 mb-4">

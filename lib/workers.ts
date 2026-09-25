@@ -16,6 +16,7 @@ export interface Worker {
   phone: string | null;
   active: boolean;
   created_at: string;
+  pin?: string | null; // per-worker login PIN for the self-service /worker panel
 }
 export interface ProductionRow {
   id: string;
