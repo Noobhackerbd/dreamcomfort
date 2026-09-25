@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/ssr-browser";
-import { loginCustomer } from "@/app/account/actions";
+import { loginCustomer, phoneLoginSync, saveCustomerName } from "@/app/account/actions";
 
 type Tab = "password" | "phone";
 
@@ -30,6 +30,8 @@ export function LoginModal() {
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [otpSent, setOtpSent] = useState(false);
+  const [askName, setAskName] = useState(false); // first-time phone login → collect name
+  const [custName, setCustName] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -95,9 +97,26 @@ export function LoginModal() {
       const sb = getSupabaseBrowserClient();
       const { error } = await sb.auth.verifyOtp({ phone: intl, token: code.trim(), type: "sms" });
       if (error) { setErr(error.message); return; }
+      // First-time phone login has no name — ask for it before entering.
+      try {
+        const sync = await phoneLoginSync();
+        if (sync.needsName) { setAskName(true); return; }
+      } catch { /* proceed anyway */ }
       window.location.href = "/account";
     } catch (e: any) { setErr(e?.message ?? "ব্যর্থ।"); }
     finally { setBusy(false); }
+  }
+
+  async function submitName(e: React.FormEvent) {
+    e.preventDefault();
+    setErr(null);
+    if (custName.trim().length < 2) { setErr("আপনার নাম লিখুন।"); return; }
+    setBusy(true);
+    try {
+      const res = await saveCustomerName(custName);
+      if (!res.ok) { setErr(res.error ?? "সেভ ব্যর্থ।"); return; }
+      window.location.href = "/account";
+    } finally { setBusy(false); }
   }
 
   async function oauthGoogle() {
@@ -125,9 +144,23 @@ export function LoginModal() {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-6 w-6"><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-6 8-6s8 2 8 6" /></svg>
           </div>
           <h2 className="text-xl font-bold font-display text-gray-900">স্বাগতম</h2>
-          <p className="text-[13px] text-gray-500 mt-1">লগইন করে কেনাকাটা চালিয়ে যান</p>
+          <p className="text-[13px] text-gray-500 mt-1">{askName ? "আর একটি ধাপ বাকি" : "লগইন করে কেনাকাটা চালিয়ে যান"}</p>
         </div>
 
+        {askName ? (
+          <form onSubmit={submitName} className="space-y-3">
+            <p className="text-center text-[13px] text-gray-500 -mt-2 mb-1">আপনার নামটি লিখুন — এটি আপনার প্রোফাইলে সংরক্ষিত থাকবে।</p>
+            <div className="relative">
+              <span className={iconWrap}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-5 w-5"><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-6 8-6s8 2 8 6" /></svg></span>
+              <input value={custName} onChange={(e) => setCustName(e.target.value)} placeholder="আপনার পুরো নাম" className={input} autoFocus autoComplete="name" />
+            </div>
+            {err && <p className="rounded-lg bg-red-50 text-red-600 text-sm px-3 py-2">{err}</p>}
+            <button type="submit" disabled={busy} className="w-full rounded-xl py-3.5 font-bold text-white bg-gradient-to-b from-brand to-brand-dark shadow-[0_10px_24px_-8px_rgba(47,144,204,0.55)] active:scale-[0.99] transition disabled:opacity-60 flex items-center justify-center gap-2">
+              {busy ? <Spinner /> : "সম্পন্ন করুন"}
+            </button>
+          </form>
+        ) : (
+        <>
         {/* Segmented toggle */}
         <div className="flex p-1 rounded-xl bg-gray-100 mb-5">
           <button onClick={() => { setTab("password"); setErr(null); }}
@@ -205,6 +238,8 @@ export function LoginModal() {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-3.5 w-3.5"><rect x="4" y="11" width="16" height="9" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
           আপনার তথ্য সম্পূর্ণ সুরক্ষিত
         </p>
+        </>
+        )}
       </div>
     </div>
   );

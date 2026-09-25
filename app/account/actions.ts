@@ -56,6 +56,51 @@ export async function loginCustomer(input: { email: string; password: string }) 
   return { ok: true };
 }
 
+/**
+ * Called right after a phone-OTP verify. Ensures a profile row exists (with the
+ * verified phone) and reports whether we still need to ask the customer for their
+ * name (true on their very first phone login, since OTP gives us no name).
+ */
+export async function phoneLoginSync(): Promise<{ ok: boolean; needsName: boolean }> {
+  const sb = getSupabaseServerClient();
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user) return { ok: false, needsName: false };
+  try {
+    const svc = getServerSupabase();
+    const { data: existing } = await svc.from("customer_profiles").select("name, phone").eq("id", user.id).maybeSingle();
+    const name = existing?.name ?? null;
+    await svc.from("customer_profiles").upsert({
+      id: user.id,
+      ...(name ? { name } : {}),
+      phone: existing?.phone ?? user.phone ?? null,
+      email: user.email ?? null,
+      updated_at: new Date().toISOString(),
+    });
+    return { ok: true, needsName: !(name && String(name).trim()) };
+  } catch {
+    return { ok: true, needsName: false };
+  }
+}
+
+/** Save the customer's name (used by the first-time phone-login name popup). */
+export async function saveCustomerName(name: string): Promise<{ ok: boolean; error?: string }> {
+  const sb = getSupabaseServerClient();
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user) return { ok: false, error: "লগইন করুন।" };
+  const nm = (name || "").trim();
+  if (nm.length < 2) return { ok: false, error: "আপনার নাম লিখুন।" };
+  try {
+    const svc = getServerSupabase();
+    const { data: existing } = await svc.from("customer_profiles").select("phone").eq("id", user.id).maybeSingle();
+    await svc.from("customer_profiles").upsert({
+      id: user.id, name: nm, phone: existing?.phone ?? user.phone ?? null, email: user.email ?? null, updated_at: new Date().toISOString(),
+    });
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? "সেভ ব্যর্থ।" };
+  }
+  return { ok: true };
+}
+
 export async function logoutCustomer() {
   const sb = getSupabaseServerClient();
   await sb.auth.signOut();

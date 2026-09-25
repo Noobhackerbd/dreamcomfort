@@ -2,6 +2,7 @@
 // Reads the `settings` table via the service-role client, with safe fallbacks to
 // lib/config defaults so the app works even before Migration 2 is run.
 
+import { unstable_cache } from "next/cache";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { SHIPPING, STORE, DeliveryArea } from "@/lib/config";
 import { DEFAULT_SMS_TEMPLATES, SmsTemplates } from "@/lib/sms/templates";
@@ -89,14 +90,28 @@ export interface HomeBannersSettings {
   offers: HomeBanner[]; // "special offer" slider lower down
 }
 
+// Settings change rarely (admin edits), but the storefront reads ~13 of them on
+// every render. Fetching each from Supabase per request is the main cause of slow
+// TTFB. So we cache each key's raw value across requests (60s) under the "settings"
+// tag, and bust that tag whenever admin saves (see saveSetting). This works even on
+// force-dynamic pages because it uses the Next data cache, not the full-route cache.
+const readSettingValue = unstable_cache(
+  async (key: string): Promise<unknown | null> => {
+    try {
+      const supabase = getServerSupabase();
+      const { data } = await supabase.from("settings").select("value").eq("key", key).single();
+      return data?.value ?? null;
+    } catch {
+      return null; // table not present yet, or env missing
+    }
+  },
+  ["dc-settings"],
+  { revalidate: 60, tags: ["settings"] }
+);
+
 async function readSetting<T>(key: string, fallback: T): Promise<T> {
-  try {
-    const supabase = getServerSupabase();
-    const { data } = await supabase.from("settings").select("value").eq("key", key).single();
-    if (data?.value) return { ...fallback, ...(data.value as object) } as T;
-  } catch {
-    // table not present yet, or env missing — use fallback
-  }
+  const value = await readSettingValue(key);
+  if (value) return { ...fallback, ...(value as object) } as T;
   return fallback;
 }
 
@@ -229,6 +244,8 @@ export async function saveSetting(key: string, value: unknown): Promise<void> {
     .from("settings")
     .upsert({ key, value, updated_at: new Date().toISOString() });
   if (error) throw new Error(error.message);
+  // Bust the settings cache so admin edits show up immediately on the storefront.
+  try { const { revalidateTag } = await import("next/cache"); revalidateTag("settings"); } catch { /* not in a request scope */ }
 }
 
 /** Worker-panel PIN (public /worker access gate). Empty = open (no PIN). */

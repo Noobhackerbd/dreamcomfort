@@ -5,6 +5,7 @@
 // session can never reach /admin.)
 
 import "server-only";
+import { cache } from "react";
 import { getSupabaseServerClient } from "@/lib/supabase/ssr-server";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { toLocalBdPhone } from "@/lib/carrybee";
@@ -29,8 +30,12 @@ export function phoneVariants(raw?: string | null): string[] {
   return [local, "88" + local, "+88" + local];
 }
 
-/** The signed-in customer, or null. Never throws. */
-export async function getCustomerSession(): Promise<CustomerSession | null> {
+/**
+ * The signed-in customer, or null. Never throws.
+ * Wrapped in React cache() so multiple calls within a single request/render
+ * (e.g. the account page + getMyOrders) share ONE auth round trip instead of two.
+ */
+export const getCustomerSession = cache(async (): Promise<CustomerSession | null> => {
   try {
     const sb = getSupabaseServerClient();
     const { data: { user } } = await sb.auth.getUser();
@@ -45,4 +50,4 @@ export async function getCustomerSession(): Promise<CustomerSession | null> {
   } catch {
     return null;
   }
-}
+});

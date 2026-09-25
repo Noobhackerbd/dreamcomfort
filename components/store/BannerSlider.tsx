@@ -28,8 +28,10 @@ export function BannerSlider({
       <div className="flex transition-transform duration-500 ease-out" style={{ transform: `translateX(-${i * 100}%)` }}>
         {slides.map((s, idx) => {
           const inner = (
+            {/* Mobile: show the WHOLE banner (object-contain, no crop). Desktop: clean
+                full-bleed strip (object-cover). The soft gradient fills any letterbox. */}
             <div className="relative w-full" style={{ aspectRatio: aspect, background: "linear-gradient(135deg,#E7F4FC,#FDEDF3)" }}>
-              <Image src={s.image} alt="" fill sizes="(max-width:768px) 100vw, 1024px" className="object-cover" priority={idx === 0} />
+              <Image src={s.image} alt="" fill sizes="(max-width:768px) 100vw, 1024px" className="object-contain md:object-cover" priority={idx === 0} />
             </div>
           );
           return (
