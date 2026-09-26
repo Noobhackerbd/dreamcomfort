@@ -1,9 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getSupabaseBrowserClient } from "@/lib/supabase/ssr-browser";
 import { loginCustomer, phoneLoginSync, saveCustomerName } from "@/app/account/actions";
 import { useL } from "@/components/i18n/I18nProvider";
+
+// The Supabase auth library (~110 kB) is only needed once a shopper opens the login
+// popup, so it's loaded on demand instead of on every page — warmed in the
+// background once the page is idle so the popup still opens instantly.
+let sbMod: Promise<typeof import("@/lib/supabase/ssr-browser")> | null = null;
+function loadSb() {
+  if (!sbMod) sbMod = import("@/lib/supabase/ssr-browser");
+  return sbMod;
+}
+async function getSb() {
+  return (await loadSb()).getSupabaseBrowserClient();
+}
 
 type Tab = "password" | "phone";
 
@@ -42,7 +53,7 @@ export function LoginModal() {
   useEffect(() => {
     async function onOpen() {
       try {
-        const sb = getSupabaseBrowserClient();
+        const sb = await getSb();
         const { data } = await sb.auth.getUser();
         if (data.user) { window.location.href = "/account"; return; }
       } catch {}
@@ -53,6 +64,14 @@ export function LoginModal() {
     window.addEventListener("dc:open-login", onOpen as EventListener);
     window.addEventListener("keydown", onKey);
     return () => { window.removeEventListener("dc:open-login", onOpen as EventListener); window.removeEventListener("keydown", onKey); };
+  }, []);
+
+  // Warm the auth library after the page is idle (never competes with page load).
+  useEffect(() => {
+    const w = window as any;
+    const run = () => { loadSb().catch(() => {}); };
+    const id = w.requestIdleCallback ? w.requestIdleCallback(run, { timeout: 6000 }) : setTimeout(run, 4000);
+    return () => { if (w.cancelIdleCallback && w.requestIdleCallback) w.cancelIdleCallback(id); else clearTimeout(id); };
   }, []);
 
   useEffect(() => {
@@ -81,7 +100,7 @@ export function LoginModal() {
     if (!intl) { setErr(L("Enter a valid mobile number (01XXXXXXXXX).","সঠিক মোবাইল নম্বর দিন (০১XXXXXXXXX)।")); return; }
     setBusy(true);
     try {
-      const sb = getSupabaseBrowserClient();
+      const sb = await getSb();
       const { error } = await sb.auth.signInWithOtp({ phone: intl });
       if (error) { setErr(error.message); return; }
       setOtpSent(true); setMsg(L("A code has been sent to your mobile.","কোড পাঠানো হয়েছে আপনার মোবাইলে।"));
@@ -96,7 +115,7 @@ export function LoginModal() {
     if (!intl || !code.trim()) { setErr(L("Enter the code.","কোড দিন।")); return; }
     setBusy(true);
     try {
-      const sb = getSupabaseBrowserClient();
+      const sb = await getSb();
       const { error } = await sb.auth.verifyOtp({ phone: intl, token: code.trim(), type: "sms" });
       if (error) { setErr(error.message); return; }
       // First-time phone login has no name — ask for it before entering.
@@ -124,7 +143,7 @@ export function LoginModal() {
   async function oauthGoogle() {
     setErr(null); setBusy(true);
     try {
-      const sb = getSupabaseBrowserClient();
+      const sb = await getSb();
       const { error } = await sb.auth.signInWithOAuth({
         provider: "google",
         options: { redirectTo: `${window.location.origin}/auth/callback?next=/account` },

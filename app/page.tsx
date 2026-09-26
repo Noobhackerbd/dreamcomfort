@@ -15,9 +15,11 @@ import { FlashCountdown } from "@/components/store/FlashCountdown";
 import { ForYou } from "@/components/store/ForYou";
 import { getForYou } from "@/app/for-you-actions";
 import { getFeaturedProducts } from "@/lib/featured";
-import { getL } from "@/lib/i18n-server";
+import { T } from "@/components/i18n/T";
+import type { ReactNode } from "react";
 
-export const dynamic = "force-dynamic";
+// Served from the edge cache and refreshed every 60s (and instantly on admin edits).
+export const revalidate = 60;
 
 export const metadata: Metadata = {
   title: `${STORE_NAME} — ${STORE.tagline}`,
@@ -26,14 +28,13 @@ export const metadata: Metadata = {
 
 const CAT_COLORS = ["#7c8cf0", "#E77BA6", "#f0a53a", "#9a7be0", "#3E9BD1", "#41b98a"];
 
-function SectionHead({ title, href }: { title: string; href?: string }) {
-  const { L } = getL();
+function SectionHead({ title, href }: { title: ReactNode; href?: string }) {
   return (
     <div className="flex items-center justify-between mb-3.5 mt-8">
       <h2 className="text-xl font-bold font-display">{title}</h2>
       {href && (
         <Link href={href} prefetch className="text-sm font-semibold text-brand-dark inline-flex items-center gap-1">
-          {L("See all", "সব দেখুন")}
+          <T en="See all" bn="সব দেখুন" />
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6" /></svg>
         </Link>
       )}
@@ -42,7 +43,6 @@ function SectionHead({ title, href }: { title: string; href?: string }) {
 }
 
 export default async function HomePage() {
-  const { L } = getL();
   const supabase = getServerSupabase();
   // One parallel batch — including featured & "for you" — so the homepage does a
   // single round of work instead of several sequential trips. The empty-store check
@@ -67,7 +67,7 @@ export default async function HomePage() {
     const map = Object.fromEntries(((fp as Product[]) ?? []).map((p) => [p.id, p]));
     flashProducts = flash.productIds.map((id) => map[id]).filter(Boolean) as Product[];
   }
-  // Hide the flash sale once its countdown has passed (page is force-dynamic → fresh each request).
+  // Hide the flash sale once its countdown has passed (page re-renders at most every 60s).
   const flashEndsMs = flash.endsAt ? new Date(flash.endsAt).getTime() : 0;
   const flashEnded = flashEndsMs > 0 && flashEndsMs <= Date.now();
   const showFlash = flashProducts.length > 0 && !flashEnded;
@@ -107,10 +107,10 @@ export default async function HomePage() {
                 <span className="inline-grid place-items-center h-7 w-7 rounded-lg text-white" style={{ background: "#F0530E" }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden><path d="M13 2L4.5 13.5H11l-1 8.5L19.5 10H13z" /></svg>
                 </span>
-                {flash.title || L("Flash Sale", "ফ্ল্যাশ সেল")}
+                {flash.title || <T en="Flash Sale" bn="ফ্ল্যাশ সেল" />}
               </h2>
               <Link href="/products" prefetch className="text-sm font-semibold text-brand-dark inline-flex items-center gap-1 shrink-0">
-                {L("See all", "সব দেখুন")}
+                <T en="See all" bn="সব দেখুন" />
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6" /></svg>
               </Link>
             </div>
@@ -129,7 +129,7 @@ export default async function HomePage() {
       {/* Categories */}
       {categories.length > 0 && (
         <>
-          <SectionHead title={L("Categories", "ক্যাটাগরি")} href="/products" />
+          <SectionHead title={<T en="Categories" bn="ক্যাটাগরি" />} href="/products" />
           <div className="rounded-xl border-l border-t border-black/[0.06] overflow-hidden bg-white">
             <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8">
               {categories.map((c, i) => (
@@ -144,7 +144,7 @@ export default async function HomePage() {
                       </span>
                     )}
                   </div>
-                  <span className="text-center text-[11.5px] sm:text-[13px] text-gray-700 leading-tight line-clamp-2 group-hover:text-brand transition-colors">{c.name_bn || c.name_en}</span>
+                  <span className="text-center text-[11.5px] sm:text-[13px] text-gray-700 leading-tight line-clamp-2 group-hover:text-brand transition-colors"><T en={c.name_en || c.name_bn} bn={c.name_bn || c.name_en} /></span>
                 </Link>
               ))}
             </div>
@@ -155,7 +155,7 @@ export default async function HomePage() {
       {/* Featured products */}
       {featured.length > 0 && (
         <>
-          <SectionHead title={L("Featured Products", "ফিচার্ড পণ্য")} href="/products" />
+          <SectionHead title={<T en="Featured Products" bn="ফিচার্ড পণ্য" />} href="/products" />
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {featured.map((p) => <ProductCard key={p.id} p={p} />)}
           </div>
@@ -165,7 +165,7 @@ export default async function HomePage() {
       {/* Offer banner */}
       {banners.offers.length > 0 && (
         <div className="mt-8">
-          <SectionHead title={L("Special Offers", "বিশেষ অফার")} />
+          <SectionHead title={<T en="Special Offers" bn="বিশেষ অফার" />} />
           <BannerSlider slides={banners.offers} aspect="16 / 7" interval={4500} />
         </div>
       )}
@@ -173,7 +173,7 @@ export default async function HomePage() {
       {/* For You — personalized recommendations with load-more */}
       {forYou.products.length > 0 && (
         <>
-          <SectionHead title={L("For You", "আপনার জন্য")} />
+          <SectionHead title={<T en="For You" bn="আপনার জন্য" />} />
           <ForYou initial={forYou.products} initialHasMore={forYou.hasMore} pageSize={8} />
         </>
       )}
@@ -185,12 +185,12 @@ export default async function HomePage() {
 
       <div className="text-center mt-8">
         <Link href="/products" prefetch className="inline-block rounded-xl border border-brand text-brand-dark font-bold text-sm px-7 py-3 hover:bg-brand-soft">
-          {L("View all products", "সব পণ্য দেখুন")} →
+          <T en="View all products" bn="সব পণ্য দেখুন" /> →
         </Link>
       </div>
 
       {(productCount ?? 0) === 0 && (
-        <p className="text-center text-gray-400 py-16">{L("No products added yet.", "এখনও কোনো পণ্য যোগ করা হয়নি।")} <a href="/admin/products" className="text-brand-dark underline">{L("Add products", "পণ্য যোগ করুন")}</a></p>
+        <p className="text-center text-gray-400 py-16"><T en="No products added yet." bn="এখনও কোনো পণ্য যোগ করা হয়নি।" /> <a href="/admin/products" className="text-brand-dark underline"><T en="Add products" bn="পণ্য যোগ করুন" /></a></p>
       )}
     </div>
   );

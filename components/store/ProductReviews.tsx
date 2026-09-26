@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { submitReview, uploadReviewPhoto, type Review } from "@/app/product/review-actions";
 import { useL } from "@/components/i18n/I18nProvider";
+import { T } from "@/components/i18n/T";
 
 function Stars({ rating, size = 14 }: { rating: number; size?: number }) {
   return (
@@ -89,8 +90,8 @@ export function ProductReviews({ productId, initial, count, average }: { product
   return (
     <section className="mt-14 max-w-3xl">
       <div className="flex items-center justify-between gap-3 mb-4">
-        <h2 className="text-xl font-bold font-display">{L("Customer Reviews","গ্রাহক রিভিউ")}</h2>
-        <button onClick={() => setOpen((v) => !v)} className="rounded-lg bg-brand text-white px-4 py-2 text-sm font-semibold hover:bg-brand-dark transition-colors">{L("Write a Review","রিভিউ লিখুন")}</button>
+        <h2 className="text-xl font-bold font-display"><T en="Customer Reviews" bn="গ্রাহক রিভিউ" /></h2>
+        <button onClick={() => setOpen((v) => !v)} className="rounded-lg bg-brand text-white px-4 py-2 text-sm font-semibold hover:bg-brand-dark transition-colors"><T en="Write a Review" bn="রিভিউ লিখুন" /></button>
       </div>
 
       {count > 0 && (
@@ -98,18 +99,18 @@ export function ProductReviews({ productId, initial, count, average }: { product
           <div className="text-center shrink-0">
             <p className="text-4xl font-extrabold text-gray-900">{average.toFixed(1)}</p>
             <div className="mt-1"><Stars rating={average} /></div>
-            <p className="mt-1 text-xs text-gray-400">{count} {L("reviews","রিভিউ")}</p>
+            <p className="mt-1 text-xs text-gray-400">{count} <T en="reviews" bn="রিভিউ" /></p>
           </div>
-          <p className="text-sm text-gray-600 leading-relaxed">{L("Reviews from verified customers. Share your experience too.","যাচাইকৃত গ্রাহকদের রিভিউ। আপনার অভিজ্ঞতাও শেয়ার করুন।")}</p>
+          <p className="text-sm text-gray-600 leading-relaxed"><T en="Reviews from verified customers. Share your experience too." bn="যাচাইকৃত গ্রাহকদের রিভিউ। আপনার অভিজ্ঞতাও শেয়ার করুন।" /></p>
         </div>
       )}
 
-      {done && <p className="rounded-lg bg-green-50 text-green-700 text-sm px-3 py-2 mb-4">{L("Thank you! Your review has been added ✓","ধন্যবাদ! আপনার রিভিউ যোগ হয়েছে ✓")}</p>}
+      {done && <p className="rounded-lg bg-green-50 text-green-700 text-sm px-3 py-2 mb-4"><T en="Thank you! Your review has been added ✓" bn="ধন্যবাদ! আপনার রিভিউ যোগ হয়েছে ✓" /></p>}
 
       {open && (
         <form onSubmit={submit} className="rounded-lg bg-white border border-black/[0.06] shadow-[0_1px_2px_rgba(0,0,0,0.03)] p-5 space-y-3 mb-5">
           <div>
-            <label className="block text-[12px] font-medium text-gray-600 mb-1">{L("Your rating","আপনার রেটিং")}</label>
+            <label className="block text-[12px] font-medium text-gray-600 mb-1"><T en="Your rating" bn="আপনার রেটিং" /></label>
             <div className="flex items-center gap-1" onMouseLeave={() => setHover(0)}>
               {[1, 2, 3, 4, 5].map((n) => (
                 <button key={n} type="button" onClick={() => setRating(n)} onMouseEnter={() => setHover(n)} aria-label={`${n} star`}>
@@ -135,15 +136,15 @@ export function ProductReviews({ productId, initial, count, average }: { product
                 </label>
               )}
             </div>
-            <p className="text-[11px] text-gray-400 mt-1">{L("Add photos (optional, up to 4)","ছবি যোগ করুন (ঐচ্ছিক, সর্বোচ্চ ৪টি)")}</p>
+            <p className="text-[11px] text-gray-400 mt-1"><T en="Add photos (optional, up to 4)" bn="ছবি যোগ করুন (ঐচ্ছিক, সর্বোচ্চ ৪টি)" /></p>
           </div>
           {err && <p className="rounded-lg bg-red-50 text-red-600 text-sm px-3 py-2">{err}</p>}
-          <button type="submit" disabled={busy || uploading} className="rounded-lg bg-brand text-white px-6 py-2.5 text-sm font-semibold hover:bg-brand-dark disabled:opacity-60 transition-colors">{busy ? "..." : L("Submit Review","রিভিউ জমা দিন")}</button>
+          <button type="submit" disabled={busy || uploading} className="rounded-lg bg-brand text-white px-6 py-2.5 text-sm font-semibold hover:bg-brand-dark disabled:opacity-60 transition-colors">{busy ? "..." : <T en="Submit Review" bn="রিভিউ জমা দিন" />}</button>
         </form>
       )}
 
       {initial.length === 0 ? (
-        !open && <p className="text-sm text-gray-500">{L("No reviews yet — be the first to review!","এখনো কোনো রিভিউ নেই — প্রথম রিভিউটি আপনি দিন!")}</p>
+        !open && <p className="text-sm text-gray-500"><T en="No reviews yet — be the first to review!" bn="এখনো কোনো রিভিউ নেই — প্রথম রিভিউটি আপনি দিন!" /></p>
       ) : (
         <div className="space-y-3">
           {initial.map((r) => (
@@ -151,7 +152,7 @@ export function ProductReviews({ productId, initial, count, average }: { product
               <div className="flex items-center gap-2">
                 <span className="h-9 w-9 rounded-full bg-brand-soft text-brand-dark grid place-items-center font-bold text-sm">{(r.name || "?").charAt(0).toUpperCase()}</span>
                 <div>
-                  <p className="text-sm font-semibold text-gray-900">{r.name || L("Customer","গ্রাহক")}</p>
+                  <p className="text-sm font-semibold text-gray-900">{r.name || <T en="Customer" bn="গ্রাহক" />}</p>
                   <div className="flex items-center gap-1.5"><Stars rating={r.rating} size={12} /><span className="text-[11px] text-gray-400">{new Date(r.created_at).toISOString().slice(0, 10)}</span></div>
                 </div>
               </div>

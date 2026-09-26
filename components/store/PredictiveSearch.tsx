@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { searchSuggestions } from "@/app/store-search-actions";
 import { useL } from "@/components/i18n/I18nProvider";
+import { T } from "@/components/i18n/T";
 
 const RECENT_KEY = "dc-search-recent";
 function loadRecent(): string[] { try { return JSON.parse(localStorage.getItem(RECENT_KEY) || "[]"); } catch { return []; } }
@@ -76,7 +77,7 @@ export function PredictiveSearch() {
       <button onClick={() => setOpen(true)} aria-label="Search"
         className="ml-2.5 sm:ml-4 mr-0.5 flex min-w-0 flex-1 sm:flex-none sm:w-56 items-center gap-1.5 sm:gap-2 h-8 sm:h-9 rounded-full bg-white/70 ring-1 ring-black/10 pl-2.5 pr-3 sm:pl-3 sm:pr-4 text-left text-gray-400 hover:bg-white hover:ring-black/20 transition">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" className="h-4 w-4 sm:h-[18px] sm:w-[18px] shrink-0 text-gray-500"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" /></svg>
-        <span className="truncate text-[12px] sm:text-sm">{L("Search products...","পণ্য খুঁজুন...")}</span>
+        <span className="truncate text-[12px] sm:text-sm"><T en="Search products..." bn="পণ্য খুঁজুন..." /></span>
       </button>
 
       {open && (
@@ -94,7 +95,7 @@ export function PredictiveSearch() {
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4"><path d="M6 6l12 12M18 6L6 18" /></svg>
                   </button>}
                 </div>
-                <button onClick={() => runSearch(q)} className="h-11 px-4 sm:px-5 rounded-full bg-brand text-white text-sm font-semibold hover:bg-brand-dark transition shrink-0">{L("Search","খুঁজুন")}</button>
+                <button onClick={() => runSearch(q)} className="h-11 px-4 sm:px-5 rounded-full bg-brand text-white text-sm font-semibold hover:bg-brand-dark transition shrink-0"><T en="Search" bn="খুঁজুন" /></button>
                 <button onClick={() => setOpen(false)} aria-label={L("Close","বন্ধ")} className="shrink-0 h-11 w-11 grid place-items-center rounded-full text-gray-500 hover:bg-black/5 transition">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5"><path d="M6 6l12 12M18 6L6 18" /></svg>
                 </button>
@@ -103,11 +104,11 @@ export function PredictiveSearch() {
               <div className="max-h-[60vh] overflow-y-auto border-t border-black/5">
                 {typing ? (
                   <>
-                    {loading && items.length === 0 && <p className="px-5 py-6 text-center text-sm text-gray-400">{L("Searching...","খুঁজছি...")}</p>}
+                    {loading && items.length === 0 && <p className="px-5 py-6 text-center text-sm text-gray-400"><T en="Searching..." bn="খুঁজছি..." /></p>}
                     {!loading && items.length === 0 && (
                       <button onClick={() => runSearch(q)} className="flex w-full items-center gap-3 px-5 py-3.5 text-left hover:bg-gray-50 transition">
                         <svg viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.8" className="h-4 w-4 shrink-0"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" /></svg>
-                        <span className="text-[15px] text-gray-700">{L("Search","খুঁজুন")} &ldquo;{q}&rdquo;</span>
+                        <span className="text-[15px] text-gray-700"><T en="Search" bn="খুঁজুন" /> &ldquo;{q}&rdquo;</span>
                       </button>
                     )}
                     {items.map((s) => (
@@ -127,8 +128,8 @@ export function PredictiveSearch() {
                     {recent.length > 0 && (
                       <div>
                         <div className="flex items-center justify-between mb-2.5">
-                          <p className="text-[13px] font-semibold text-gray-700">{L("Recent searches","সাম্প্রতিক সার্চ")}</p>
-                          <button onClick={clearRecent} className="text-[12px] text-gray-400 hover:text-gray-600">{L("Clear","মুছুন")}</button>
+                          <p className="text-[13px] font-semibold text-gray-700"><T en="Recent searches" bn="সাম্প্রতিক সার্চ" /></p>
+                          <button onClick={clearRecent} className="text-[12px] text-gray-400 hover:text-gray-600"><T en="Clear" bn="মুছুন" /></button>
                         </div>
                         <div className="flex flex-wrap gap-2">
                           {recent.map((t) => (
@@ -142,7 +143,7 @@ export function PredictiveSearch() {
                     )}
                     {popular.length > 0 && (
                       <div>
-                        <p className="text-[13px] font-semibold text-gray-700 mb-2.5">{L("Popular searches","জনপ্রিয় সার্চ")}</p>
+                        <p className="text-[13px] font-semibold text-gray-700 mb-2.5"><T en="Popular searches" bn="জনপ্রিয় সার্চ" /></p>
                         <div className="flex flex-wrap gap-2">
                           {popular.map((t) => (
                             <button key={t} onClick={() => runSearch(t)} className="rounded-full bg-accent-light/40 hover:bg-accent-light/70 text-accent-dark text-[13px] px-3.5 py-1.5 font-medium transition">{t}</button>
@@ -151,7 +152,7 @@ export function PredictiveSearch() {
                       </div>
                     )}
                     {recent.length === 0 && popular.length === 0 && (
-                      <p className="py-6 text-center text-sm text-gray-400">{L("Type a product name to search...","পণ্যের নাম লিখে খুঁজুন...")}</p>
+                      <p className="py-6 text-center text-sm text-gray-400"><T en="Type a product name to search..." bn="পণ্যের নাম লিখে খুঁজুন..." /></p>
                     )}
                   </div>
                 )}

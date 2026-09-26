@@ -8,6 +8,7 @@ import { SHIPPING, type DeliveryArea } from "@/lib/config";
 import { placeOrder, checkCoupon, getCheckoutPrefill } from "./actions";
 import { fireEvent } from "@/components/track";
 import { useL } from "@/components/i18n/I18nProvider";
+import { T } from "@/components/i18n/T";
 
 export default function CheckoutPage() {
   const { L } = useL();
@@ -77,8 +78,8 @@ export default function CheckoutPage() {
   if (items.length === 0) {
     return (
       <div className="text-center py-20">
-        <p className="text-lg text-gray-500">{L("Your cart is empty.", "আপনার কার্ট খালি।")}</p>
-        <a href="/" className="inline-block mt-5 rounded-xl bg-brand text-white px-6 py-3 font-medium">{L("Start shopping", "কেনাকাটা শুরু করুন")}</a>
+        <p className="text-lg text-gray-500"><T en="Your cart is empty." bn="আপনার কার্ট খালি।" /></p>
+        <a href="/" className="inline-block mt-5 rounded-xl bg-brand text-white px-6 py-3 font-medium"><T en="Start shopping" bn="কেনাকাটা শুরু করুন" /></a>
       </div>
     );
   }
@@ -116,7 +117,7 @@ export default function CheckoutPage() {
       fbclid,
     });
     setSubmitting(false);
-    if (!res.ok) { setError(res.error ?? L("Order failed.", "অর্ডার ব্যর্থ হয়েছে।")); return; }
+    if (!res.ok) { setError(res.error ?? L("Order failed.","অর্ডার ব্যর্থ হয়েছে।")); return; }
     clear();
     router.push(`/order/${res.orderNumber}`);
   }
@@ -125,16 +126,16 @@ export default function CheckoutPage() {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold font-display mb-6">{L("Checkout", "চেকআউট")}</h1>
+      <h1 className="text-2xl font-bold font-display mb-6"><T en="Checkout" bn="চেকআউট" /></h1>
 
       <form onSubmit={onSubmit} className="grid md:grid-cols-[1.1fr_.9fr] gap-6 items-start">
         {/* Left — details */}
         <div className="rounded-2xl border border-black/5 bg-white p-5 space-y-4 shadow-sm">
-          <h2 className="font-bold text-lg">{L("Delivery Information", "ডেলিভারি তথ্য")}</h2>
+          <h2 className="font-bold text-lg"><T en="Delivery Information" bn="ডেলিভারি তথ্য" /></h2>
 
           {savedAddresses.length > 0 && (
             <div>
-              <label className="block text-sm font-medium mb-1.5">{L("Saved addresses", "সেভ করা ঠিকানা")}</label>
+              <label className="block text-sm font-medium mb-1.5"><T en="Saved addresses" bn="সেভ করা ঠিকানা" /></label>
               <div className="flex gap-2 flex-wrap">
                 {savedAddresses.map((a) => (
                   <button key={a.id} type="button" onClick={() => pickAddress(a)}
@@ -148,29 +149,29 @@ export default function CheckoutPage() {
           )}
 
           <div>
-            <label className="block text-sm font-medium mb-1">{L("Your Name", "আপনার নাম")} *</label>
+            <label className="block text-sm font-medium mb-1"><T en="Your Name" bn="আপনার নাম" /> *</label>
             <input autoComplete="name" autoCapitalize="words" value={name} onChange={(e) => setName(e.target.value)} placeholder={L("Your name", "আপনার নাম")} className={inputCls} />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">{L("Mobile Number", "মোবাইল নম্বর")} *</label>
+            <label className="block text-sm font-medium mb-1"><T en="Mobile Number" bn="মোবাইল নম্বর" /> *</label>
             <input type="tel" autoComplete="tel" inputMode="numeric" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="01XXXXXXXXX" className={inputCls} />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">{L("Full Address", "সম্পূর্ণ ঠিকানা")} *</label>
+            <label className="block text-sm font-medium mb-1"><T en="Full Address" bn="সম্পূর্ণ ঠিকানা" /> *</label>
             <input autoComplete="street-address" value={address} onChange={(e) => setAddress(e.target.value)} placeholder={L("House/holding, road, area, thana, district", "বাসা/হোল্ডিং, রোড, এলাকা, থানা, জেলা")} className={inputCls} />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">{L("Order note (optional)", "অর্ডার নোট (ঐচ্ছিক)")}</label>
+            <label className="block text-sm font-medium mb-1"><T en="Order note (optional)" bn="অর্ডার নোট (ঐচ্ছিক)" /></label>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder={L("Any special instructions", "বিশেষ কোনো নির্দেশনা")} className={inputCls} />
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1.5">{L("Delivery Area", "ডেলিভারি এলাকা")}</label>
+            <label className="block text-sm font-medium mb-1.5"><T en="Delivery Area" bn="ডেলিভারি এলাকা" /></label>
             <div className="grid grid-cols-2 gap-3">
               {(["inside", "outside"] as const).map((area) => (
                 <button key={area} type="button" onClick={() => setDeliveryArea(area)}
                   className={"rounded-xl border px-3 py-3 text-sm font-medium transition " + (deliveryArea === area ? "border-brand bg-brand-soft text-brand-dark" : "border-black/10 hover:border-brand/40")}>
-                  {area === "inside" ? L("Inside Dhaka", "ঢাকার ভিতরে") : L("Outside Dhaka", "ঢাকার বাইরে")} · {taka(area === "inside" ? SHIPPING.insideDhaka : SHIPPING.outsideDhaka)}
+                  {area === "inside" ? <T en="Inside Dhaka" bn="ঢাকার ভিতরে" /> : <T en="Outside Dhaka" bn="ঢাকার বাইরে" />} · {taka(area === "inside" ? SHIPPING.insideDhaka : SHIPPING.outsideDhaka)}
                 </button>
               ))}
             </div>
@@ -179,7 +180,7 @@ export default function CheckoutPage() {
 
         {/* Right — summary */}
         <div className="rounded-2xl border border-black/5 bg-white p-5 shadow-sm md:sticky md:top-24">
-          <h2 className="font-bold text-lg mb-3">{L("Order Summary", "অর্ডার সারাংশ")}</h2>
+          <h2 className="font-bold text-lg mb-3"><T en="Order Summary" bn="অর্ডার সারাংশ" /></h2>
           <div className="space-y-3 max-h-[22rem] overflow-y-auto pr-1 -mr-1">
             {items.map((i) => (
               <div key={i.id} className="flex gap-3 items-center">
@@ -229,11 +230,11 @@ export default function CheckoutPage() {
             {coupon ? (
               <div className="flex items-center justify-between rounded-xl bg-green-50 border border-green-200 px-3 py-2">
                 <span className="text-sm text-green-700 font-medium">🎟️ {coupon.code} · {coupon.label}</span>
-                <button type="button" onClick={removeCoupon} className="text-xs text-red-500 font-medium">{L("Remove","বাতিল")}</button>
+                <button type="button" onClick={removeCoupon} className="text-xs text-red-500 font-medium"><T en="Remove" bn="বাতিল" /></button>
               </div>
             ) : (
               <>
-                <label className="block text-sm font-medium mb-1.5">{L("Coupon code","কুপন কোড")}</label>
+                <label className="block text-sm font-medium mb-1.5"><T en="Coupon code" bn="কুপন কোড" /></label>
                 <div className="flex gap-2">
                   <input value={couponInput} onChange={(e) => setCouponInput(e.target.value.toUpperCase())} placeholder={L("Enter code","কোড লিখুন")} className={inputCls + " flex-1 font-mono"} />
                   <button type="button" onClick={applyCoupon} disabled={couponBusy || !couponInput.trim()} className="shrink-0 rounded-xl bg-accent text-white px-5 font-medium disabled:opacity-50">
@@ -247,18 +248,18 @@ export default function CheckoutPage() {
 
           {/* Totals */}
           <div className="mt-4 pt-4 border-t border-black/5 space-y-2 text-sm">
-            <div className="flex justify-between"><span className="text-gray-500">{L("Subtotal","সাবটোটাল")}</span><span className="tabular-nums">{taka(sub)}</span></div>
-            <div className="flex justify-between"><span className="text-gray-500">{L("Delivery charge","ডেলিভারি চার্জ")}</span><span className="tabular-nums">{taka(shippingFee)}</span></div>
-            {discount > 0 && <div className="flex justify-between text-green-600"><span>{L("Coupon discount","কুপন ছাড়")}</span><span className="tabular-nums">− {taka(discount)}</span></div>}
-            <div className="flex justify-between font-bold text-lg pt-2 border-t border-black/5"><span>{L("Total","সর্বমোট")}</span><span className="text-accent-dark tabular-nums">{taka(total)}</span></div>
+            <div className="flex justify-between"><span className="text-gray-500"><T en="Subtotal" bn="সাবটোটাল" /></span><span className="tabular-nums">{taka(sub)}</span></div>
+            <div className="flex justify-between"><span className="text-gray-500"><T en="Delivery charge" bn="ডেলিভারি চার্জ" /></span><span className="tabular-nums">{taka(shippingFee)}</span></div>
+            {discount > 0 && <div className="flex justify-between text-green-600"><span><T en="Coupon discount" bn="কুপন ছাড়" /></span><span className="tabular-nums">− {taka(discount)}</span></div>}
+            <div className="flex justify-between font-bold text-lg pt-2 border-t border-black/5"><span><T en="Total" bn="সর্বমোট" /></span><span className="text-accent-dark tabular-nums">{taka(total)}</span></div>
           </div>
 
           {error && <p className="mt-3 rounded-xl bg-red-50 border border-red-200 text-red-700 px-4 py-2 text-sm">{error}</p>}
 
           <button type="submit" disabled={submitting} className="mt-4 w-full rounded-xl bg-brand text-white px-6 py-3.5 font-bold hover:bg-brand-dark disabled:opacity-60">
-            {submitting ? L("Placing order...","অর্ডার হচ্ছে...") : L("Confirm Order","অর্ডার নিশ্চিত করুন")}
+            {submitting ? <T en="Placing order..." bn="অর্ডার হচ্ছে..." /> : <T en="Confirm Order" bn="অর্ডার নিশ্চিত করুন" />}
           </button>
-          <p className="mt-2 text-center text-xs text-gray-400">{L("Cash on delivery · we'll call to confirm after you order.","ক্যাশ অন ডেলিভারি · অর্ডারের পর আমরা কল করে নিশ্চিত করব।")}</p>
+          <p className="mt-2 text-center text-xs text-gray-400"><T en="Cash on delivery · we'll call to confirm after you order." bn="ক্যাশ অন ডেলিভারি · অর্ডারের পর আমরা কল করে নিশ্চিত করব।" /></p>
         </div>
       </form>
     </div>

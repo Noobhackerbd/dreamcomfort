@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useL } from "@/components/i18n/I18nProvider";
 import { LanguageSwitcher } from "@/components/i18n/LanguageSwitcher";
+import { T } from "@/components/i18n/T";
 
 /** Clean, simple white line-icons on a flat brand-blue bar (matches the
  *  reference design). Same buttons/behaviour as before — only the look changed. */
@@ -100,7 +101,7 @@ export function StorefrontTabBar({ categoryIcon }: { categoryIcon?: string }) {
 
   return (
     <>
-      <style>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         @media (max-width:767px){ body.has-store-tabs{ padding-bottom:80px } }
         @keyframes dcMenuIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
         @keyframes dcTabPop{0%{transform:scale(.82)}55%{transform:scale(1.16)}100%{transform:scale(1)}}
@@ -125,14 +126,14 @@ export function StorefrontTabBar({ categoryIcon }: { categoryIcon?: string }) {
         .dc-tab-ico{display:inline-flex;transition:transform .2s ease}
         .dc-tab-on .dc-tab-ico{animation:dcTabPop .42s cubic-bezier(.34,1.56,.64,1)}
         @media (prefers-reduced-motion: reduce){ .dc-tab-on .dc-tab-ico{animation:none} }
-      `}</style>
+      ` }} />
 
       {menuOpen && (
         <div className="md:hidden fixed inset-0 z-[80] bg-black/40 backdrop-blur-sm" onClick={() => setMenuOpen(false)}>
           <div className="absolute top-0 right-0 h-full w-[80%] max-w-[320px] bg-white shadow-2xl flex flex-col"
             style={{ animation: "dcMenuIn .22s ease-out" }} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-4 h-14 border-b border-black/5 shrink-0">
-              <p className="text-sm font-bold text-gray-800">{L("Menu", "মেনু")}</p>
+              <p className="text-sm font-bold text-gray-800"><T en="Menu" bn="মেনু" /></p>
               <button onClick={() => setMenuOpen(false)} aria-label={L("Close", "বন্ধ")}
                 className="h-9 w-9 grid place-items-center rounded-full text-gray-500 hover:bg-black/5 transition">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5"><path d="M6 6l12 12M18 6L6 18" /></svg>
@@ -142,13 +143,13 @@ export function StorefrontTabBar({ categoryIcon }: { categoryIcon?: string }) {
               {MENU_LINKS.map((l) => (
                 <Link key={l.href + l.en} href={l.href} prefetch
                   className="flex items-center justify-between px-4 py-3.5 text-[14px] font-semibold text-gray-700 border-b border-black/5 hover:bg-cream/60 transition">
-                  {L(l.en, l.bn)}
+                  <T en={l.en} bn={l.bn} />
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="h-4 w-4 text-gray-300"><path d="M9 6l6 6-6 6" /></svg>
                 </Link>
               ))}
             </nav>
             <div className="px-4 py-3.5 border-t border-black/5 shrink-0">
-              <p className="text-[12px] font-semibold text-gray-500 mb-2">{L("Language", "ভাষা")}</p>
+              <p className="text-[12px] font-semibold text-gray-500 mb-2"><T en="Language" bn="ভাষা" /></p>
               <LanguageSwitcher />
             </div>
           </div>
@@ -171,7 +172,7 @@ export function StorefrontTabBar({ categoryIcon }: { categoryIcon?: string }) {
                 className={"dc-tab-item flex-1 flex flex-col items-center gap-0.5 text-[10px] font-semibold" + (active ? " on" : "")}
                 style={{ color }}>
                 <span className="dc-pill" />
-                <IconWrap active={active}>{icon}</IconWrap><span className="dc-lbl">{L(t.en, t.bn)}</span>
+                <IconWrap active={active}>{icon}</IconWrap><span className="dc-lbl"><T en={t.en} bn={t.bn} /></span>
               </button>
             );
           }
@@ -180,7 +181,7 @@ export function StorefrontTabBar({ categoryIcon }: { categoryIcon?: string }) {
               className={"dc-tab-item flex-1 flex flex-col items-center gap-0.5 text-[10px] font-semibold" + (active ? " on" : "")}
               style={{ color }}>
               <span className="dc-pill" />
-              <IconWrap active={active}>{icon}</IconWrap><span className="dc-lbl">{L(t.en, t.bn)}</span>
+              <IconWrap active={active}>{icon}</IconWrap><span className="dc-lbl"><T en={t.en} bn={t.bn} /></span>
             </Link>
           );
         })}
@@ -191,7 +192,7 @@ export function StorefrontTabBar({ categoryIcon }: { categoryIcon?: string }) {
           <IconWrap active={menuOpen}>
             <span style={{ color: menuOpen ? ACTIVE : INACTIVE }}>{Icons.menu()}</span>
           </IconWrap>
-          <span className="dc-lbl">{L("Menu","মেনু")}</span>
+          <span className="dc-lbl"><T en="Menu" bn="মেনু" /></span>
         </button>
       </nav>
     </>

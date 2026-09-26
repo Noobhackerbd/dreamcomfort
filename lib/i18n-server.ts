@@ -6,7 +6,7 @@ export function getLang(): Lang {
   try {
     return normalizeLang(cookies().get(LANG_COOKIE)?.value);
   } catch {
-    return "en";
+    return "bn";
   }
 }
 

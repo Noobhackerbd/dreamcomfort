@@ -167,7 +167,7 @@ export async function saveProduct(input: ProductInput) {
   }
 
   revalidatePath("/admin/products");
-  revalidatePath("/");
+  revalidatePath("/", "layout"); // purge every cached store page
   return { ok: true };
 }
 
@@ -266,7 +266,7 @@ export async function backfillTranslations(limit = 10): Promise<{ ok: boolean; u
       if (!uErr) updated++;
     }
 
-    revalidatePath("/");
+    revalidatePath("/", "layout"); // purge every cached store page
     revalidatePath("/products");
     return { ok: true, updated, remaining: Math.max(0, needs.length - batch.length) };
   } catch (e: any) {
@@ -280,6 +280,6 @@ export async function deleteProduct(id: string) {
   const { error } = await supabase.from("products").delete().eq("id", id);
   if (error) return { ok: false, error: error.message };
   revalidatePath("/admin/products");
-  revalidatePath("/");
+  revalidatePath("/", "layout"); // purge every cached store page
   return { ok: true };
 }

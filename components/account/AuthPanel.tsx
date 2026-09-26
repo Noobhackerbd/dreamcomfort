@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { loginCustomer, registerCustomer, forgotPassword } from "@/app/account/actions";
 import { useL } from "@/components/i18n/I18nProvider";
+import { T } from "@/components/i18n/T";
 
 type Mode = "login" | "register" | "forgot";
 
@@ -43,8 +44,8 @@ export function AuthPanel({ mode }: { mode: Mode }) {
     } finally { setBusy(false); }
   }
 
-  const title = mode === "login" ? L("Log In","লগইন করুন") : mode === "register" ? L("Create Account","অ্যাকাউন্ট তৈরি করুন") : L("Reset Password","পাসওয়ার্ড রিসেট");
-  const sub = mode === "login" ? L("Log in to see your orders, tracking and more.","আপনার অর্ডার, ট্র্যাকিং ও আরও দেখতে লগইন করুন।") : mode === "register" ? L("Create one and keep all your orders in one place.","একবার তৈরি করলে সব অর্ডার এক জায়গায় পাবেন।") : L("Enter your email — a reset link will be sent.","ইমেইল দিন — রিসেট লিংক পাঠানো হবে।");
+  const title = mode === "login" ? <T en="Log In" bn="লগইন করুন" /> : mode === "register" ? <T en="Create Account" bn="অ্যাকাউন্ট তৈরি করুন" /> : <T en="Reset Password" bn="পাসওয়ার্ড রিসেট" />;
+  const sub = mode === "login" ? <T en="Log in to see your orders, tracking and more." bn="আপনার অর্ডার, ট্র্যাকিং ও আরও দেখতে লগইন করুন।" /> : mode === "register" ? <T en="Create one and keep all your orders in one place." bn="একবার তৈরি করলে সব অর্ডার এক জায়গায় পাবেন।" /> : <T en="Enter your email — a reset link will be sent." bn="ইমেইল দিন — রিসেট লিংক পাঠানো হবে।" />;
 
   return (
     <div className="min-h-[70vh] grid place-items-center px-4 py-10">
@@ -58,31 +59,31 @@ export function AuthPanel({ mode }: { mode: Mode }) {
           {mode === "register" && (
             <>
               <div>
-                <label className={label}>{L("Full Name","পূর্ণ নাম")}</label>
+                <label className={label}><T en="Full Name" bn="পূর্ণ নাম" /></label>
                 <input value={name} onChange={(e) => setName(e.target.value)} className={input} placeholder={L("Your name","আপনার নাম")} autoComplete="name" />
               </div>
               <div>
-                <label className={label}>{L("Mobile Number","মোবাইল নম্বর")}</label>
+                <label className={label}><T en="Mobile Number" bn="মোবাইল নম্বর" /></label>
                 <input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="numeric" className={input} placeholder="01XXXXXXXXX" autoComplete="tel" />
               </div>
             </>
           )}
 
           <div>
-            <label className={label}>{L("Email","ইমেইল")}</label>
+            <label className={label}><T en="Email" bn="ইমেইল" /></label>
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={input} placeholder="you@email.com" autoComplete="email" />
           </div>
 
           {mode !== "forgot" && (
             <div>
-              <label className={label}>{L("Password","পাসওয়ার্ড")}</label>
+              <label className={label}><T en="Password" bn="পাসওয়ার্ড" /></label>
               <div className="relative">
                 <input type={show ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} className={input + " pr-16"} placeholder="••••••••" autoComplete={mode === "login" ? "current-password" : "new-password"} />
-                <button type="button" onClick={() => setShow((s) => !s)} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-brand">{show ? L("Hide","লুকান") : L("Show","দেখুন")}</button>
+                <button type="button" onClick={() => setShow((s) => !s)} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-brand">{show ? <T en="Hide" bn="লুকান" /> : <T en="Show" bn="দেখুন" />}</button>
               </div>
               {mode === "login" && (
                 <div className="mt-1.5 text-right">
-                  <a href="/account/forgot" className="text-xs font-medium text-brand hover:underline">{L("Forgot password?","পাসওয়ার্ড ভুলে গেছেন?")}</a>
+                  <a href="/account/forgot" className="text-xs font-medium text-brand hover:underline"><T en="Forgot password?" bn="পাসওয়ার্ড ভুলে গেছেন?" /></a>
                 </div>
               )}
             </div>
@@ -92,15 +93,15 @@ export function AuthPanel({ mode }: { mode: Mode }) {
           {ok && <p className="rounded-xl bg-green-50 text-green-700 text-sm px-3 py-2">{ok}</p>}
 
           <button type="submit" disabled={busy} className="w-full rounded-xl bg-brand text-white py-3.5 font-semibold shadow-sm hover:bg-brand-dark disabled:opacity-60 transition">
-            {busy ? "..." : mode === "login" ? L("Log In","লগইন") : mode === "register" ? L("Create Account","অ্যাকাউন্ট তৈরি করুন") : L("Send Reset Link","রিসেট লিংক পাঠান")}
+            {busy ? "..." : mode === "login" ? <T en="Log In" bn="লগইন" /> : mode === "register" ? <T en="Create Account" bn="অ্যাকাউন্ট তৈরি করুন" /> : <T en="Send Reset Link" bn="রিসেট লিংক পাঠান" />}
           </button>
         </form>
 
         <p className="mt-5 text-center text-sm text-gray-500">
           {mode === "login" ? (
-            <>{L("No account?","অ্যাকাউন্ট নেই?")} <a href="/account/register" className="font-semibold text-brand hover:underline">{L("Create one","তৈরি করুন")}</a></>
+            <><T en="No account?" bn="অ্যাকাউন্ট নেই?" /> <a href="/account/register" className="font-semibold text-brand hover:underline"><T en="Create one" bn="তৈরি করুন" /></a></>
           ) : (
-            <>{L("Already have an account?","ইতিমধ্যে অ্যাকাউন্ট আছে?")} <a href="/account/login" className="font-semibold text-brand hover:underline">{L("Log in","লগইন করুন")}</a></>
+            <><T en="Already have an account?" bn="ইতিমধ্যে অ্যাকাউন্ট আছে?" /> <a href="/account/login" className="font-semibold text-brand hover:underline"><T en="Log in" bn="লগইন করুন" /></a></>
           )}
         </p>
       </div>

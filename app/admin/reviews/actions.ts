@@ -10,6 +10,7 @@ export async function deleteReview(id: string) {
     const svc = getServerSupabase();
     await svc.from("product_reviews").delete().eq("id", id);
     revalidatePath("/admin/reviews");
+    revalidatePath("/product/[slug]", "page"); // cached product pages show reviews
     return { ok: true };
   } catch (e: any) {
     return { ok: false, error: e?.message ?? "ব্যর্থ।" };

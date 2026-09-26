@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { logoutCustomer } from "@/app/account/actions";
 import { useL } from "@/components/i18n/I18nProvider";
+import { T } from "@/components/i18n/T";
 
 type NavKey = "overview" | "orders" | "wishlist" | "recent" | "coupons" | "addresses" | "support" | "profile";
 
@@ -63,7 +64,7 @@ export function DashboardShell({ active, name, email, children }: { active: NavK
             <div className="flex items-center gap-3 p-4 bg-gradient-to-br from-brand-soft to-white">
               <div className="h-12 w-12 shrink-0 rounded-full bg-gradient-to-br from-brand to-brand-dark text-white grid place-items-center font-display text-lg font-bold shadow-[0_4px_10px_-3px_rgba(47,144,204,0.55)]">{initial}</div>
               <div className="min-w-0">
-                <p className="font-semibold text-gray-900 truncate">{name || L("Customer","গ্রাহক")}</p>
+                <p className="font-semibold text-gray-900 truncate">{name || <T en="Customer" bn="গ্রাহক" />}</p>
                 <p className="text-xs text-gray-500 truncate">{email}</p>
               </div>
             </div>
@@ -74,17 +75,17 @@ export function DashboardShell({ active, name, email, children }: { active: NavK
                 <a key={n.key} href={n.href}
                   className={"flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors " +
                     (active === n.key ? "bg-brand text-white shadow-[0_4px_12px_-4px_rgba(47,144,204,0.6)]" : "text-gray-600 hover:bg-brand-soft/60 hover:text-brand-dark")}>
-                  {n.icon}{L(n.en, n.bn)}
+                  {n.icon}<T en={n.en} bn={n.bn} />
                 </a>
               ))}
               <a href="/track-order" className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-600 hover:bg-brand-soft/60 hover:text-brand-dark transition-colors">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-[18px] w-[18px]"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
-                {L("Track Order","অর্ডার ট্র্যাক")}
+                <T en="Track Order" bn="অর্ডার ট্র্যাক" />
               </a>
               <button onClick={logout} disabled={busy}
                 className="mt-0.5 flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-60 text-left transition-colors">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-[18px] w-[18px]"><path d="M15 12H4M9 7l-5 5 5 5M14 4h5v16h-5" /></svg>
-                {busy ? "..." : L("Log Out","লগ আউট")}
+                {busy ? "..." : <T en="Log Out" bn="লগ আউট" />}
               </button>
             </nav>
           </div>
@@ -98,7 +99,7 @@ export function DashboardShell({ active, name, email, children }: { active: NavK
                   className={"flex flex-col items-center justify-start gap-1.5 rounded-xl border py-2.5 px-1 transition-colors " +
                     (on ? "border-brand bg-brand-soft" : "border-black/[0.06] bg-white")}>
                   <span className={"h-9 w-9 grid place-items-center rounded-full shrink-0 " + (on ? "bg-brand text-white" : "bg-brand-soft text-brand-dark")}>{n.icon}</span>
-                  <span className="text-[10.5px] font-semibold text-center leading-tight text-gray-700 line-clamp-2">{L(SHORT[n.key].en, SHORT[n.key].bn)}</span>
+                  <span className="text-[10.5px] font-semibold text-center leading-tight text-gray-700 line-clamp-2"><T en={SHORT[n.key].en} bn={SHORT[n.key].bn} /></span>
                 </a>
               );
             })}
@@ -106,13 +107,13 @@ export function DashboardShell({ active, name, email, children }: { active: NavK
               <span className="h-9 w-9 grid place-items-center rounded-full bg-brand-soft text-brand-dark shrink-0">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-[18px] w-[18px]"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
               </span>
-              <span className="text-[10.5px] font-semibold text-center leading-tight text-gray-700">{L("Track","ট্র্যাক")}</span>
+              <span className="text-[10.5px] font-semibold text-center leading-tight text-gray-700"><T en="Track" bn="ট্র্যাক" /></span>
             </a>
             <button onClick={logout} disabled={busy} className="flex flex-col items-center justify-start gap-1.5 rounded-xl border border-red-100 bg-white py-2.5 px-1 disabled:opacity-60">
               <span className="h-9 w-9 grid place-items-center rounded-full bg-red-50 text-red-500 shrink-0">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-[18px] w-[18px]"><path d="M15 12H4M9 7l-5 5 5 5M14 4h5v16h-5" /></svg>
               </span>
-              <span className="text-[10.5px] font-semibold text-center leading-tight text-red-500">{L("Log Out","লগ আউট")}</span>
+              <span className="text-[10.5px] font-semibold text-center leading-tight text-red-500"><T en="Log Out" bn="লগ আউট" /></span>
             </button>
           </div>
         </aside>

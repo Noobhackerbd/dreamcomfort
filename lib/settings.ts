@@ -257,7 +257,7 @@ export async function saveSetting(key: string, value: unknown): Promise<void> {
     .upsert({ key, value, updated_at: new Date().toISOString() });
   if (error) throw new Error(error.message);
   // Bust the settings cache so admin edits show up immediately on the storefront.
-  try { const { revalidateTag } = await import("next/cache"); revalidateTag("settings"); } catch { /* not in a request scope */ }
+  try { const { revalidateTag, revalidatePath } = await import("next/cache"); revalidateTag("settings"); revalidatePath("/", "layout"); } catch { /* not in a request scope */ }
 }
 
 /** Worker-panel PIN (public /worker access gate). Empty = open (no PIN). */

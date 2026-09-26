@@ -44,6 +44,9 @@ export async function submitReview(input: { productId: string; name: string; rat
     // Keep products.rating (avg) + review_count in sync so the PRODUCT CARD shows
     // the rating too — the card reads products.rating, not the reviews table.
     await syncProductRating(svc, input.productId);
+    // Product pages & cards are served from the edge cache — refresh them so the new
+    // review and updated rating show right away.
+    try { const { revalidatePath } = await import("next/cache"); revalidatePath("/", "layout"); } catch {}
     return { ok: true };
   } catch (e: any) {
     return { ok: false, error: e?.message ?? "ব্যর্থ।" };

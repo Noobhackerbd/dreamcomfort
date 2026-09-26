@@ -17,7 +17,7 @@ export async function setCategoryImage(id: string, url: string) {
     return { ok: false, error: e?.message ?? "Save failed." };
   }
   revalidatePath("/admin/categories");
-  revalidatePath("/");
+  revalidatePath("/", "layout"); // purge every cached store page
   return { ok: true };
 }
 
@@ -52,7 +52,7 @@ export async function saveCategory(input: {
     if (error) return { ok: false, error: error.message };
   }
   revalidatePath("/admin/categories");
-  revalidatePath("/");
+  revalidatePath("/", "layout"); // purge every cached store page
   return { ok: true };
 }
 
@@ -81,7 +81,7 @@ export async function reorderCategory(id: string, direction: "up" | "down") {
   await supabase.from("categories").update({ sort_order: newA }).eq("id", a.id);
   await supabase.from("categories").update({ sort_order: newB }).eq("id", b.id);
   revalidatePath("/admin/categories");
-  revalidatePath("/");
+  revalidatePath("/", "layout"); // purge every cached store page
   return { ok: true };
 }
 

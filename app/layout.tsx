@@ -33,7 +33,8 @@ import { CartDrawer } from "@/components/store/CartDrawer";
 import { LoginModal } from "@/components/store/LoginModal";
 import { PromoPopup } from "@/components/store/PromoPopup";
 import { I18nProvider } from "@/components/i18n/I18nProvider";
-import { getL } from "@/lib/i18n-server";
+import { T } from "@/components/i18n/T";
+import { LANG_COOKIE } from "@/lib/i18n";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://dreamcomfortbd.com";
 
@@ -58,7 +59,6 @@ export const viewport: Viewport = {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const [landing, meta, store, tiktok, navIcons, promo] = await Promise.all([getLandingConfig(), getMetaSettings(), getStoreSettings(), getTikTokSettings(), getNavIcons(), getPromoPopup()]);
-  const { lang, L } = getL();
   const orgJsonLd = {
     "@context": "https://schema.org",
     "@graph": [
@@ -74,16 +74,19 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     ],
   };
   return (
-    <html lang="bn" className={`${display.variable} ${notoBengali.variable}`}>
+    <html lang="bn" suppressHydrationWarning className={`${display.variable} ${notoBengali.variable}`}>
       <head>
+        {/* Pick the language BEFORE first paint (no flash, no server cookie read → pages
+            stay cacheable at the edge). Default = Bengali. */}
+        <script dangerouslySetInnerHTML={{ __html: `(function(){try{var m=document.cookie.match(/(?:^|; )${LANG_COOKIE}=(en|bn)/);var l=m?m[1]:"bn";var d=document.documentElement;d.setAttribute("data-lang",l);d.lang=l;}catch(e){}})();` }} />
         {/* Connect to Meta Pixel origin early → faster tracking load, better LCP/TBT. */}
         <link rel="preconnect" href="https://connect.facebook.net" crossOrigin="" />
         <link rel="dns-prefetch" href="https://connect.facebook.net" />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }} />
       </head>
       <body className="min-h-screen antialiased flex flex-col">
-        <I18nProvider lang={lang}>
-        <a href="#main" className="dc-skip">{L("Skip to main content", "মূল কন্টেন্টে যান")}</a>
+        <I18nProvider>
+        <a href="#main" className="dc-skip"><T en="Skip to main content" bn="মূল কন্টেন্টে যান" /></a>
         <HeaderGate>
           <Header logoUrl={landing.logoUrl || "/logo.png"} phone={store.phone} />
         </HeaderGate>
@@ -102,25 +105,25 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <p className="mt-2.5 text-gray-500 leading-relaxed max-w-[260px]">{STORE.tagline}</p>
             </div>
             <div>
-              <p className="font-semibold mb-2">{L("Shop", "শপ")}</p>
+              <p className="font-semibold mb-2"><T en="Shop" bn="শপ" /></p>
               <ul className="space-y-1 text-gray-500">
-                <li><a href="/" className="hover:text-brand">{L("Home", "হোম")}</a></li>
-                <li><a href="/products" className="hover:text-brand">{L("All Products", "সব পণ্য")}</a></li>
-                <li><a href="/track-order" className="hover:text-brand">{L("Track Order", "অর্ডার ট্র্যাক")}</a></li>
+                <li><a href="/" className="hover:text-brand"><T en="Home" bn="হোম" /></a></li>
+                <li><a href="/products" className="hover:text-brand"><T en="All Products" bn="সব পণ্য" /></a></li>
+                <li><a href="/track-order" className="hover:text-brand"><T en="Track Order" bn="অর্ডার ট্র্যাক" /></a></li>
               </ul>
             </div>
             <div>
-              <p className="font-semibold mb-2">{L("Support", "সহায়তা")}</p>
+              <p className="font-semibold mb-2"><T en="Support" bn="সহায়তা" /></p>
               <ul className="space-y-1 text-gray-500">
-                <li><a href="/about" className="hover:text-brand">{L("About Us", "আমাদের সম্পর্কে")}</a></li>
-                <li><a href="/contact" className="hover:text-brand">{L("Contact", "যোগাযোগ")}</a></li>
-                <li><a href="/return-policy" className="hover:text-brand">{L("Return Policy", "রিটার্ন পলিসি")}</a></li>
-                <li><a href="/privacy" className="hover:text-brand">{L("Privacy", "প্রাইভেসি")}</a></li>
-                <li><a href="/terms" className="hover:text-brand">{L("Terms", "শর্তাবলী")}</a></li>
+                <li><a href="/about" className="hover:text-brand"><T en="About Us" bn="আমাদের সম্পর্কে" /></a></li>
+                <li><a href="/contact" className="hover:text-brand"><T en="Contact" bn="যোগাযোগ" /></a></li>
+                <li><a href="/return-policy" className="hover:text-brand"><T en="Return Policy" bn="রিটার্ন পলিসি" /></a></li>
+                <li><a href="/privacy" className="hover:text-brand"><T en="Privacy" bn="প্রাইভেসি" /></a></li>
+                <li><a href="/terms" className="hover:text-brand"><T en="Terms" bn="শর্তাবলী" /></a></li>
               </ul>
             </div>
             <div className="col-span-2 md:col-span-1">
-              <p className="font-semibold mb-2">{L("Contact", "যোগাযোগ")}</p>
+              <p className="font-semibold mb-2"><T en="Contact" bn="যোগাযোগ" /></p>
               <ul className="space-y-1.5 text-gray-500">
                 <li>📞 <a href={`tel:${STORE.phone}`} className="hover:text-brand">{STORE.phone}</a></li>
                 <li>🌐 <a href={SITE_URL} className="hover:text-brand">DreamcomfortBD.com</a></li>
@@ -131,7 +134,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           </div>
           <div className="border-t border-black/5">
             <div className="mx-auto max-w-6xl px-4 py-4 text-xs text-gray-400">
-              © {STORE_NAME} · {L("All rights reserved", "সকল অধিকার সংরক্ষিত")}
+              © {STORE_NAME} · <T en="All rights reserved" bn="সকল অধিকার সংরক্ষিত" />
             </div>
           </div>
         </footer>

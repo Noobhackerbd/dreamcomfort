@@ -5,11 +5,14 @@ import { useRouter } from "next/navigation";
 import { useCart, CartItem } from "@/lib/cart/store";
 import { fireEvent } from "@/components/track";
 import { useL } from "@/components/i18n/I18nProvider";
+import { T } from "@/components/i18n/T";
 
-export function BuyButtons({ product }: { product: Omit<CartItem, "qty"> }) {
-  const { L } = useL();
+export function BuyButtons({ product, nameEn }: { product: Omit<CartItem, "qty">; nameEn?: string }) {
+  const { L, lang } = useL();
   const router = useRouter();
-  const add = useCart((s) => s.add);
+  const addRaw = useCart((s) => s.add);
+  // Store the name in the language the shopper is using right now (cart/checkout show it).
+  const add = (p: Omit<CartItem, "qty">, q: number) => addRaw(lang === "en" && nameEn ? { ...p, name: nameEn } : p, q);
   const [qty, setQty] = useState(1);
 
   function trackAddToCart(quantity: number) {
@@ -31,7 +34,7 @@ export function BuyButtons({ product }: { product: Omit<CartItem, "qty"> }) {
     <div className="space-y-3.5">
       {/* Quantity stepper — premium pill with circular brand controls */}
       <div className="flex items-center gap-3">
-        <span className="text-sm font-semibold text-gray-700">{L("Quantity", "পরিমাণ")}</span>
+        <span className="text-sm font-semibold text-gray-700"><T en="Quantity" bn="পরিমাণ" /></span>
         <div className="inline-flex items-center gap-1 rounded-full border border-black/[0.07] bg-white p-1 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.12)]">
           <button
             type="button"
@@ -76,7 +79,7 @@ export function BuyButtons({ product }: { product: Omit<CartItem, "qty"> }) {
           {/* subtle top sheen */}
           <span className="pointer-events-none absolute inset-x-0 top-0 h-1/2 bg-white/15 opacity-60" aria-hidden />
           <svg className="relative shrink-0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L4.5 13.5H11l-1 8.5L19.5 10H13z" /></svg>
-          <span className="relative whitespace-nowrap">{L("Order Now", "এখনই অর্ডার করুন")}</span>
+          <span className="relative whitespace-nowrap"><T en="Order Now" bn="এখনই অর্ডার করুন" /></span>
         </button>
         <button
           onClick={() => {
@@ -89,7 +92,7 @@ export function BuyButtons({ product }: { product: Omit<CartItem, "qty"> }) {
                      transition-all duration-200 hover:bg-brand-soft hover:border-brand active:scale-[0.985]"
         >
           <svg className="shrink-0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1.4" /><circle cx="19" cy="21" r="1.4" /><path d="M2.5 3h2l2.2 12.4a1.6 1.6 0 001.6 1.3h8.8a1.6 1.6 0 001.6-1.3L21 7H6" /></svg>
-          <span className="whitespace-nowrap">{L("Add to Cart", "কার্টে যোগ")}</span>
+          <span className="whitespace-nowrap"><T en="Add to Cart" bn="কার্টে যোগ" /></span>
         </button>
       </div>
     </div>

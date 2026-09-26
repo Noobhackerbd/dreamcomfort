@@ -12,7 +12,7 @@ export async function saveLanding(config: LandingConfig) {
   } catch (e: any) {
     return { ok: false, error: e?.message ?? "সেভ ব্যর্থ হয়েছে।" };
   }
-  revalidatePath("/");
+  revalidatePath("/", "layout"); // purge every cached store page
   revalidatePath("/admin/landing");
   return { ok: true };
 }
@@ -44,7 +44,7 @@ export async function saveLandingVariants(
   } catch (e: any) {
     return { ok: false, error: e?.message ?? "সেভ ব্যর্থ হয়েছে।" };
   }
-  revalidatePath("/");
+  revalidatePath("/", "layout"); // purge every cached store page
   revalidatePath("/admin/landing");
   clean.forEach((v) => revalidatePath("/" + v.key));
   return { ok: true, keys: clean.map((v) => v.key) };

@@ -100,10 +100,10 @@ export function PromoPopup({
       role="dialog"
       aria-modal="true"
     >
-      <style>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         @keyframes dcPromoFade{from{opacity:0}to{opacity:1}}
         @keyframes dcPromoPop{0%{transform:scale(.92);opacity:0}100%{transform:scale(1);opacity:1}}
-      `}</style>
+      ` }} />
 
       <div
         className="relative w-full max-w-[400px] overflow-hidden rounded-2xl bg-white shadow-2xl"

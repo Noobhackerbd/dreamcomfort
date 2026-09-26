@@ -1,10 +1,8 @@
-"use client";
-
 import Image from "next/image";
 import Link from "next/link";
 import { taka } from "@/lib/format";
 import type { Product } from "@/lib/types";
-import { useL } from "@/components/i18n/I18nProvider";
+import { T } from "@/components/i18n/T";
 
 function Stars({ rating }: { rating: number }) {
   return (
@@ -29,8 +27,11 @@ function Stars({ rating }: { rating: number }) {
 }
 
 export function ProductCard({ p }: { p: Product }) {
-  const { L, lang } = useL();
-  const name = (lang === "bn" ? (p.name_bn || p.name_en) : (p.name_en || p.name_bn)) || "";
+  // Both languages are rendered; CSS shows the active one (no hooks → no extra JS,
+  // and the card can render on the server / from the edge cache).
+  const nameBn = p.name_bn || p.name_en || "";
+  const nameEn = p.name_en || p.name_bn || "";
+  const name = nameBn; // for attributes (alt) — Bengali is the default language
   const img = p.images?.[0];
   const hasDiscount = !!(p.compare_at_price && p.compare_at_price > p.price);
   const off = hasDiscount ? Math.round((1 - p.price / (p.compare_at_price as number)) * 100) : 0;
@@ -56,18 +57,18 @@ export function ProductCard({ p }: { p: Product }) {
             className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
           />
         ) : (
-          <span className="absolute inset-0 grid place-items-center text-gray-400 text-sm px-2 text-center">{name}</span>
+          <span className="absolute inset-0 grid place-items-center text-gray-400 text-sm px-2 text-center"><T en={nameEn} bn={nameBn} /></span>
         )}
         {soldOut && (
           <span className="absolute inset-0 grid place-items-center bg-white/55">
-            <span className="rounded-full bg-black/75 text-white text-[11px] font-semibold px-3 py-1">{L("Out of stock", "স্টকে নেই")}</span>
+            <span className="rounded-full bg-black/75 text-white text-[11px] font-semibold px-3 py-1"><T en="Out of stock" bn="স্টকে নেই" /></span>
           </span>
         )}
       </div>
 
       {/* Body */}
       <div className="p-2 sm:p-2.5 flex flex-col flex-1">
-        <p className="text-[13px] text-gray-800 leading-snug line-clamp-2 min-h-[2.5em]">{name}</p>
+        <p className="text-[13px] text-gray-800 leading-snug line-clamp-2 min-h-[2.5em]"><T en={nameEn} bn={nameBn} /></p>
 
         {/* Price — orange, plain gray discount % */}
         <div className="mt-1 flex items-center gap-1.5">

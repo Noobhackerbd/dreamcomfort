@@ -3,6 +3,9 @@
 //    client JS runs), so every browser + server event carries external_id,
 //    _fbp, and _fbc → maximum Event Match Quality coverage.
 // 2) Protects /admin routes (auth + allow-list).
+// 3) Speed: rewrites /products?category=…, /products?q=… and landing ?color=… links to
+//    dedicated routes so those pages are served from the edge cache. The visible URL
+//    (and everything the Pixel/CAPI sees, e.g. fbclid) is unchanged.
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
@@ -43,15 +46,59 @@ function setMatchingCookies(req: NextRequest, res: NextResponse) {
   }
 }
 
+// Top-level routes that are NOT landing pages (a landing variant is any other
+// single-segment path, e.g. /landing2 — see app/[landingKey]).
+const NON_LANDING = new Set([
+  "about", "account", "admin", "api", "auth", "cart", "checkout", "contact", "help",
+  "order", "privacy", "product", "products", "return-policy", "terms", "track-order", "worker",
+  "sitemap.xml", "robots.txt", "manifest.webmanifest", "icon.png", "apple-icon.png",
+]);
+
+/** /landing?color=slug (and /landing2?color=…) → cached per-color route. */
+function landingRewrite(req: NextRequest): NextResponse | null {
+  const segs = req.nextUrl.pathname.split("/").filter(Boolean);
+  if (segs.length !== 1 || NON_LANDING.has(segs[0])) return null;
+  const sp = req.nextUrl.searchParams;
+  // Same precedence LandingScreen uses: color → product → slug.
+  const v = (sp.get("color") ?? sp.get("product") ?? sp.get("slug") ?? "").trim();
+  if (!v) return null;
+  const url = req.nextUrl.clone();
+  url.pathname = `/${segs[0]}/c/${encodeURIComponent(v)}`;
+  for (const k of ["color", "product", "slug"]) url.searchParams.delete(k); // fbclid/utm kept
+  return NextResponse.rewrite(url, { request: req });
+}
+
+/** Internal rewrites for the product listing (visible URL stays /products?…). */
+function storeRewrite(req: NextRequest): NextResponse | null {
+  if (req.nextUrl.pathname !== "/products") return landingRewrite(req);
+  const sp = req.nextUrl.searchParams;
+  const url = req.nextUrl.clone();
+  // Text search / custom sort → live search route.
+  if ((sp.get("q") || "").trim() || sp.get("sort")) {
+    url.pathname = "/products/search";
+    return NextResponse.rewrite(url, { request: req });
+  }
+  // Category → cached per-category page. Other params (fbclid, utm_…) are kept.
+  const cat = (sp.get("category") || "").trim();
+  if (cat) {
+    url.pathname = `/products/c/${encodeURIComponent(cat)}`;
+    url.searchParams.delete("category");
+    return NextResponse.rewrite(url, { request: req });
+  }
+  return null;
+}
+
 export async function middleware(req: NextRequest) {
-  const res = NextResponse.next({ request: req });
   const path = req.nextUrl.pathname;
 
-  // Storefront: just seed the matching cookies (no auth work).
+  // Storefront: seed the matching cookies (no auth work) — on rewritten requests too.
   if (!path.startsWith("/admin")) {
+    const res = storeRewrite(req) ?? NextResponse.next({ request: req });
     setMatchingCookies(req, res);
     return res;
   }
+
+  const res = NextResponse.next({ request: req });
 
   // Admin: auth + allow-list.
   const supabase = createServerClient(

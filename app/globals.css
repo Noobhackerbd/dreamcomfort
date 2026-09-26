@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Bilingual text (<T/>): both languages are in the HTML so pages can be cached at
+   the edge; this shows the active one. <html data-lang> is set from the dc_lang
+   cookie before first paint. No attribute = Bengali (the default). */
+html[data-lang="en"] [data-l="bn"],
+html:not([data-lang="en"]) [data-l="en"] { display: none !important; }
+
 :root {
   /* Clean modern off-white — soft, premium, works with the brand blue + pink.
      (The landing page keeps its original cream via body.dc-landing below.) */
