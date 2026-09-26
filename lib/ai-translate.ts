@@ -1,77 +1,76 @@
-// lib/ai-translate.ts — server-side AI translation for product name & description.
-// Uses the same Google Gemini key configured in Admin → Settings (key "gemini"),
-// the same one image-search already uses. Text-only, fast, thinking disabled.
-import { getGeminiSettings } from "@/lib/settings";
+// lib/ai-translate.ts — server-side AI translation for product content.
+// Runs on Claude (Haiku 4.5 — fast & cheap) via lib/llm.ts; falls back to Gemini only
+// if no Claude key is configured.
+//
+// Every list is translated in ONE batched request (not one request per line), so a
+// product save uses a handful of calls instead of 15–25 — cheaper and no rate limits.
+import { llm, extractJson } from "@/lib/llm";
 
 const BENGALI = /[ঀ-৿]/;
 export function hasBengali(s: string): boolean {
   return BENGALI.test(s || "");
 }
 
+const LANG = { en: "English", bn: "Bengali (Bangla)" } as const;
+
 /**
- * Translate a short product text to the target language.
- * Returns "" if there's nothing to translate or AI isn't configured — callers
- * fall back gracefully so a missing key never blocks saving a product.
+ * Translate many short texts in a single AI call. Returns an array of the same
+ * length; any item that can't be translated falls back to its source text.
  */
+export async function translateBatch(texts: string[], target: "en" | "bn"): Promise<string[]> {
+  const src = (texts || []).map((t) => (t ?? "").toString());
+  const idx = src.map((t, i) => (t.trim() ? i : -1)).filter((i) => i >= 0);
+  if (!idx.length) return src;
+
+  const items = idx.map((i) => src[i]);
+  const prompt =
+    `Translate each item of this JSON array into natural, fluent ${LANG[target]} for a Bangladeshi mom & baby online store's product listing. ` +
+    `Keep meaning and length similar, keep numbers/units, don't transliterate brand names, don't add anything. ` +
+    `Reply with ONLY a JSON array of exactly ${items.length} strings, in the same order.\n\n` +
+    JSON.stringify(items);
+
+  const res = await llm({ prompt, tier: "fast", maxTokens: Math.min(4096, 200 + items.join("").length * 3) });
+  if (!res.ok) return src;
+  const out = extractJson<unknown[]>(res.text);
+  if (!Array.isArray(out) || out.length !== items.length) return src;
+
+  const result = [...src];
+  idx.forEach((i, k) => {
+    const v = typeof out[k] === "string" ? (out[k] as string).trim() : "";
+    if (v) result[i] = v;
+  });
+  return result;
+}
+
+/** Translate one short text. Returns "" if there's nothing to translate or AI is unavailable. */
 export async function aiTranslate(text: string, target: "en" | "bn"): Promise<string> {
   const clean = (text || "").trim();
   if (!clean) return "";
-  const { apiKey, model } = await getGeminiSettings();
-  if (!apiKey) return "";
-  let MODEL = model || "gemini-3.6-flash";
-  if (/gemini-(1\.5|2\.0)/.test(MODEL)) MODEL = "gemini-3.6-flash";
-
-  const targetName = target === "en" ? "English" : "Bengali (Bangla)";
-  const prompt =
-    `You are translating product text for a Bangladeshi mom & baby online store. ` +
-    `Translate the text below into natural, fluent ${targetName} suitable for an e-commerce product listing. ` +
-    `Keep it concise, keep the meaning, do not add anything, do not transliterate brand names. ` +
-    `Output ONLY the translation — no quotes, no labels, no notes.\n\nTEXT:\n${clean}`;
-
-  try {
-    const r = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.2, maxOutputTokens: 600, thinkingConfig: { thinkingBudget: 0 } },
-        }),
-      }
-    );
-    const j: any = await r.json();
-    if (!r.ok) return "";
-    const t: string = j?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-    return t.trim();
-  } catch {
-    return "";
-  }
+  const [out] = await translateBatch([clean], target);
+  return out && out !== clean ? out : (hasBengali(clean) === (target === "bn") ? clean : "");
 }
 
-/** Translate an array of short strings (runs in parallel; falls back to source). */
+/** Translate an array of short strings (one AI call; falls back to source). */
 export async function translateStrings(arr: string[], target: "en" | "bn"): Promise<string[]> {
-  return Promise.all((arr || []).map(async (s) => (await aiTranslate(s, target)) || s));
+  return translateBatch(arr || [], target);
 }
 
-/** Translate spec rows ({label,value}) into the target language. */
+/** Translate spec rows ({label,value}) in one AI call. */
 export async function translateSpecs(
   specs: { label: string; value: string }[], target: "en" | "bn"
 ): Promise<{ label: string; value: string }[]> {
-  return Promise.all((specs || []).map(async (s) => ({
-    label: (await aiTranslate(s.label, target)) || s.label,
-    value: (await aiTranslate(s.value, target)) || s.value,
-  })));
+  const list = specs || [];
+  const flat = await translateBatch(list.flatMap((s) => [s.label, s.value]), target);
+  return list.map((s, i) => ({ label: flat[i * 2] || s.label, value: flat[i * 2 + 1] || s.value }));
 }
 
-/** Translate FAQ rows ({q,a}) into the target language. */
+/** Translate FAQ rows ({q,a}) in one AI call. */
 export async function translateFaq(
   faq: { q: string; a: string }[], target: "en" | "bn"
 ): Promise<{ q: string; a: string }[]> {
-  return Promise.all((faq || []).map(async (f) => ({
-    q: (await aiTranslate(f.q, target)) || f.q,
-    a: (await aiTranslate(f.a, target)) || f.a,
-  })));
+  const list = faq || [];
+  const flat = await translateBatch(list.flatMap((f) => [f.q, f.a]), target);
+  return list.map((f, i) => ({ q: flat[i * 2] || f.q, a: flat[i * 2 + 1] || f.a }));
 }
 
 /** Given whatever the admin typed (one language), produce both language versions. */

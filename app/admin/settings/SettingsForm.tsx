@@ -335,9 +335,9 @@ export function SettingsForm({
         <StatusPill ok={!!mb.apiKey} okText="App login enabled" badText="Set a token (app won't work otherwise)" />
       </Card>
 
-      {/* AI (Anthropic) — order screenshot reader */}
-      <Card icon="🤖" iconBg="#f3eefc" iconColor="#7c3aed" title="AI order reader (Anthropic)"
-        desc="Enter an Anthropic API key — it auto-fills name, phone and address from Messenger/WhatsApp order screenshots.">
+      {/* AI (Anthropic / Claude) — powers every AI feature */}
+      <Card icon="🤖" iconBg="#f3eefc" iconColor="#7c3aed" title="AI — Claude (Anthropic)"
+        desc="One Claude key powers all AI features: order-screenshot reader, product AI Auto-fill, AI translation (Bangla ⇄ English) and customer image search. When set, it is used instead of Gemini.">
         <div className="space-y-3">
           <div>
             <label className={lbl}>Anthropic API key</label>
@@ -346,7 +346,7 @@ export function SettingsForm({
           <div>
             <label className={lbl}>Model</label>
             <input value={aiCfg.model} onChange={(e) => setAiCfg({ ...aiCfg, model: e.target.value })} placeholder="claude-sonnet-5" className={cls} />
-            <p className="mt-1 text-xs dc-muted">Recommended: <b>claude-sonnet-5</b> · claude-haiku-4-5-20251001 (cheaper/faster) · claude-opus-5. Old claude-3 models no longer work.</p>
+            <p className="mt-1 text-xs dc-muted">Used for the order reader &amp; product AI Auto-fill. Recommended: <b>claude-sonnet-5</b> · claude-haiku-4-5-20251001 (cheapest/fastest) · claude-opus-5-5 (highest quality). Translation and image search always use Claude Haiku 4.5 to keep costs low. Old claude-3 models no longer work.</p>
           </div>
         </div>
         <SaveRow busy={aiBusy} saved={aiSaved} err={aiErr}

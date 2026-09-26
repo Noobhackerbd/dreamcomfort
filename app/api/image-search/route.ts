@@ -1,12 +1,13 @@
 // app/api/image-search/route.ts — visual product search.
-// Sends the uploaded photo to Google Gemini, gets a few search keywords, then
+// Sends the uploaded photo to the AI (Claude Haiku via lib/llm.ts; Gemini only if no
+// Claude key is set), gets a few search keywords, then
 // finds the first keyword that matches a real product and returns it so the
 // storefront can show results. The Gemini API key comes from the admin Settings
 // page (settings key "gemini"), falling back to the GEMINI_API_KEY env var.
 // No key set → returns not_configured (the button shows a friendly message).
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSupabase } from "@/lib/supabase/server";
-import { getGeminiSettings } from "@/lib/settings";
+import { llm, llmProvider } from "@/lib/llm";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -20,13 +21,7 @@ const PROMPT =
   "Each keyword must be 1-3 words. Example: প্রেগনেন্সি পিলো, বেবি পিলো, pregnancy pillow";
 
 export async function POST(req: NextRequest) {
-  const { apiKey, model } = await getGeminiSettings();
-  if (!apiKey) return NextResponse.json({ ok: false, reason: "not_configured" });
-  // gemini-2.0-flash was retired by Google — default to a current model. Older
-  // saved settings that still say 2.0/1.5 are auto-upgraded so image search keeps
-  // working without needing the admin to touch the settings page.
-  let MODEL = model || "gemini-3.6-flash";
-  if (/gemini-(1\.5|2\.0)/.test(MODEL)) MODEL = "gemini-3.6-flash";
+  if (!(await llmProvider())) return NextResponse.json({ ok: false, reason: "not_configured" });
 
   let image = "", mime = "image/jpeg";
   try {
@@ -38,34 +33,11 @@ export async function POST(req: NextRequest) {
   }
   if (!image) return NextResponse.json({ ok: false, reason: "no_image" }, { status: 400 });
 
-  // 1) Ask Gemini what the product is.
+  // 1) Ask the AI what the product is.
   let keywords: string[] = [];
-  try {
-    const gRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: PROMPT }, { inline_data: { mime_type: mime, data: image } }] }],
-          // thinkingBudget:0 — current Gemini "flash" models think by default, which
-          // would eat a tiny token budget and return empty text. Disable thinking for
-          // this simple keyword task and give the actual answer enough room.
-          generationConfig: {
-            temperature: 0,
-            maxOutputTokens: 128,
-            thinkingConfig: { thinkingBudget: 0 },
-          },
-        }),
-      }
-    );
-    const gJson: any = await gRes.json();
-    if (!gRes.ok) return NextResponse.json({ ok: false, reason: "vision_failed", detail: gJson?.error?.message });
-    const text: string = gJson?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-    keywords = text.split(/[,\n]/).map((s) => s.trim()).filter(Boolean).slice(0, 5);
-  } catch (e: any) {
-    return NextResponse.json({ ok: false, reason: "vision_failed", detail: e?.message });
-  }
+  const res = await llm({ prompt: PROMPT, image: { data: image, mime }, tier: "fast", maxTokens: 128, timeoutMs: 25000 });
+  if (!res.ok) return NextResponse.json({ ok: false, reason: "vision_failed", detail: res.error });
+  keywords = res.text.split(/[,\n]/).map((s) => s.replace(/^[-*•\d.\s]+/, "").trim()).filter(Boolean).slice(0, 5);
   if (keywords.length === 0) return NextResponse.json({ ok: false, reason: "no_keywords" });
 
   // 2) Return the first keyword that actually matches a product.

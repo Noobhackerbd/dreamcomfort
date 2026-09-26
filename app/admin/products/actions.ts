@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { toSlug } from "@/lib/slug";
 import { aiTranslate, bilingualize, hasBengali, translateStrings, translateSpecs, translateFaq } from "@/lib/ai-translate";
 import { aiAutofillProduct, type AutofillResult } from "@/lib/ai-autofill";
+import { llmProvider } from "@/lib/llm";
 
 function slugify(input: string): string {
   // English/ASCII slug — Bengali names are transliterated to Latin so ?color= links work.
@@ -75,15 +76,10 @@ export async function saveProduct(input: ProductInput) {
   // The admin types the name/description in ONE language. Whichever language is
   // missing, AI fills it here so we always store both (the storefront reads the
   // stored columns, so rendering stays fast — no per-request translation).
-  let nameBn = input.name_bn?.trim() || "";
-  let nameEn = input.name_en?.trim() || "";
-  if (nameBn && !nameEn) nameEn = (await aiTranslate(nameBn, "en")) || nameBn;
-  else if (nameEn && !nameBn) nameBn = (await aiTranslate(nameEn, "bn")) || nameEn;
-
-  let descBn = input.description_bn?.trim() || "";
-  let descEn = input.description_en?.trim() || "";
-  if (descBn && !descEn) descEn = (await aiTranslate(descBn, "en")) || "";
-  else if (descEn && !descBn) descBn = (await aiTranslate(descEn, "bn")) || "";
+  const inNameBn = input.name_bn?.trim() || "";
+  const inNameEn = input.name_en?.trim() || "";
+  const inDescBn = input.description_bn?.trim() || "";
+  const inDescEn = input.description_en?.trim() || "";
 
   // Premium page content — bilingual. Whichever language the admin typed, the other
   // is AI-generated so highlights / specs / FAQ / how-to-use also switch with the site.
@@ -92,33 +88,47 @@ export async function saveProduct(input: ProductInput) {
   const faqSrc = parseFaq(input.faq_text) || [];
   const howSrc = input.how_to_use?.trim() || "";
 
-  let highlightsBn: string[] | null = hlSrc.length ? hlSrc : null;
-  let highlightsEn: string[] | null = null;
-  if (hlSrc.length) {
-    if (hasBengali(input.highlights_text || "")) highlightsEn = await translateStrings(hlSrc, "en");
-    else { highlightsEn = hlSrc; highlightsBn = await translateStrings(hlSrc, "bn"); }
-  }
+  // All translations are independent → run them in PARALLEL (each list is a single
+  // batched AI call), so saving takes ~one AI round-trip instead of six in a row.
+  const [nameRes, descRes, hlRes, specRes, faqRes, howRes] = await Promise.all([
+    (async () => {
+      if (inNameBn && !inNameEn) return { bn: inNameBn, en: (await aiTranslate(inNameBn, "en")) || inNameBn };
+      if (inNameEn && !inNameBn) return { bn: (await aiTranslate(inNameEn, "bn")) || inNameEn, en: inNameEn };
+      return { bn: inNameBn, en: inNameEn };
+    })(),
+    (async () => {
+      if (inDescBn && !inDescEn) return { bn: inDescBn, en: (await aiTranslate(inDescBn, "en")) || "" };
+      if (inDescEn && !inDescBn) return { bn: (await aiTranslate(inDescEn, "bn")) || "", en: inDescEn };
+      return { bn: inDescBn, en: inDescEn };
+    })(),
+    (async (): Promise<{ bn: string[] | null; en: string[] | null }> => {
+      if (!hlSrc.length) return { bn: null, en: null };
+      if (hasBengali(input.highlights_text || "")) return { bn: hlSrc, en: await translateStrings(hlSrc, "en") };
+      return { bn: await translateStrings(hlSrc, "bn"), en: hlSrc };
+    })(),
+    (async (): Promise<{ bn: { label: string; value: string }[] | null; en: { label: string; value: string }[] | null }> => {
+      if (!spSrc.length) return { bn: null, en: null };
+      if (hasBengali(input.specs_text || "")) return { bn: spSrc, en: await translateSpecs(spSrc, "en") };
+      return { bn: await translateSpecs(spSrc, "bn"), en: spSrc };
+    })(),
+    (async (): Promise<{ bn: { q: string; a: string }[] | null; en: { q: string; a: string }[] | null }> => {
+      if (!faqSrc.length) return { bn: null, en: null };
+      if (hasBengali(input.faq_text || "")) return { bn: faqSrc, en: await translateFaq(faqSrc, "en") };
+      return { bn: await translateFaq(faqSrc, "bn"), en: faqSrc };
+    })(),
+    (async (): Promise<{ bn: string | null; en: string | null }> => {
+      if (!howSrc) return { bn: null, en: null };
+      if (hasBengali(howSrc)) return { bn: howSrc, en: (await aiTranslate(howSrc, "en")) || null };
+      return { bn: (await aiTranslate(howSrc, "bn")) || howSrc, en: howSrc };
+    })(),
+  ]);
 
-  let specsBn: { label: string; value: string }[] | null = spSrc.length ? spSrc : null;
-  let specsEn: { label: string; value: string }[] | null = null;
-  if (spSrc.length) {
-    if (hasBengali(input.specs_text || "")) specsEn = await translateSpecs(spSrc, "en");
-    else { specsEn = spSrc; specsBn = await translateSpecs(spSrc, "bn"); }
-  }
-
-  let faqBn: { q: string; a: string }[] | null = faqSrc.length ? faqSrc : null;
-  let faqEn: { q: string; a: string }[] | null = null;
-  if (faqSrc.length) {
-    if (hasBengali(input.faq_text || "")) faqEn = await translateFaq(faqSrc, "en");
-    else { faqEn = faqSrc; faqBn = await translateFaq(faqSrc, "bn"); }
-  }
-
-  let howBn: string | null = howSrc || null;
-  let howEn: string | null = null;
-  if (howSrc) {
-    if (hasBengali(howSrc)) howEn = (await aiTranslate(howSrc, "en")) || null;
-    else { howEn = howSrc; howBn = (await aiTranslate(howSrc, "bn")) || howSrc; }
-  }
+  const nameBn = nameRes.bn, nameEn = nameRes.en;
+  const descBn = descRes.bn, descEn = descRes.en;
+  const highlightsBn = hlRes.bn, highlightsEn = hlRes.en;
+  const specsBn = specRes.bn, specsEn = specRes.en;
+  const faqBn = faqRes.bn, faqEn = faqRes.en;
+  const howBn = howRes.bn, howEn = howRes.en;
 
   const row: Record<string, unknown> = {
     name_bn: nameBn || null,
@@ -182,8 +192,7 @@ export async function previewTranslate(input: { name?: string; description?: str
 }> {
   await requireAdmin();
   try {
-    const { apiKey } = await getGeminiSettingsSafe();
-    if (!apiKey) return { ok: false, error: "AI is not configured. Add a Gemini API key in Admin → Settings." };
+    if (!(await llmProvider())) return { ok: false, error: "AI is not configured. Add your Claude (Anthropic) API key in Admin → Settings → AI." };
     const name = (input.name || "").trim();
     const description = (input.description || "").trim();
     const [n, d] = await Promise.all([
@@ -196,11 +205,6 @@ export async function previewTranslate(input: { name?: string; description?: str
   }
 }
 
-// small helper so previewTranslate can check config without importing settings twice
-async function getGeminiSettingsSafe(): Promise<{ apiKey: string }> {
-  try { const { getGeminiSettings } = await import("@/lib/settings"); const s = await getGeminiSettings(); return { apiKey: s.apiKey }; }
-  catch { return { apiKey: "" }; }
-}
 
 /**
  * Bulk backfill: translate existing products that are missing a language.

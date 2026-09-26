@@ -1,12 +1,13 @@
 // lib/ai-autofill.ts — AI auto-fill for the admin product form.
-// From the product name (+ optional description and first product photo) Gemini
+// From the product name (+ optional description and first product photo) the AI
 // drafts: English name, slug, category, description, highlights, specs, how-to-use,
-// FAQ and SEO fields. Uses the same Gemini key as image search / translation.
+// FAQ and SEO fields. Runs on Claude (the model set in Admin → Settings → AI, default
+// Sonnet 5) via lib/llm.ts; Gemini is only used if no Claude key is configured.
 //
 // Guardrails (important for a baby/pregnancy store and for Meta ad policy): the model
 // is told not to invent facts (materials, sizes, weights, certifications), prices,
 // delivery promises or medical/health guarantees. Anything it can't infer is left empty.
-import { getGeminiSettings } from "@/lib/settings";
+import { llm, extractJson } from "@/lib/llm";
 import { toSlug } from "@/lib/slug";
 
 export interface AutofillInput {
@@ -57,11 +58,6 @@ export async function aiAutofillProduct(
   const name = (input.name || "").trim();
   if (!name) return { ok: false, error: "Enter the product name first." };
 
-  const { apiKey, model } = await getGeminiSettings();
-  if (!apiKey) return { ok: false, error: "AI is not configured. Add a Gemini API key in Admin → Settings." };
-  let MODEL = model || "gemini-3.6-flash";
-  if (/gemini-(1\.5|2\.0)/.test(MODEL)) MODEL = "gemini-3.6-flash";
-
   const catList = input.categories.map((c) => `- ${c.id}: ${c.name}`).join("\n") || "(none)";
   const prompt = `You write product listings for "Dream Comfort", a Bangladeshi online store for mothers & babies (pregnancy pillows, baby care, bedding). Customers pay cash on delivery.
 
@@ -92,39 +88,10 @@ STRICT RULES:
 - Output valid JSON only. No markdown, no comments.`;
 
   const img = await fetchImage(input.imageUrl);
-  const parts: any[] = [{ text: prompt }];
-  if (img) parts.push({ inline_data: { mime_type: img.mime, data: img.data } });
-
-  let text = "";
-  try {
-    const r = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts }],
-          generationConfig: {
-            temperature: 0.4,
-            maxOutputTokens: 2048,
-            responseMimeType: "application/json",
-            thinkingConfig: { thinkingBudget: 0 },
-          },
-        }),
-        signal: AbortSignal.timeout(45000),
-      }
-    );
-    const j: any = await r.json();
-    if (!r.ok) return { ok: false, error: j?.error?.message || "AI request failed." };
-    text = j?.candidates?.[0]?.content?.parts?.map((p: any) => p?.text || "").join("") || "";
-  } catch (e: any) {
-    return { ok: false, error: e?.name === "TimeoutError" ? "AI took too long — try again." : (e?.message ?? "AI request failed.") };
-  }
-
-  let raw: any;
-  try {
-    raw = JSON.parse(text.replace(/^```(?:json)?\s*|\s*```$/g, ""));
-  } catch {
+  const res = await llm({ prompt, image: img, tier: "quality", maxTokens: 2048, timeoutMs: 50000 });
+  if (!res.ok) return { ok: false, error: res.error };
+  const raw: any = extractJson(res.text);
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     return { ok: false, error: "AI returned an unexpected answer — please try again." };
   }
 
