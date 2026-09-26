@@ -49,6 +49,31 @@ export async function aiTranslate(text: string, target: "en" | "bn"): Promise<st
   }
 }
 
+/** Translate an array of short strings (runs in parallel; falls back to source). */
+export async function translateStrings(arr: string[], target: "en" | "bn"): Promise<string[]> {
+  return Promise.all((arr || []).map(async (s) => (await aiTranslate(s, target)) || s));
+}
+
+/** Translate spec rows ({label,value}) into the target language. */
+export async function translateSpecs(
+  specs: { label: string; value: string }[], target: "en" | "bn"
+): Promise<{ label: string; value: string }[]> {
+  return Promise.all((specs || []).map(async (s) => ({
+    label: (await aiTranslate(s.label, target)) || s.label,
+    value: (await aiTranslate(s.value, target)) || s.value,
+  })));
+}
+
+/** Translate FAQ rows ({q,a}) into the target language. */
+export async function translateFaq(
+  faq: { q: string; a: string }[], target: "en" | "bn"
+): Promise<{ q: string; a: string }[]> {
+  return Promise.all((faq || []).map(async (f) => ({
+    q: (await aiTranslate(f.q, target)) || f.q,
+    a: (await aiTranslate(f.a, target)) || f.a,
+  })));
+}
+
 /** Given whatever the admin typed (one language), produce both language versions. */
 export async function bilingualize(
   primary: string,

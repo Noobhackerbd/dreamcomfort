@@ -4,7 +4,7 @@ import { getServerSupabase } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { revalidatePath } from "next/cache";
 import { toSlug } from "@/lib/slug";
-import { aiTranslate, bilingualize, hasBengali } from "@/lib/ai-translate";
+import { aiTranslate, bilingualize, hasBengali, translateStrings, translateSpecs, translateFaq } from "@/lib/ai-translate";
 
 function slugify(input: string): string {
   // English/ASCII slug — Bengali names are transliterated to Latin so ?color= links work.
@@ -38,7 +38,7 @@ export interface ProductInput {
   video_url?: string;
 }
 
-const OPTIONAL_COLS = ["rating", "review_count", "highlights", "specs", "how_to_use", "faq", "video_url", "description_images"];
+const OPTIONAL_COLS = ["rating", "review_count", "highlights", "specs", "how_to_use", "faq", "video_url", "description_images", "highlights_en", "specs_en", "faq_en", "how_to_use_en"];
 /** True when the error is a "column doesn't exist" for one of the optional/newer columns. */
 function isMissingOptionalCol(error: any): boolean {
   return !!error && (error.code === "42703" || new RegExp(OPTIONAL_COLS.join("|"), "i").test(error.message || ""));
@@ -84,6 +84,41 @@ export async function saveProduct(input: ProductInput) {
   if (descBn && !descEn) descEn = (await aiTranslate(descBn, "en")) || "";
   else if (descEn && !descBn) descBn = (await aiTranslate(descEn, "bn")) || "";
 
+  // Premium page content — bilingual. Whichever language the admin typed, the other
+  // is AI-generated so highlights / specs / FAQ / how-to-use also switch with the site.
+  const hlSrc = parseHighlights(input.highlights_text) || [];
+  const spSrc = parseSpecs(input.specs_text) || [];
+  const faqSrc = parseFaq(input.faq_text) || [];
+  const howSrc = input.how_to_use?.trim() || "";
+
+  let highlightsBn: string[] | null = hlSrc.length ? hlSrc : null;
+  let highlightsEn: string[] | null = null;
+  if (hlSrc.length) {
+    if (hasBengali(input.highlights_text || "")) highlightsEn = await translateStrings(hlSrc, "en");
+    else { highlightsEn = hlSrc; highlightsBn = await translateStrings(hlSrc, "bn"); }
+  }
+
+  let specsBn: { label: string; value: string }[] | null = spSrc.length ? spSrc : null;
+  let specsEn: { label: string; value: string }[] | null = null;
+  if (spSrc.length) {
+    if (hasBengali(input.specs_text || "")) specsEn = await translateSpecs(spSrc, "en");
+    else { specsEn = spSrc; specsBn = await translateSpecs(spSrc, "bn"); }
+  }
+
+  let faqBn: { q: string; a: string }[] | null = faqSrc.length ? faqSrc : null;
+  let faqEn: { q: string; a: string }[] | null = null;
+  if (faqSrc.length) {
+    if (hasBengali(input.faq_text || "")) faqEn = await translateFaq(faqSrc, "en");
+    else { faqEn = faqSrc; faqBn = await translateFaq(faqSrc, "bn"); }
+  }
+
+  let howBn: string | null = howSrc || null;
+  let howEn: string | null = null;
+  if (howSrc) {
+    if (hasBengali(howSrc)) howEn = (await aiTranslate(howSrc, "en")) || null;
+    else { howEn = howSrc; howBn = (await aiTranslate(howSrc, "bn")) || howSrc; }
+  }
+
   const row: Record<string, unknown> = {
     name_bn: nameBn || null,
     name_en: nameEn || nameBn || "Product",
@@ -101,10 +136,14 @@ export async function saveProduct(input: ProductInput) {
     description_images: input.description_images && input.description_images.length ? input.description_images : null,
     rating,
     review_count: reviewCount,
-    highlights: parseHighlights(input.highlights_text),
-    specs: parseSpecs(input.specs_text),
-    how_to_use: input.how_to_use?.trim() || null,
-    faq: parseFaq(input.faq_text),
+    highlights: highlightsBn,
+    highlights_en: highlightsEn,
+    specs: specsBn,
+    specs_en: specsEn,
+    how_to_use: howBn,
+    how_to_use_en: howEn,
+    faq: faqBn,
+    faq_en: faqEn,
     video_url: input.video_url?.trim() || null,
   };
   const stripOptional = (o: Record<string, unknown>) => { for (const c of OPTIONAL_COLS) delete o[c]; return o; };
@@ -167,43 +206,63 @@ async function getGeminiSettingsSafe(): Promise<{ apiKey: string }> {
  * Processes up to `limit` products per call so it never times out; returns how
  * many were updated and whether more remain (call again to continue).
  */
-export async function backfillTranslations(limit = 20): Promise<{ ok: boolean; updated: number; remaining: number; error?: string }> {
+export async function backfillTranslations(limit = 10): Promise<{ ok: boolean; updated: number; remaining: number; error?: string }> {
   await requireAdmin();
   const supabase = getServerSupabase();
+  const arrLen = (x: any) => Array.isArray(x) && x.length > 0;
   try {
-    const { data, error } = await supabase
+    // Try to read premium columns too; if they don't exist yet (migration not run),
+    // fall back to name + description only.
+    let hasPremium = true;
+    let res = await supabase
       .from("products")
-      .select("id, name_bn, name_en, description_bn, description_en")
+      .select("id, name_bn, name_en, description_bn, description_en, highlights, highlights_en, specs, specs_en, faq, faq_en, how_to_use, how_to_use_en")
       .limit(500);
-    if (error) return { ok: false, updated: 0, remaining: 0, error: error.message };
+    if (res.error && isMissingOptionalCol(res.error)) {
+      hasPremium = false;
+      res = await supabase.from("products").select("id, name_bn, name_en, description_bn, description_en").limit(500);
+    }
+    if (res.error) return { ok: false, updated: 0, remaining: 0, error: res.error.message };
 
-    const rows = (data as any[]) ?? [];
-    // A product "needs" translation when a language is empty, or when name_en is
-    // just a copy of name_bn (i.e. Bengali sitting in the English column).
+    const rows = (res.data as any[]) ?? [];
+    const premiumNeed = (p: any) =>
+      hasPremium && (
+        (arrLen(p.highlights) && !arrLen(p.highlights_en)) ||
+        (arrLen(p.specs) && !arrLen(p.specs_en)) ||
+        (arrLen(p.faq) && !arrLen(p.faq_en)) ||
+        ((p.how_to_use || "").trim() && !(p.how_to_use_en || "").trim())
+      );
     const needs = rows.filter((p) => {
       const nb = (p.name_bn || "").trim(), ne = (p.name_en || "").trim();
       const db = (p.description_bn || "").trim(), de = (p.description_en || "").trim();
       const nameNeed = (nb && (!ne || ne === nb || hasBengali(ne))) || (ne && !nb);
       const descNeed = (db && !de) || (de && !db);
-      return nameNeed || descNeed;
+      return nameNeed || descNeed || premiumNeed(p);
     });
 
-    const batch = needs.slice(0, Math.max(1, Math.min(50, limit)));
+    const batch = needs.slice(0, Math.max(1, Math.min(30, limit)));
     let updated = 0;
     for (const p of batch) {
-      let nb = (p.name_bn || "").trim(), ne = (p.name_en || "").trim();
-      let db = (p.description_bn || "").trim(), de = (p.description_en || "").trim();
+      const upd: Record<string, unknown> = {};
       // Name
+      let nb = (p.name_bn || "").trim(), ne = (p.name_en || "").trim();
       if (nb && (!ne || ne === nb || hasBengali(ne))) ne = (await aiTranslate(nb, "en")) || ne || nb;
       else if (ne && !nb) nb = (await aiTranslate(ne, "bn")) || nb || ne;
+      upd.name_bn = nb || null; upd.name_en = ne || nb || "Product";
       // Description
+      let db = (p.description_bn || "").trim(), de = (p.description_en || "").trim();
       if (db && !de) de = (await aiTranslate(db, "en")) || de;
       else if (de && !db) db = (await aiTranslate(de, "bn")) || db;
-
-      const { error: uErr } = await supabase.from("products").update({
-        name_bn: nb || null, name_en: ne || nb || "Product",
-        description_bn: db || null, description_en: de || null,
-      }).eq("id", p.id);
+      upd.description_bn = db || null; upd.description_en = de || null;
+      // Premium content (existing content is Bengali → generate English)
+      if (hasPremium) {
+        if (arrLen(p.highlights) && !arrLen(p.highlights_en)) upd.highlights_en = await translateStrings(p.highlights, "en");
+        if (arrLen(p.specs) && !arrLen(p.specs_en)) upd.specs_en = await translateSpecs(p.specs, "en");
+        if (arrLen(p.faq) && !arrLen(p.faq_en)) upd.faq_en = await translateFaq(p.faq, "en");
+        const hw = (p.how_to_use || "").trim();
+        if (hw && !(p.how_to_use_en || "").trim()) upd.how_to_use_en = (await aiTranslate(hw, "en")) || null;
+      }
+      const { error: uErr } = await supabase.from("products").update(upd).eq("id", p.id);
       if (!uErr) updated++;
     }
 
