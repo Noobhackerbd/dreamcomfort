@@ -71,6 +71,13 @@ export interface HomeStripSettings {
   link: string;  // optional destination when the strip is tapped
 }
 
+export interface PromoPopupSettings {
+  enabled: boolean; // master on/off for the first-visit promo popup
+  image: string;    // banner image URL (uploaded from admin). "" = nothing to show
+  link: string;     // optional destination when the banner is tapped
+  rev: number;      // bumped on every save — visitors who dismissed an older banner see the new one
+}
+
 export interface FeaturedSettings {
   productIds: string[]; // admin hand-picked "featured" products (order preserved). Best-sellers fill the rest.
 }
@@ -204,6 +211,11 @@ export function getFlashSale(): Promise<FlashSaleSettings> {
 /** Slim GIF/image strip shown right under the hero banner. Uploaded from admin. */
 export function getHomeStrip(): Promise<HomeStripSettings> {
   return readSetting<HomeStripSettings>("home_strip", { gif: "", link: "" });
+}
+
+/** First-visit promotional popup (banner image). Uploaded & toggled from admin. */
+export function getPromoPopup(): Promise<PromoPopupSettings> {
+  return readSetting<PromoPopupSettings>("promo_popup", { enabled: false, image: "", link: "", rev: 0 });
 }
 
 /** Admin hand-picked featured products (order preserved). Best-sellers fill remaining slots. */

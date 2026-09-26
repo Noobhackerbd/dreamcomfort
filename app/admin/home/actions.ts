@@ -30,6 +30,23 @@ export async function saveHomeStrip(input: { gif: string; link?: string }) {
   return { ok: true };
 }
 
+export async function savePromoPopup(input: { enabled: boolean; image: string; link?: string }) {
+  await requireAdmin();
+  try {
+    await saveSetting("promo_popup", {
+      enabled: !!input.enabled,
+      image: (input.image || "").trim(),
+      link: (input.link || "").trim(),
+      rev: Date.now(), // bump so visitors who dismissed the previous banner see this one
+    });
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? "Save failed. Is the settings table present (supabase-migration-2.sql)?" };
+  }
+  revalidatePath("/admin/home");
+  revalidatePath("/");
+  return { ok: true };
+}
+
 export async function saveFlashSale(input: { title: string; productIds: string[]; endsAt?: string }) {
   await requireAdmin();
   try {

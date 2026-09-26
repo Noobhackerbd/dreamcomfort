@@ -4,6 +4,7 @@ import { getServerSupabase } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { revalidatePath } from "next/cache";
 import { toSlug } from "@/lib/slug";
+import { aiTranslate, bilingualize, hasBengali } from "@/lib/ai-translate";
 
 function slugify(input: string): string {
   // English/ASCII slug — Bengali names are transliterated to Latin so ?color= links work.
@@ -69,16 +70,30 @@ export async function saveProduct(input: ProductInput) {
   const rating = input.rating == null || input.rating === ("" as any) ? null : Math.min(5, Math.max(0, Number(input.rating)));
   const reviewCount = input.review_count == null || input.review_count === ("" as any) ? null : Math.max(0, Math.floor(Number(input.review_count)));
 
+  // ── AI bilingual fill ──────────────────────────────────────────────────────
+  // The admin types the name/description in ONE language. Whichever language is
+  // missing, AI fills it here so we always store both (the storefront reads the
+  // stored columns, so rendering stays fast — no per-request translation).
+  let nameBn = input.name_bn?.trim() || "";
+  let nameEn = input.name_en?.trim() || "";
+  if (nameBn && !nameEn) nameEn = (await aiTranslate(nameBn, "en")) || nameBn;
+  else if (nameEn && !nameBn) nameBn = (await aiTranslate(nameEn, "bn")) || nameEn;
+
+  let descBn = input.description_bn?.trim() || "";
+  let descEn = input.description_en?.trim() || "";
+  if (descBn && !descEn) descEn = (await aiTranslate(descBn, "en")) || "";
+  else if (descEn && !descBn) descBn = (await aiTranslate(descEn, "bn")) || "";
+
   const row: Record<string, unknown> = {
-    name_bn: input.name_bn?.trim() || null,
-    name_en: input.name_en?.trim() || input.name_bn?.trim() || "Product",
+    name_bn: nameBn || null,
+    name_en: nameEn || nameBn || "Product",
     price: Number(input.price) || 0,
     compare_at_price: input.compare_at_price ? Number(input.compare_at_price) : null,
     stock: Math.max(0, Math.floor(Number(input.stock) || 0)),
     sku: input.sku?.trim() || null,
     category_id: input.category_id || null,
-    description_bn: input.description_bn?.trim() || null,
-    description_en: input.description_en?.trim() || null,
+    description_bn: descBn || null,
+    description_en: descEn || null,
     meta_title: input.meta_title?.trim() || null,
     meta_description: input.meta_description?.trim() || null,
     is_active: !!input.is_active,
@@ -115,6 +130,89 @@ export async function saveProduct(input: ProductInput) {
   revalidatePath("/admin/products");
   revalidatePath("/");
   return { ok: true };
+}
+
+/**
+ * Preview AI translation for the product form (no DB write). Given whatever the
+ * admin typed, returns both language versions so they can see/trust it.
+ */
+export async function previewTranslate(input: { name?: string; description?: string }): Promise<{
+  ok: boolean; error?: string;
+  name?: { bn: string; en: string }; description?: { bn: string; en: string };
+}> {
+  await requireAdmin();
+  try {
+    const { apiKey } = await getGeminiSettingsSafe();
+    if (!apiKey) return { ok: false, error: "AI is not configured. Add a Gemini API key in Admin → Settings." };
+    const name = (input.name || "").trim();
+    const description = (input.description || "").trim();
+    const [n, d] = await Promise.all([
+      name ? bilingualize(name, "name") : Promise.resolve({ bn: "", en: "" }),
+      description ? bilingualize(description, "description") : Promise.resolve({ bn: "", en: "" }),
+    ]);
+    return { ok: true, name: n, description: d };
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? "Translation failed." };
+  }
+}
+
+// small helper so previewTranslate can check config without importing settings twice
+async function getGeminiSettingsSafe(): Promise<{ apiKey: string }> {
+  try { const { getGeminiSettings } = await import("@/lib/settings"); const s = await getGeminiSettings(); return { apiKey: s.apiKey }; }
+  catch { return { apiKey: "" }; }
+}
+
+/**
+ * Bulk backfill: translate existing products that are missing a language.
+ * Processes up to `limit` products per call so it never times out; returns how
+ * many were updated and whether more remain (call again to continue).
+ */
+export async function backfillTranslations(limit = 20): Promise<{ ok: boolean; updated: number; remaining: number; error?: string }> {
+  await requireAdmin();
+  const supabase = getServerSupabase();
+  try {
+    const { data, error } = await supabase
+      .from("products")
+      .select("id, name_bn, name_en, description_bn, description_en")
+      .limit(500);
+    if (error) return { ok: false, updated: 0, remaining: 0, error: error.message };
+
+    const rows = (data as any[]) ?? [];
+    // A product "needs" translation when a language is empty, or when name_en is
+    // just a copy of name_bn (i.e. Bengali sitting in the English column).
+    const needs = rows.filter((p) => {
+      const nb = (p.name_bn || "").trim(), ne = (p.name_en || "").trim();
+      const db = (p.description_bn || "").trim(), de = (p.description_en || "").trim();
+      const nameNeed = (nb && (!ne || ne === nb || hasBengali(ne))) || (ne && !nb);
+      const descNeed = (db && !de) || (de && !db);
+      return nameNeed || descNeed;
+    });
+
+    const batch = needs.slice(0, Math.max(1, Math.min(50, limit)));
+    let updated = 0;
+    for (const p of batch) {
+      let nb = (p.name_bn || "").trim(), ne = (p.name_en || "").trim();
+      let db = (p.description_bn || "").trim(), de = (p.description_en || "").trim();
+      // Name
+      if (nb && (!ne || ne === nb || hasBengali(ne))) ne = (await aiTranslate(nb, "en")) || ne || nb;
+      else if (ne && !nb) nb = (await aiTranslate(ne, "bn")) || nb || ne;
+      // Description
+      if (db && !de) de = (await aiTranslate(db, "en")) || de;
+      else if (de && !db) db = (await aiTranslate(de, "bn")) || db;
+
+      const { error: uErr } = await supabase.from("products").update({
+        name_bn: nb || null, name_en: ne || nb || "Product",
+        description_bn: db || null, description_en: de || null,
+      }).eq("id", p.id);
+      if (!uErr) updated++;
+    }
+
+    revalidatePath("/");
+    revalidatePath("/products");
+    return { ok: true, updated, remaining: Math.max(0, needs.length - batch.length) };
+  } catch (e: any) {
+    return { ok: false, updated: 0, remaining: 0, error: e?.message ?? "Backfill failed." };
+  }
 }
 
 export async function deleteProduct(id: string) {

@@ -107,6 +107,7 @@ const NAV = [
   { href: "/admin/home", label: "Home Page", icon: "image" },
   { href: "/admin/landing", label: "Landing (funnel)", icon: "landing" },
   { href: "/admin/products", label: "Products", icon: "products" },
+  { href: "/admin/translate", label: "AI Translate", icon: "target" },
   { href: "/admin/categories", label: "Categories", icon: "categories" },
   { href: "/admin/coupons", label: "Coupons", icon: "tag" },
   { href: "/admin/orders", label: "Orders", icon: "orders", badgeKey: "bookedDue" },

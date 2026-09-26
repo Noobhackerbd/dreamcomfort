@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseBrowserClient } from "@/lib/supabase/ssr-browser";
 import { Icon } from "@/components/admin/icons";
-import { saveProduct, ProductInput } from "./actions";
+import { saveProduct, previewTranslate, ProductInput } from "./actions";
 import type { Category } from "@/lib/types";
 import { toSlug } from "@/lib/slug";
 
@@ -20,16 +20,16 @@ const lbl = "block text-[13px] font-medium dc-muted mb-1";
 
 export function ProductForm({ initial, categories, landings = [] }: Props) {
   const router = useRouter();
-  const [nameBn, setNameBn] = useState(initial?.name_bn ?? "");
-  const [nameEn, setNameEn] = useState(initial?.name_en ?? "");
+  const [name, setName] = useState(initial?.name_bn || initial?.name_en || "");
   const [slug, setSlug] = useState(initial?.slug ?? "");
+  const [tPreview, setTPreview] = useState<{ name?: { bn: string; en: string }; description?: { bn: string; en: string } } | null>(null);
+  const [tBusy, setTBusy] = useState(false);
   const [price, setPrice] = useState(initial?.price?.toString() ?? "");
   const [compare, setCompare] = useState(initial?.compare_at_price?.toString() ?? "");
   const [stock, setStock] = useState(initial?.stock?.toString() ?? "0");
   const [sku, setSku] = useState(initial?.sku ?? "");
   const [categoryId, setCategoryId] = useState(initial?.category_id ?? "");
-  const [descBn, setDescBn] = useState(initial?.description_bn ?? "");
-  const [descEn, setDescEn] = useState(initial?.description_en ?? "");
+  const [description, setDescription] = useState(initial?.description_bn || initial?.description_en || "");
   const [metaTitle, setMetaTitle] = useState(initial?.meta_title ?? "");
   const [metaDesc, setMetaDesc] = useState(initial?.meta_description ?? "");
   const [active, setActive] = useState(initial?.is_active ?? true);
@@ -48,7 +48,16 @@ export function ProductForm({ initial, categories, landings = [] }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-  const effectiveSlug = slugify(slug || nameEn || nameBn);
+  const effectiveSlug = slugify(slug || name);
+  const BENGALI = /[ঀ-৿]/;
+
+  async function runPreview() {
+    setTBusy(true); setError(null);
+    const res = await previewTranslate({ name, description });
+    setTBusy(false);
+    if (!res.ok) { setError(res.error ?? "Translation failed."); return; }
+    setTPreview({ name: res.name, description: res.description });
+  }
   const origin =
     (process.env.NEXT_PUBLIC_SITE_URL && process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "")) ||
     (typeof window !== "undefined" ? window.location.origin : "https://dreamcomfortbd.com");
@@ -126,13 +135,20 @@ export function ProductForm({ initial, categories, landings = [] }: Props) {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!nameBn.trim() && !nameEn.trim()) return setError("Enter a product name.");
+    if (!name.trim()) return setError("Enter a product name.");
     if (!Number(price)) return setError("Enter a valid price.");
     setSaving(true);
+    // Route the single Name/Description into the right language column; the server
+    // AI-fills the OTHER language automatically.
+    const nameIsBn = BENGALI.test(name);
+    const descIsBn = BENGALI.test(description);
     const res = await saveProduct({
-      id: initial?.id, slug, name_bn: nameBn, name_en: nameEn, price: Number(price),
+      id: initial?.id, slug,
+      name_bn: nameIsBn ? name : "", name_en: nameIsBn ? "" : name,
+      price: Number(price),
       compare_at_price: compare ? Number(compare) : null, stock: Number(stock), sku,
-      category_id: categoryId || null, description_bn: descBn, description_en: descEn,
+      category_id: categoryId || null,
+      description_bn: descIsBn ? description : "", description_en: descIsBn ? "" : description,
       meta_title: metaTitle, meta_description: metaDesc, is_active: active, images,
       description_images: descImages,
       rating: rating.trim() === "" ? null : Number(rating),
@@ -147,9 +163,15 @@ export function ProductForm({ initial, categories, landings = [] }: Props) {
 
   return (
     <form onSubmit={onSubmit} className="max-w-2xl space-y-4">
-      <div className="grid md:grid-cols-2 gap-4">
-        <div><label className={lbl}>Product name (Bangla)</label><input value={nameBn} onChange={(e) => setNameBn(e.target.value)} placeholder="e.g. প্রিমিয়াম প্রেগনেন্সি পিলো" className={cls} /></div>
-        <div><label className={lbl}>Name (English — for URL)</label><input value={nameEn} onChange={(e) => setNameEn(e.target.value)} placeholder="e.g. Premium Pregnancy Pillow" className={cls} /></div>
+      <div>
+        <label className={lbl}>Product name</label>
+        <input value={name} onChange={(e) => { setName(e.target.value); setTPreview(null); }} placeholder="Type in Bangla or English — e.g. প্রিমিয়াম প্রেগনেন্সি পিলো" className={cls} />
+        <p className="text-xs dc-muted mt-1">
+          ✨ Type the name in <b>one</b> language. AI creates the other language automatically when you save.{" "}
+          <button type="button" onClick={runPreview} disabled={tBusy || (!name.trim() && !description.trim())} className="underline disabled:opacity-50" style={{ color: "var(--a-brand)" }}>
+            {tBusy ? "Translating…" : "Preview AI translation"}
+          </button>
+        </p>
       </div>
 
       <div className="grid md:grid-cols-2 gap-4">
@@ -197,8 +219,29 @@ export function ProductForm({ initial, categories, landings = [] }: Props) {
         <div><label className={lbl}>Review count</label><input value={reviewCount} onChange={(e) => setReviewCount(e.target.value.replace(/\D/g, ""))} inputMode="numeric" placeholder="e.g. 250" className={cls} /></div>
       </div>
 
-      <div><label className={lbl}>Description (Bangla)</label><textarea value={descBn} onChange={(e) => setDescBn(e.target.value)} rows={3} className={cls} /></div>
-      <div><label className={lbl}>Description (English)</label><textarea value={descEn} onChange={(e) => setDescEn(e.target.value)} rows={2} className={cls} /></div>
+      <div>
+        <label className={lbl}>Description</label>
+        <textarea value={description} onChange={(e) => { setDescription(e.target.value); setTPreview(null); }} rows={3} placeholder="Type in one language — AI translates the other on save." className={cls} />
+      </div>
+
+      {/* AI translation preview (read-only) */}
+      {tPreview && (tPreview.name?.en || tPreview.name?.bn || tPreview.description?.en || tPreview.description?.bn) && (
+        <div className="dc-card p-3.5 space-y-2" style={{ background: "var(--a-brand-soft)" }}>
+          <p className="text-sm font-semibold">✨ AI translation preview <span className="dc-muted font-normal">(this is what will be saved)</span></p>
+          {tPreview.name && (
+            <div className="grid md:grid-cols-2 gap-3 text-sm">
+              <div><span className="dc-muted text-xs block">Name (Bangla)</span>{tPreview.name.bn || "—"}</div>
+              <div><span className="dc-muted text-xs block">Name (English)</span>{tPreview.name.en || "—"}</div>
+            </div>
+          )}
+          {tPreview.description && (tPreview.description.bn || tPreview.description.en) && (
+            <div className="grid md:grid-cols-2 gap-3 text-sm">
+              <div><span className="dc-muted text-xs block">Description (Bangla)</span><span className="whitespace-pre-line">{tPreview.description.bn || "—"}</span></div>
+              <div><span className="dc-muted text-xs block">Description (English)</span><span className="whitespace-pre-line">{tPreview.description.en || "—"}</span></div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Description photos — shown as "পণ্যের বিস্তারিত" (long details) on the product page */}
       <div>

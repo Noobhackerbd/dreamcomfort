@@ -5,18 +5,27 @@ import { getServerSupabase } from "@/lib/supabase/server";
 import { getCategoryImages } from "@/lib/settings";
 import { Product, Category } from "@/lib/types";
 import { ProductCard } from "@/components/ProductCard";
+import { getL } from "@/lib/i18n-server";
 
 export const dynamic = "force-dynamic";
-
-export const metadata: Metadata = {
-  title: "সব পণ্য",
-  description: "প্রিমিয়াম বিছানাপত্র, বালিশ ও আরামদায়ক পণ্যের সম্পূর্ণ তালিকা।",
-};
 
 interface SearchParams {
   category?: string;
   q?: string;
   sort?: string;
+}
+
+export async function generateMetadata({ searchParams }: { searchParams: SearchParams }): Promise<Metadata> {
+  const { lang } = getL();
+  if (!searchParams.category) {
+    return lang === "bn"
+      ? { title: "সব পণ্য", description: "প্রিমিয়াম বিছানাপত্র, বালিশ ও আরামদায়ক পণ্যের সম্পূর্ণ তালিকা।" }
+      : { title: "All Products", description: "The full range of premium bedding, pillows and comfort products." };
+  }
+  const supabase = getServerSupabase();
+  const { data } = await supabase.from("categories").select("name_bn, name_en").eq("slug", searchParams.category).maybeSingle();
+  const name = lang === "bn" ? ((data as any)?.name_bn || (data as any)?.name_en) : ((data as any)?.name_en || (data as any)?.name_bn);
+  return { title: name || (lang === "bn" ? "সব পণ্য" : "All Products") };
 }
 
 async function getData(sp: SearchParams) {
@@ -54,12 +63,16 @@ export default async function ProductsPage({
 }: {
   searchParams: SearchParams;
 }) {
+  const { L, lang } = getL();
+  const catName = (c: Category) => lang === "bn" ? (c.name_bn || c.name_en) : (c.name_en || c.name_bn);
   const { categories, products, catImages } = await getData(searchParams);
   const activeCat = searchParams.category ?? "";
+  const activeCategory = activeCat ? categories.find((c) => c.slug === activeCat) : null;
+  const heading = activeCategory ? catName(activeCategory) : L("All Products", "সব পণ্য");
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">সব পণ্য</h1>
+      <h1 className="text-2xl font-bold mb-6">{heading}</h1>
 
       {/* Category chips (with images) */}
       <div className="flex flex-wrap gap-2 mb-6">
@@ -73,7 +86,7 @@ export default async function ProductsPage({
           <span className="grid place-items-center h-7 w-7 rounded-full bg-brand/10 text-brand">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z" /></svg>
           </span>
-          সব
+          {L("All", "সব")}
         </a>
         {categories.map((c) => (
           <a
@@ -93,13 +106,13 @@ export default async function ProductsPage({
                 </span>
               )}
             </span>
-            {c.name_bn || c.name_en}
+            {catName(c)}
           </a>
         ))}
       </div>
 
       {products.length === 0 ? (
-        <div className="text-center py-20 text-gray-400">কোনো পণ্য পাওয়া যায়নি।</div>
+        <div className="text-center py-20 text-gray-400">{L("No products found.", "কোনো পণ্য পাওয়া যায়নি।")}</div>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {products.map((p) => (

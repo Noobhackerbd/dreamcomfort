@@ -16,6 +16,7 @@ import { ProductReviews } from "@/components/store/ProductReviews";
 import { getReviews } from "@/app/product/review-actions";
 import { taka } from "@/lib/format";
 import { STORE_NAME } from "@/lib/config";
+import { getL } from "@/lib/i18n-server";
 
 export const dynamic = "force-dynamic";
 
@@ -36,9 +37,10 @@ async function getRelated(categoryId: string | null, excludeId: string): Promise
 }
 
 export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
+  const { lang } = getL();
   const p = await getProduct(params.slug);
-  if (!p) return { title: "পণ্য পাওয়া যায়নি" };
-  const name = p.name_bn || p.name_en;
+  if (!p) return { title: lang === "bn" ? "পণ্য পাওয়া যায়নি" : "Product not found" };
+  const name = lang === "bn" ? (p.name_bn || p.name_en) : (p.name_en || p.name_bn);
   const desc = p.meta_description || p.description_bn || p.description_en || `${name} — ${STORE_NAME}`;
   const image = p.images?.[0];
   return {
@@ -66,17 +68,19 @@ function Stars({ rating, size = 16 }: { rating: number; size?: number }) {
 }
 
 const TRUST = [
-  { c: "#3E9BD1", t: "দ্রুত ডেলিভারি", d: "M1 3h15v13H1zM16 8h4l3 3v5h-7M5.5 18.5a2.5 2.5 0 105 0M18.5 18.5a2.5 2.5 0 105 0" },
-  { c: "#16a34a", t: "ক্যাশ অন ডেলিভারি", d: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10zM9 12l2 2 4-4" },
-  { c: "#E77BA6", t: "সহজ রিটার্ন", d: "M3 12a9 9 0 103-6.7L3 8M3 3v5h5" },
+  { c: "#3E9BD1", en: "Fast Delivery", bn: "দ্রুত ডেলিভারি", d: "M1 3h15v13H1zM16 8h4l3 3v5h-7M5.5 18.5a2.5 2.5 0 105 0M18.5 18.5a2.5 2.5 0 105 0" },
+  { c: "#16a34a", en: "Cash on Delivery", bn: "ক্যাশ অন ডেলিভারি", d: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10zM9 12l2 2 4-4" },
+  { c: "#E77BA6", en: "Easy Returns", bn: "সহজ রিটার্ন", d: "M3 12a9 9 0 103-6.7L3 8M3 3v5h5" },
 ];
 
 
 export default async function ProductPage({ params }: { params: { slug: string } }) {
+  const { L, lang } = getL();
   const p = await getProduct(params.slug);
   if (!p) notFound();
 
-  const name = p.name_bn || p.name_en;
+  const name = lang === "bn" ? (p.name_bn || p.name_en) : (p.name_en || p.name_bn);
+  const description = lang === "bn" ? (p.description_bn || p.description_en) : (p.description_en || p.description_bn);
   const hasDiscount = p.compare_at_price && p.compare_at_price > p.price;
   const images = p.images?.length ? p.images : [];
   const related = await getRelated(p.category_id, p.id);
@@ -106,7 +110,7 @@ export default async function ProductPage({ params }: { params: { slug: string }
       <ViewContentPixel id={p.id} value={p.price} name={name} />
       <RecordView id={p.id} />
 
-      <Breadcrumbs items={[{ name: "হোম", href: "/" }, { name: "সব পণ্য", href: "/products" }, { name, href: `/product/${p.slug}` }]} />
+      <Breadcrumbs items={[{ name: L("Home", "হোম"), href: "/" }, { name: L("All Products", "সব পণ্য"), href: "/products" }, { name, href: `/product/${p.slug}` }]} />
 
       {/* Above the fold */}
       <div className="grid md:grid-cols-2 gap-8 lg:gap-12">
@@ -121,7 +125,7 @@ export default async function ProductPage({ params }: { params: { slug: string }
             {showRating && (
               <div className="flex items-center gap-2">
                 <Stars rating={rating} />
-                <span className="text-sm text-gray-500">{rating.toFixed(1)}{reviews > 0 ? ` · ${reviews} রিভিউ` : ""}</span>
+                <span className="text-sm text-gray-500">{rating.toFixed(1)}{reviews > 0 ? ` · ${reviews} ${L("reviews", "রিভিউ")}` : ""}</span>
               </div>
             )}
             <div className="ml-auto flex items-center gap-2">
@@ -135,7 +139,7 @@ export default async function ProductPage({ params }: { params: { slug: string }
             {hasDiscount && (
               <>
                 <span className="text-gray-400 line-through text-lg">{taka(p.compare_at_price as number)}</span>
-                <span className="rounded-md bg-accent text-white text-xs font-bold px-2 py-1">{Math.round((1 - p.price / (p.compare_at_price as number)) * 100)}% ছাড়</span>
+                <span className="rounded-md bg-accent text-white text-xs font-bold px-2 py-1">{Math.round((1 - p.price / (p.compare_at_price as number)) * 100)}% {L("OFF", "ছাড়")}</span>
               </>
             )}
           </div>
@@ -152,20 +156,20 @@ export default async function ProductPage({ params }: { params: { slug: string }
             </ul>
           )}
 
-          {(p.description_bn || p.description_en) && (
-            <p className="mt-5 text-gray-700 leading-relaxed whitespace-pre-line">{p.description_bn || p.description_en}</p>
+          {description && (
+            <p className="mt-5 text-gray-700 leading-relaxed whitespace-pre-line">{description}</p>
           )}
 
           <div className="mt-6">
             <BuyButtons product={{ id: p.id, slug: p.slug, name, price: p.price, image: images[0] }} />
-            <p className="mt-3 text-xs text-gray-400">স্টক: {p.stock > 0 ? `${p.stock} টি` : "স্টকে নেই"}</p>
+            <p className="mt-3 text-xs text-gray-400">{L("Stock", "স্টক")}: {p.stock > 0 ? `${p.stock} ${L("pcs", "টি")}` : L("Out of stock", "স্টকে নেই")}</p>
           </div>
 
           <div className="mt-6 grid grid-cols-3 gap-2.5 text-center">
             {TRUST.map((b, i) => (
               <div key={i} className="rounded-lg border border-black/[0.07] bg-white py-3 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={b.c} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="mx-auto mb-1"><path d={b.d} /></svg>
-                <span className="text-[11px] font-medium text-gray-600">{b.t}</span>
+                <span className="text-[11px] font-medium text-gray-600">{L(b.en, b.bn)}</span>
               </div>
             ))}
           </div>
@@ -175,7 +179,7 @@ export default async function ProductPage({ params }: { params: { slug: string }
       {/* Specifications */}
       {specs.length > 0 && (
         <section className="mt-14 max-w-3xl">
-          <h2 className="text-xl font-bold font-display mb-4">স্পেসিফিকেশন</h2>
+          <h2 className="text-xl font-bold font-display mb-4">{L("Specifications", "স্পেসিফিকেশন")}</h2>
           <div className="rounded-lg bg-white border border-black/[0.06] shadow-[0_1px_2px_rgba(0,0,0,0.03)] overflow-hidden divide-y divide-black/5">
             {specs.map((s, i) => (
               <div key={i} className="flex gap-4 px-5 py-3 text-sm">
@@ -190,7 +194,7 @@ export default async function ProductPage({ params }: { params: { slug: string }
       {/* How to use */}
       {howTo && (
         <section className="mt-14 max-w-3xl">
-          <h2 className="text-xl font-bold font-display mb-4">ব্যবহারের নিয়ম</h2>
+          <h2 className="text-xl font-bold font-display mb-4">{L("How to Use", "ব্যবহারের নিয়ম")}</h2>
           <div className="rounded-lg bg-brand-soft/50 border border-black/[0.06] p-5 text-gray-700 leading-relaxed whitespace-pre-line">{howTo}</div>
         </section>
       )}
@@ -198,7 +202,7 @@ export default async function ProductPage({ params }: { params: { slug: string }
       {/* Product description photos (admin-uploaded, Daraz-style long details) */}
       {Array.isArray(p.description_images) && p.description_images.filter(Boolean).length > 0 && (
         <section className="mt-14 max-w-3xl">
-          <h2 className="text-xl font-bold font-display mb-4">পণ্যের বিস্তারিত</h2>
+          <h2 className="text-xl font-bold font-display mb-4">{L("Product Details", "পণ্যের বিস্তারিত")}</h2>
           <div className="space-y-3">
             {p.description_images.filter(Boolean).map((src, i) => (
               // eslint-disable-next-line @next/next/no-img-element
@@ -214,7 +218,7 @@ export default async function ProductPage({ params }: { params: { slug: string }
       {/* FAQ */}
       {faq.length > 0 && (
         <section className="mt-14 max-w-3xl">
-          <h2 className="text-xl font-bold font-display mb-4">সাধারণ প্রশ্ন</h2>
+          <h2 className="text-xl font-bold font-display mb-4">{L("FAQ", "সাধারণ প্রশ্ন")}</h2>
           <FaqAccordion items={faq} />
         </section>
       )}
@@ -222,9 +226,9 @@ export default async function ProductPage({ params }: { params: { slug: string }
       {/* Shipping & returns info */}
       <section className="mt-14 grid sm:grid-cols-3 gap-3 max-w-4xl">
         {[
-          { t: "ডেলিভারি", d: "ঢাকায় ১–২ দিন, ঢাকার বাইরে ২–৪ দিন।", c: "#2F90CC", icon: "M1 3h15v13H1zM16 8h4l3 3v5h-7M5.5 18.5a2.5 2.5 0 105 0M18.5 18.5a2.5 2.5 0 105 0" },
-          { t: "পেমেন্ট", d: "ক্যাশ অন ডেলিভারি — পণ্য হাতে পেয়ে টাকা দিন।", c: "#16a34a", icon: "M2 7h20v10H2zM2 11h20M6 15h3" },
-          { t: "রিটার্ন", d: "পণ্যে সমস্যা থাকলে সহজ রিটার্ন সুবিধা।", c: "#E77BA6", icon: "M3 12a9 9 0 103-6.7L3 8M3 3v5h5" },
+          { t: L("Delivery", "ডেলিভারি"), d: L("1–2 days in Dhaka, 2–4 days outside Dhaka.", "ঢাকায় ১–২ দিন, ঢাকার বাইরে ২–৪ দিন।"), c: "#2F90CC", icon: "M1 3h15v13H1zM16 8h4l3 3v5h-7M5.5 18.5a2.5 2.5 0 105 0M18.5 18.5a2.5 2.5 0 105 0" },
+          { t: L("Payment", "পেমেন্ট"), d: L("Cash on delivery — pay when you receive the product.", "ক্যাশ অন ডেলিভারি — পণ্য হাতে পেয়ে টাকা দিন।"), c: "#16a34a", icon: "M2 7h20v10H2zM2 11h20M6 15h3" },
+          { t: L("Returns", "রিটার্ন"), d: L("Easy returns if there's any issue with the product.", "পণ্যে সমস্যা থাকলে সহজ রিটার্ন সুবিধা।"), c: "#E77BA6", icon: "M3 12a9 9 0 103-6.7L3 8M3 3v5h5" },
         ].map((x) => (
           <div key={x.t} className="flex items-start gap-3 rounded-lg bg-white border border-black/[0.06] shadow-[0_1px_2px_rgba(0,0,0,0.03)] p-4">
             <span className="shrink-0 h-9 w-9 grid place-items-center rounded-lg" style={{ background: `${x.c}14`, color: x.c }}>
@@ -240,7 +244,7 @@ export default async function ProductPage({ params }: { params: { slug: string }
 
       {related.length > 0 && (
         <section className="mt-14">
-          <h2 className="text-xl font-bold font-display mb-4">আপনার পছন্দ হতে পারে</h2>
+          <h2 className="text-xl font-bold font-display mb-4">{L("You may also like", "আপনার পছন্দ হতে পারে")}</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {related.map((r) => <ProductCard key={r.id} p={r} />)}
           </div>

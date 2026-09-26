@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { usePathname } from "next/navigation";
+import { useL } from "@/components/i18n/I18nProvider";
 
 function waLink(phone: string): string {
   let n = (phone || "").replace(/\D/g, "");
@@ -11,6 +12,7 @@ function waLink(phone: string): string {
 }
 
 export function SupportFab({ phone, facebook }: { phone?: string; facebook?: string }) {
+  const { L } = useL();
   const pathname = usePathname() || "/";
   const [open, setOpen] = useState(false);
 
@@ -20,7 +22,7 @@ export function SupportFab({ phone, facebook }: { phone?: string; facebook?: str
   const items = [
     facebook ? { label: "Messenger", href: facebook, bg: "#0084FF", icon: (<path fill="#fff" d="M12 2C6.3 2 2 6.2 2 11.7c0 2.9 1.18 5.4 3.1 7.12V22l2.9-1.6c.9.25 1.85.4 2.99.4 5.7 0 10-4.2 10-9.7S17.7 2 12 2zm1 13l-2.5-2.7L5.7 15l5.3-5.6 2.6 2.7 4.7-2.7L13 15z" />) } : null,
     phone ? { label: "WhatsApp", href: waLink(phone), bg: "#25D366", icon: (<path fill="#fff" d="M12 2a10 10 0 0 0-8.5 15.3L2 22l4.8-1.5A10 10 0 1 0 12 2zm5.8 14.2c-.25.7-1.45 1.32-2 1.37-.55.05-1.06.24-3.57-.75-3-1.2-4.9-4.28-5.05-4.48-.15-.2-1.2-1.6-1.2-3.05s.76-2.16 1.03-2.46c.27-.3.59-.37.79-.37h.57c.18 0 .43-.07.67.51.25.6.84 2.05.91 2.2.07.15.12.32.02.51-.34.68-.7.65-.4 1.16.82 1.4 1.63 1.88 2.86 2.5.3.15.46.12.62-.07.16-.19.7-.8.88-1.08.18-.28.36-.23.61-.14.25.09 1.6.75 1.87.89.21.1.35.15.4.24.05.09.05.53-.2 1.24z" />) } : null,
-    { label: "সাহায্য কেন্দ্র", href: "/help", bg: "#3E9BD1", icon: (<path fill="none" stroke="#fff" strokeWidth="1.9" d="M9.1 9a3 3 0 1 1 4.2 2.7c-.8.4-1.3 1-1.3 2M12 17h.01" />) },
+    { label: L("Help Center", "সাহায্য কেন্দ্র"), href: "/help", bg: "#3E9BD1", icon: (<path fill="none" stroke="#fff" strokeWidth="1.9" d="M9.1 9a3 3 0 1 1 4.2 2.7c-.8.4-1.3 1-1.3 2M12 17h.01" />) },
   ].filter(Boolean) as { label: string; href: string; bg: string; icon: JSX.Element }[];
 
   return (

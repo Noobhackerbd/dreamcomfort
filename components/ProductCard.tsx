@@ -1,7 +1,10 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
 import { taka } from "@/lib/format";
 import type { Product } from "@/lib/types";
+import { useL } from "@/components/i18n/I18nProvider";
 
 function Stars({ rating }: { rating: number }) {
   return (
@@ -26,7 +29,8 @@ function Stars({ rating }: { rating: number }) {
 }
 
 export function ProductCard({ p }: { p: Product }) {
-  const name = p.name_bn || p.name_en;
+  const { L, lang } = useL();
+  const name = lang === "bn" ? (p.name_bn || p.name_en) : (p.name_en || p.name_bn);
   const img = p.images?.[0];
   const hasDiscount = !!(p.compare_at_price && p.compare_at_price > p.price);
   const off = hasDiscount ? Math.round((1 - p.price / (p.compare_at_price as number)) * 100) : 0;
@@ -56,7 +60,7 @@ export function ProductCard({ p }: { p: Product }) {
         )}
         {soldOut && (
           <span className="absolute inset-0 grid place-items-center bg-white/55">
-            <span className="rounded-full bg-black/75 text-white text-[11px] font-semibold px-3 py-1">স্টকে নেই</span>
+            <span className="rounded-full bg-black/75 text-white text-[11px] font-semibold px-3 py-1">{L("Out of stock", "স্টকে নেই")}</span>
           </span>
         )}
       </div>

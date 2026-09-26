@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Bottom Nav Options</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1d2733; --muted:#6b7684; --line:#e6e9ee; --card:#ffffff;
+    --bg:#eef1f5; --brand:#2F90CC;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ink:#e9edf2; --muted:#9aa5b2; --line:#2a303a; --card:#161a20; --bg:#0d1015;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ink:#e9edf2; --muted:#9aa5b2; --line:#2a303a; --card:#161a20; --bg:#0d1015;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:"Manrope","Hind Siliguri",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased; padding:22px 16px 40px;
+  }
+  .wrap{max-width:440px;margin:0 auto}
+  h1{font-size:19px;font-weight:800;margin:0 0 3px;letter-spacing:-.01em}
+  .sub{font-size:13px;color:var(--muted);margin:0 0 22px;line-height:1.5}
+  .opt{margin-bottom:22px}
+  .opt-head{display:flex;align-items:center;gap:8px;margin:0 0 8px}
+  .badge{font-family:Manrope;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+    color:#fff;background:var(--brand);border-radius:99px;padding:3px 9px}
+  .opt-name{font-size:14.5px;font-weight:700}
+  .opt-note{font-size:12px;color:var(--muted);margin:2px 0 9px}
+
+  /* Phone-ish frame just for context */
+  .frame{
+    background:var(--card);border:1px solid var(--line);border-radius:20px;overflow:hidden;
+    box-shadow:0 10px 30px -18px rgba(20,40,70,.4);
+  }
+  .screen{height:74px;background:
+    linear-gradient(180deg, color-mix(in srgb, var(--card) 100%, transparent), color-mix(in srgb, var(--card) 100%, transparent)),
+    repeating-linear-gradient(90deg, transparent 0 46px, var(--line) 46px 47px);
+    display:flex;align-items:flex-end;justify-content:center;padding-bottom:8px}
+  .screen span{font-family:"Hind Siliguri";font-size:11px;color:var(--muted)}
+
+  /* ===== the bar ===== */
+  .bar{display:flex;padding:7px 4px 9px}
+  .tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;position:relative;
+    font-family:"Hind Siliguri";font-size:10px;font-weight:600}
+  .tab .ic{height:23px;display:grid;place-items:center}
+  .tab svg{width:22px;height:22px}
+  .dot{position:absolute;top:-7px;left:50%;transform:translateX(-50%);width:18px;height:3px;border-radius:99px;opacity:0}
+  .tab.on .dot{opacity:1}
+
+  /* WHITE / LIGHT */
+  .v-white .bar{background:#fff;border-top:1px solid #eceff3}
+  .v-white .tab{color:#5b6470}
+  .v-white .tab.on{color:#2F90CC}
+  .v-white .dot{background:#2F90CC}
+
+  /* ROSE PINK */
+  .v-pink .bar{background:#E77BA6}
+  .v-pink .tab{color:rgba(255,255,255,.95)}
+  .v-pink .tab.on{color:#fff}
+  .v-pink .dot{background:#fff}
+
+  /* SOFT GREEN */
+  .v-green .bar{background:#41B98A}
+  .v-green .tab{color:rgba(255,255,255,.95)}
+  .v-green .tab.on{color:#fff}
+  .v-green .dot{background:#fff}
+
+  /* CHARCOAL */
+  .v-dark .bar{background:#23262B}
+  .v-dark .tab{color:rgba(255,255,255,.88)}
+  .v-dark .tab.on{color:#3EA7E0}
+  .v-dark .dot{background:#3EA7E0}
+
+  /* CURRENT BLUE (for comparison) */
+  .v-blue .bar{background:#2F90CC}
+  .v-blue .tab{color:rgba(255,255,255,.95)}
+  .v-blue .tab.on{color:#fff}
+  .v-blue .dot{background:#fff}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>বটম ন্যাভ — কালার অপশন</h1>
+  <p class="sub">একই বাটন, একই আইকন — শুধু কালার আলাদা। উচ্চতা আগের থেকে কমানো হয়েছে। যেটা পছন্দ হয় বলুন, আমি সেটা বসিয়ে দিচ্ছি।</p>
+
+  <!-- WHITE -->
+  <div class="opt v-white">
+    <div class="opt-head"><span class="badge">1</span><span class="opt-name">White / Light</span></div>
+    <p class="opt-note">সাদা বার, ধূসর আইকন — অ্যাকটিভ ট্যাব ব্র্যান্ড ব্লু। সবচেয়ে ক্লিন, Daraz/Amazon স্টাইল।</p>
+    <div class="frame"><div class="screen"><span>পণ্যের পেজ…</span></div><div class="bar" id="bar1"></div></div>
+  </div>
+
+  <!-- PINK -->
+  <div class="opt v-pink">
+    <div class="opt-head"><span class="badge">2</span><span class="opt-name">Rose Pink</span></div>
+    <p class="opt-note">নরম গোলাপি, সাদা আইকন — Mom &amp; Baby ফিল।</p>
+    <div class="frame"><div class="screen"><span>পণ্যের পেজ…</span></div><div class="bar" id="bar2"></div></div>
+  </div>
+
+  <!-- GREEN -->
+  <div class="opt v-green">
+    <div class="opt-head"><span class="badge">3</span><span class="opt-name">Soft Green</span></div>
+    <p class="opt-note">মিন্ট গ্রিন, সাদা আইকন — ফ্রেশ ও আলাদা।</p>
+    <div class="frame"><div class="screen"><span>পণ্যের পেজ…</span></div><div class="bar" id="bar3"></div></div>
+  </div>
+
+  <!-- DARK -->
+  <div class="opt v-dark">
+    <div class="opt-head"><span class="badge">4</span><span class="opt-name">Charcoal / Dark</span></div>
+    <p class="opt-note">ডিপ চারকোল, সাদা আইকন — অ্যাকটিভ ব্লু। স্লিক ও প্রিমিয়াম।</p>
+    <div class="frame"><div class="screen"><span>পণ্যের পেজ…</span></div><div class="bar" id="bar4"></div></div>
+  </div>
+
+  <!-- BLUE (current) -->
+  <div class="opt v-blue">
+    <div class="opt-head"><span class="badge">এখন</span><span class="opt-name">Brand Blue (বর্তমান)</span></div>
+    <p class="opt-note">এটাই এখন আছে — তুলনার জন্য দেখানো হলো।</p>
+    <div class="frame"><div class="screen"><span>পণ্যের পেজ…</span></div><div class="bar" id="bar5"></div></div>
+  </div>
+</div>
+
+<script>
+  var ICONS = {
+    home:'<path d="M3.5 10.7 12 3.5l8.5 7.2"/><path d="M5.6 9.4V19a1.4 1.4 0 0 0 1.4 1.4h2.6V15a1 1 0 0 1 1-1h2.8a1 1 0 0 1 1 1v5.4H17a1.4 1.4 0 0 0 1.4-1.4V9.4"/>',
+    grid:'<rect x="3.4" y="3.4" width="7.2" height="7.2" rx="2"/><rect x="13.4" y="3.4" width="7.2" height="7.2" rx="2"/><rect x="3.4" y="13.4" width="7.2" height="7.2" rx="2"/><rect x="13.4" y="13.4" width="7.2" height="7.2" rx="2"/>',
+    gift:'<path d="M4.5 11.5V19a1.5 1.5 0 0 0 1.5 1.5h12a1.5 1.5 0 0 0 1.5-1.5v-7.5"/><rect x="3" y="7.5" width="18" height="4" rx="1.4"/><path d="M12 7.5v13"/><path d="M12 7.5S10.9 3.5 8.4 3.5 6.2 7.5 9 7.5"/><path d="M12 7.5s1.1-4 3.6-4 2.2 4-.6 4"/>',
+    user:'<circle cx="12" cy="8" r="3.6"/><path d="M5 20a7 7 0 0 1 14 0"/>',
+    menu:'<path d="M4.5 7.5h15M4.5 12h15M4.5 16.5h15"/>'
+  };
+  var TABS = [
+    {k:'home', l:'হোম', on:true},
+    {k:'grid', l:'ক্যাটাগরি'},
+    {k:'gift', l:'অফার'},
+    {k:'user', l:'অ্যাকাউন্ট'},
+    {k:'menu', l:'মেনু'}
+  ];
+  function svg(paths){
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+paths+'</svg>';
+  }
+  function build(id){
+    var bar = document.getElementById(id);
+    bar.innerHTML = TABS.map(function(t){
+      return '<div class="tab'+(t.on?' on':'')+'"><span class="dot"></span><span class="ic">'+svg(ICONS[t.k])+'</span>'+t.l+'</div>';
+    }).join('');
+  }
+  ['bar1','bar2','bar3','bar4','bar5'].forEach(build);
+</script>
+</body>
+</html>

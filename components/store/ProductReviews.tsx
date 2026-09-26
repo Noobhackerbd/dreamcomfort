@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { submitReview, uploadReviewPhoto, type Review } from "@/app/product/review-actions";
+import { useL } from "@/components/i18n/I18nProvider";
 
 function Stars({ rating, size = 14 }: { rating: number; size?: number }) {
   return (
@@ -34,6 +35,7 @@ async function shrink(file: File): Promise<{ base64: string; mediaType: string }
 }
 
 export function ProductReviews({ productId, initial, count, average }: { productId: string; initial: Review[]; count: number; average: number }) {
+  const { L } = useL();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -79,7 +81,7 @@ export function ProductReviews({ productId, initial, count, average }: { product
     e.preventDefault(); setErr(null); setBusy(true);
     const res = await submitReview({ productId, name, rating, body, images: photos });
     setBusy(false);
-    if (!res.ok) { setErr(res.error ?? "ব্যর্থ।"); return; }
+    if (!res.ok) { setErr(res.error ?? L("Failed.","ব্যর্থ।")); return; }
     setDone(true); setName(""); setBody(""); setPhotos([]); setRating(5); setOpen(false);
     router.refresh();
   }
@@ -87,8 +89,8 @@ export function ProductReviews({ productId, initial, count, average }: { product
   return (
     <section className="mt-14 max-w-3xl">
       <div className="flex items-center justify-between gap-3 mb-4">
-        <h2 className="text-xl font-bold font-display">গ্রাহক রিভিউ</h2>
-        <button onClick={() => setOpen((v) => !v)} className="rounded-lg bg-brand text-white px-4 py-2 text-sm font-semibold hover:bg-brand-dark transition-colors">রিভিউ লিখুন</button>
+        <h2 className="text-xl font-bold font-display">{L("Customer Reviews","গ্রাহক রিভিউ")}</h2>
+        <button onClick={() => setOpen((v) => !v)} className="rounded-lg bg-brand text-white px-4 py-2 text-sm font-semibold hover:bg-brand-dark transition-colors">{L("Write a Review","রিভিউ লিখুন")}</button>
       </div>
 
       {count > 0 && (
@@ -96,18 +98,18 @@ export function ProductReviews({ productId, initial, count, average }: { product
           <div className="text-center shrink-0">
             <p className="text-4xl font-extrabold text-gray-900">{average.toFixed(1)}</p>
             <div className="mt-1"><Stars rating={average} /></div>
-            <p className="mt-1 text-xs text-gray-400">{count} রিভিউ</p>
+            <p className="mt-1 text-xs text-gray-400">{count} {L("reviews","রিভিউ")}</p>
           </div>
-          <p className="text-sm text-gray-600 leading-relaxed">যাচাইকৃত গ্রাহকদের রিভিউ। আপনার অভিজ্ঞতাও শেয়ার করুন।</p>
+          <p className="text-sm text-gray-600 leading-relaxed">{L("Reviews from verified customers. Share your experience too.","যাচাইকৃত গ্রাহকদের রিভিউ। আপনার অভিজ্ঞতাও শেয়ার করুন।")}</p>
         </div>
       )}
 
-      {done && <p className="rounded-lg bg-green-50 text-green-700 text-sm px-3 py-2 mb-4">ধন্যবাদ! আপনার রিভিউ যোগ হয়েছে ✓</p>}
+      {done && <p className="rounded-lg bg-green-50 text-green-700 text-sm px-3 py-2 mb-4">{L("Thank you! Your review has been added ✓","ধন্যবাদ! আপনার রিভিউ যোগ হয়েছে ✓")}</p>}
 
       {open && (
         <form onSubmit={submit} className="rounded-lg bg-white border border-black/[0.06] shadow-[0_1px_2px_rgba(0,0,0,0.03)] p-5 space-y-3 mb-5">
           <div>
-            <label className="block text-[12px] font-medium text-gray-600 mb-1">আপনার রেটিং</label>
+            <label className="block text-[12px] font-medium text-gray-600 mb-1">{L("Your rating","আপনার রেটিং")}</label>
             <div className="flex items-center gap-1" onMouseLeave={() => setHover(0)}>
               {[1, 2, 3, 4, 5].map((n) => (
                 <button key={n} type="button" onClick={() => setRating(n)} onMouseEnter={() => setHover(n)} aria-label={`${n} star`}>
@@ -116,8 +118,8 @@ export function ProductReviews({ productId, initial, count, average }: { product
               ))}
             </div>
           </div>
-          <div><input value={name} onChange={(e) => setName(e.target.value)} placeholder="আপনার নাম" className={input} /></div>
-          <div><textarea value={body} onChange={(e) => setBody(e.target.value)} rows={3} placeholder="পণ্যটি কেমন লাগলো?" className={input} /></div>
+          <div><input value={name} onChange={(e) => setName(e.target.value)} placeholder={L("Your name","আপনার নাম")} className={input} /></div>
+          <div><textarea value={body} onChange={(e) => setBody(e.target.value)} rows={3} placeholder={L("How did you like the product?","পণ্যটি কেমন লাগলো?")} className={input} /></div>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               {photos.map((u, i) => (
@@ -133,15 +135,15 @@ export function ProductReviews({ productId, initial, count, average }: { product
                 </label>
               )}
             </div>
-            <p className="text-[11px] text-gray-400 mt-1">ছবি যোগ করুন (ঐচ্ছিক, সর্বোচ্চ ৪টি)</p>
+            <p className="text-[11px] text-gray-400 mt-1">{L("Add photos (optional, up to 4)","ছবি যোগ করুন (ঐচ্ছিক, সর্বোচ্চ ৪টি)")}</p>
           </div>
           {err && <p className="rounded-lg bg-red-50 text-red-600 text-sm px-3 py-2">{err}</p>}
-          <button type="submit" disabled={busy || uploading} className="rounded-lg bg-brand text-white px-6 py-2.5 text-sm font-semibold hover:bg-brand-dark disabled:opacity-60 transition-colors">{busy ? "..." : "রিভিউ জমা দিন"}</button>
+          <button type="submit" disabled={busy || uploading} className="rounded-lg bg-brand text-white px-6 py-2.5 text-sm font-semibold hover:bg-brand-dark disabled:opacity-60 transition-colors">{busy ? "..." : L("Submit Review","রিভিউ জমা দিন")}</button>
         </form>
       )}
 
       {initial.length === 0 ? (
-        !open && <p className="text-sm text-gray-500">এখনো কোনো রিভিউ নেই — প্রথম রিভিউটি আপনি দিন!</p>
+        !open && <p className="text-sm text-gray-500">{L("No reviews yet — be the first to review!","এখনো কোনো রিভিউ নেই — প্রথম রিভিউটি আপনি দিন!")}</p>
       ) : (
         <div className="space-y-3">
           {initial.map((r) => (
@@ -149,7 +151,7 @@ export function ProductReviews({ productId, initial, count, average }: { product
               <div className="flex items-center gap-2">
                 <span className="h-9 w-9 rounded-full bg-brand-soft text-brand-dark grid place-items-center font-bold text-sm">{(r.name || "?").charAt(0).toUpperCase()}</span>
                 <div>
-                  <p className="text-sm font-semibold text-gray-900">{r.name || "গ্রাহক"}</p>
+                  <p className="text-sm font-semibold text-gray-900">{r.name || L("Customer","গ্রাহক")}</p>
                   <div className="flex items-center gap-1.5"><Stars rating={r.rating} size={12} /><span className="text-[11px] text-gray-400">{new Date(r.created_at).toISOString().slice(0, 10)}</span></div>
                 </div>
               </div>
@@ -158,7 +160,7 @@ export function ProductReviews({ productId, initial, count, average }: { product
                 <div className="mt-2 flex gap-2 flex-wrap">
                   {r.images.filter(Boolean).map((u, i, arr) => (
                     <button key={i} type="button" onClick={() => setLb({ imgs: arr as string[], i })}
-                      aria-label="ছবি বড় করে দেখুন"
+                      aria-label={L("View larger image","ছবি বড় করে দেখুন")}
                       className="relative h-16 w-16 rounded-md overflow-hidden ring-1 ring-black/10 cursor-zoom-in transition-transform hover:scale-[1.04]">
                       <Image src={u} alt="" fill sizes="64px" className="object-cover" />
                     </button>
@@ -175,14 +177,14 @@ export function ProductReviews({ productId, initial, count, average }: { product
         <div className="fixed inset-0 z-[120] bg-black/85 backdrop-blur-sm grid place-items-center px-4 select-none"
           onClick={() => setLb(null)}>
           {/* Close */}
-          <button type="button" onClick={() => setLb(null)} aria-label="বন্ধ"
+          <button type="button" onClick={() => setLb(null)} aria-label={L("Close","বন্ধ")}
             className="absolute top-4 right-4 h-11 w-11 grid place-items-center rounded-full bg-white/10 text-white hover:bg-white/20 transition">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-6 w-6"><path d="M6 6l12 12M18 6L6 18" /></svg>
           </button>
 
           {/* Prev */}
           {lb.imgs.length > 1 && (
-            <button type="button" onClick={(e) => { e.stopPropagation(); lbPrev(); }} aria-label="আগের ছবি"
+            <button type="button" onClick={(e) => { e.stopPropagation(); lbPrev(); }} aria-label={L("Previous image","আগের ছবি")}
               className="absolute left-3 sm:left-6 top-1/2 -translate-y-1/2 h-12 w-12 grid place-items-center rounded-full bg-white/10 text-white hover:bg-white/25 transition">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-7 w-7"><path d="M15 18l-6-6 6-6" /></svg>
             </button>
@@ -201,7 +203,7 @@ export function ProductReviews({ productId, initial, count, average }: { product
 
           {/* Next */}
           {lb.imgs.length > 1 && (
-            <button type="button" onClick={(e) => { e.stopPropagation(); lbNext(); }} aria-label="পরের ছবি"
+            <button type="button" onClick={(e) => { e.stopPropagation(); lbNext(); }} aria-label={L("Next image","পরের ছবি")}
               className="absolute right-3 sm:right-6 top-1/2 -translate-y-1/2 h-12 w-12 grid place-items-center rounded-full bg-white/10 text-white hover:bg-white/25 transition">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="h-7 w-7"><path d="M9 18l6-6-6-6" /></svg>
             </button>

@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useL } from "@/components/i18n/I18nProvider";
 
 /** Single heart icon — toggles this product in the wishlist (localStorage + account sync). */
 export function WishlistButton({ id, className, iconSize = 34 }: { id: string; className?: string; iconSize?: number }) {
+  const { L } = useL();
   const [wish, setWish] = useState(false);
 
   useEffect(() => {
@@ -24,7 +26,7 @@ export function WishlistButton({ id, className, iconSize = 34 }: { id: string; c
   }
 
   return (
-    <button onClick={toggle} aria-label="উইশলিস্ট" title="উইশলিস্টে যোগ করুন"
+    <button onClick={toggle} aria-label={L("Wishlist", "উইশলিস্ট")} title={L("Add to wishlist", "উইশলিস্টে যোগ করুন")}
       className={className || "shrink-0 h-[50px] w-[50px] grid place-items-center rounded-lg border border-black/10 bg-white hover:border-accent transition"}>
       <svg width={iconSize} height={iconSize} viewBox="0 0 24 24" fill={wish ? "#E0699A" : "none"} stroke={wish ? "#E0699A" : "#9a94a1"} strokeWidth="1.7">
         <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z" />

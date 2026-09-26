@@ -7,8 +7,10 @@ import { taka } from "@/lib/format";
 import { SHIPPING, type DeliveryArea } from "@/lib/config";
 import { placeOrder, checkCoupon, getCheckoutPrefill } from "./actions";
 import { fireEvent } from "@/components/track";
+import { useL } from "@/components/i18n/I18nProvider";
 
 export default function CheckoutPage() {
+  const { L } = useL();
   const router = useRouter();
   const { items, subtotal, clear, setQty, remove } = useCart();
   const [mounted, setMounted] = useState(false);
@@ -75,8 +77,8 @@ export default function CheckoutPage() {
   if (items.length === 0) {
     return (
       <div className="text-center py-20">
-        <p className="text-lg text-gray-500">আপনার কার্ট খালি।</p>
-        <a href="/" className="inline-block mt-5 rounded-xl bg-brand text-white px-6 py-3 font-medium">কেনাকাটা শুরু করুন</a>
+        <p className="text-lg text-gray-500">{L("Your cart is empty.", "আপনার কার্ট খালি।")}</p>
+        <a href="/" className="inline-block mt-5 rounded-xl bg-brand text-white px-6 py-3 font-medium">{L("Start shopping", "কেনাকাটা শুরু করুন")}</a>
       </div>
     );
   }
@@ -100,9 +102,9 @@ export default function CheckoutPage() {
     e.preventDefault();
     setError(null);
     const phoneDigits = phone.replace(/\D/g, "");
-    if (!name.trim()) return setError("নাম লিখুন।");
-    if (!/^01\d{9}$/.test(phoneDigits)) return setError("সঠিক মোবাইল নম্বর লিখুন (০১XXXXXXXXX)।");
-    if (address.trim().length < 5) return setError("সম্পূর্ণ ঠিকানা লিখুন।");
+    if (!name.trim()) return setError(L("Please enter your name.", "নাম লিখুন।"));
+    if (!/^01\d{9}$/.test(phoneDigits)) return setError(L("Enter a valid mobile number (01XXXXXXXXX).", "সঠিক মোবাইল নম্বর লিখুন (০১XXXXXXXXX)।"));
+    if (address.trim().length < 5) return setError(L("Please enter your full address.", "সম্পূর্ণ ঠিকানা লিখুন।"));
 
     const fbclid = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("fbclid") ?? undefined : undefined;
 
@@ -114,7 +116,7 @@ export default function CheckoutPage() {
       fbclid,
     });
     setSubmitting(false);
-    if (!res.ok) { setError(res.error ?? "অর্ডার ব্যর্থ হয়েছে।"); return; }
+    if (!res.ok) { setError(res.error ?? L("Order failed.", "অর্ডার ব্যর্থ হয়েছে।")); return; }
     clear();
     router.push(`/order/${res.orderNumber}`);
   }
@@ -123,16 +125,16 @@ export default function CheckoutPage() {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold font-display mb-6">চেকআউট</h1>
+      <h1 className="text-2xl font-bold font-display mb-6">{L("Checkout", "চেকআউট")}</h1>
 
       <form onSubmit={onSubmit} className="grid md:grid-cols-[1.1fr_.9fr] gap-6 items-start">
         {/* Left — details */}
         <div className="rounded-2xl border border-black/5 bg-white p-5 space-y-4 shadow-sm">
-          <h2 className="font-bold text-lg">ডেলিভারি তথ্য</h2>
+          <h2 className="font-bold text-lg">{L("Delivery Information", "ডেলিভারি তথ্য")}</h2>
 
           {savedAddresses.length > 0 && (
             <div>
-              <label className="block text-sm font-medium mb-1.5">সেভ করা ঠিকানা</label>
+              <label className="block text-sm font-medium mb-1.5">{L("Saved addresses", "সেভ করা ঠিকানা")}</label>
               <div className="flex gap-2 flex-wrap">
                 {savedAddresses.map((a) => (
                   <button key={a.id} type="button" onClick={() => pickAddress(a)}
@@ -146,29 +148,29 @@ export default function CheckoutPage() {
           )}
 
           <div>
-            <label className="block text-sm font-medium mb-1">আপনার নাম *</label>
-            <input autoComplete="name" autoCapitalize="words" value={name} onChange={(e) => setName(e.target.value)} placeholder="আপনার নাম" className={inputCls} />
+            <label className="block text-sm font-medium mb-1">{L("Your Name", "আপনার নাম")} *</label>
+            <input autoComplete="name" autoCapitalize="words" value={name} onChange={(e) => setName(e.target.value)} placeholder={L("Your name", "আপনার নাম")} className={inputCls} />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">মোবাইল নম্বর *</label>
-            <input type="tel" autoComplete="tel" inputMode="numeric" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="০১XXXXXXXXX" className={inputCls} />
+            <label className="block text-sm font-medium mb-1">{L("Mobile Number", "মোবাইল নম্বর")} *</label>
+            <input type="tel" autoComplete="tel" inputMode="numeric" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="01XXXXXXXXX" className={inputCls} />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">সম্পূর্ণ ঠিকানা *</label>
-            <input autoComplete="street-address" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="বাসা/হোল্ডিং, রোড, এলাকা, থানা, জেলা" className={inputCls} />
+            <label className="block text-sm font-medium mb-1">{L("Full Address", "সম্পূর্ণ ঠিকানা")} *</label>
+            <input autoComplete="street-address" value={address} onChange={(e) => setAddress(e.target.value)} placeholder={L("House/holding, road, area, thana, district", "বাসা/হোল্ডিং, রোড, এলাকা, থানা, জেলা")} className={inputCls} />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">অর্ডার নোট (ঐচ্ছিক)</label>
-            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="বিশেষ কোনো নির্দেশনা" className={inputCls} />
+            <label className="block text-sm font-medium mb-1">{L("Order note (optional)", "অর্ডার নোট (ঐচ্ছিক)")}</label>
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder={L("Any special instructions", "বিশেষ কোনো নির্দেশনা")} className={inputCls} />
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1.5">ডেলিভারি এলাকা</label>
+            <label className="block text-sm font-medium mb-1.5">{L("Delivery Area", "ডেলিভারি এলাকা")}</label>
             <div className="grid grid-cols-2 gap-3">
               {(["inside", "outside"] as const).map((area) => (
                 <button key={area} type="button" onClick={() => setDeliveryArea(area)}
                   className={"rounded-xl border px-3 py-3 text-sm font-medium transition " + (deliveryArea === area ? "border-brand bg-brand-soft text-brand-dark" : "border-black/10 hover:border-brand/40")}>
-                  {area === "inside" ? "ঢাকার ভিতরে" : "ঢাকার বাইরে"} · {taka(area === "inside" ? SHIPPING.insideDhaka : SHIPPING.outsideDhaka)}
+                  {area === "inside" ? L("Inside Dhaka", "ঢাকার ভিতরে") : L("Outside Dhaka", "ঢাকার বাইরে")} · {taka(area === "inside" ? SHIPPING.insideDhaka : SHIPPING.outsideDhaka)}
                 </button>
               ))}
             </div>
@@ -177,7 +179,7 @@ export default function CheckoutPage() {
 
         {/* Right — summary */}
         <div className="rounded-2xl border border-black/5 bg-white p-5 shadow-sm md:sticky md:top-24">
-          <h2 className="font-bold text-lg mb-3">অর্ডার সারাংশ</h2>
+          <h2 className="font-bold text-lg mb-3">{L("Order Summary", "অর্ডার সারাংশ")}</h2>
           <div className="space-y-3 max-h-[22rem] overflow-y-auto pr-1 -mr-1">
             {items.map((i) => (
               <div key={i.id} className="flex gap-3 items-center">
@@ -198,12 +200,12 @@ export default function CheckoutPage() {
                   <p className="text-[13px] font-semibold text-gray-800 leading-snug line-clamp-2">{i.name}</p>
                   <p className="text-[12px] text-gray-400 mt-0.5 tabular-nums">{taka(i.price)} × {i.qty}</p>
                   <div className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-black/[0.08] bg-white p-0.5">
-                    <button type="button" onClick={() => setQty(i.id, i.qty - 1)} aria-label="কমান"
+                    <button type="button" onClick={() => setQty(i.id, i.qty - 1)} aria-label={L("Decrease","কমান")}
                       className="h-6 w-6 grid place-items-center rounded-full text-brand-dark bg-brand-soft hover:bg-brand hover:text-white active:scale-90 transition-all">
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M5 12h14" /></svg>
                     </button>
                     <span className="min-w-[1.75rem] text-center text-[13px] font-bold tabular-nums select-none">{i.qty}</span>
-                    <button type="button" onClick={() => setQty(i.id, i.qty + 1)} aria-label="বাড়ান"
+                    <button type="button" onClick={() => setQty(i.id, i.qty + 1)} aria-label={L("Increase","বাড়ান")}
                       className="h-6 w-6 grid place-items-center rounded-full text-white bg-gradient-to-b from-brand to-brand-dark hover:brightness-105 active:scale-90 transition-all">
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
                     </button>
@@ -212,7 +214,7 @@ export default function CheckoutPage() {
 
                 {/* Line total + remove */}
                 <div className="flex flex-col items-end justify-between self-stretch shrink-0">
-                  <button type="button" onClick={() => remove(i.id)} aria-label="সরান"
+                  <button type="button" onClick={() => remove(i.id)} aria-label={L("Remove","সরান")}
                     className="h-7 w-7 grid place-items-center rounded-full text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2m2 0v14a1 1 0 01-1 1H7a1 1 0 01-1-1V6" /></svg>
                   </button>
@@ -227,13 +229,13 @@ export default function CheckoutPage() {
             {coupon ? (
               <div className="flex items-center justify-between rounded-xl bg-green-50 border border-green-200 px-3 py-2">
                 <span className="text-sm text-green-700 font-medium">🎟️ {coupon.code} · {coupon.label}</span>
-                <button type="button" onClick={removeCoupon} className="text-xs text-red-500 font-medium">বাতিল</button>
+                <button type="button" onClick={removeCoupon} className="text-xs text-red-500 font-medium">{L("Remove","বাতিল")}</button>
               </div>
             ) : (
               <>
-                <label className="block text-sm font-medium mb-1.5">কুপন কোড</label>
+                <label className="block text-sm font-medium mb-1.5">{L("Coupon code","কুপন কোড")}</label>
                 <div className="flex gap-2">
-                  <input value={couponInput} onChange={(e) => setCouponInput(e.target.value.toUpperCase())} placeholder="কোড লিখুন" className={inputCls + " flex-1 font-mono"} />
+                  <input value={couponInput} onChange={(e) => setCouponInput(e.target.value.toUpperCase())} placeholder={L("Enter code","কোড লিখুন")} className={inputCls + " flex-1 font-mono"} />
                   <button type="button" onClick={applyCoupon} disabled={couponBusy || !couponInput.trim()} className="shrink-0 rounded-xl bg-accent text-white px-5 font-medium disabled:opacity-50">
                     {couponBusy ? "…" : "Apply"}
                   </button>
@@ -245,18 +247,18 @@ export default function CheckoutPage() {
 
           {/* Totals */}
           <div className="mt-4 pt-4 border-t border-black/5 space-y-2 text-sm">
-            <div className="flex justify-between"><span className="text-gray-500">সাবটোটাল</span><span className="tabular-nums">{taka(sub)}</span></div>
-            <div className="flex justify-between"><span className="text-gray-500">ডেলিভারি চার্জ</span><span className="tabular-nums">{taka(shippingFee)}</span></div>
-            {discount > 0 && <div className="flex justify-between text-green-600"><span>কুপন ছাড়</span><span className="tabular-nums">− {taka(discount)}</span></div>}
-            <div className="flex justify-between font-bold text-lg pt-2 border-t border-black/5"><span>সর্বমোট</span><span className="text-accent-dark tabular-nums">{taka(total)}</span></div>
+            <div className="flex justify-between"><span className="text-gray-500">{L("Subtotal","সাবটোটাল")}</span><span className="tabular-nums">{taka(sub)}</span></div>
+            <div className="flex justify-between"><span className="text-gray-500">{L("Delivery charge","ডেলিভারি চার্জ")}</span><span className="tabular-nums">{taka(shippingFee)}</span></div>
+            {discount > 0 && <div className="flex justify-between text-green-600"><span>{L("Coupon discount","কুপন ছাড়")}</span><span className="tabular-nums">− {taka(discount)}</span></div>}
+            <div className="flex justify-between font-bold text-lg pt-2 border-t border-black/5"><span>{L("Total","সর্বমোট")}</span><span className="text-accent-dark tabular-nums">{taka(total)}</span></div>
           </div>
 
           {error && <p className="mt-3 rounded-xl bg-red-50 border border-red-200 text-red-700 px-4 py-2 text-sm">{error}</p>}
 
           <button type="submit" disabled={submitting} className="mt-4 w-full rounded-xl bg-brand text-white px-6 py-3.5 font-bold hover:bg-brand-dark disabled:opacity-60">
-            {submitting ? "অর্ডার হচ্ছে..." : "অর্ডার নিশ্চিত করুন"}
+            {submitting ? L("Placing order...","অর্ডার হচ্ছে...") : L("Confirm Order","অর্ডার নিশ্চিত করুন")}
           </button>
-          <p className="mt-2 text-center text-xs text-gray-400">ক্যাশ অন ডেলিভারি · অর্ডারের পর আমরা কল করে নিশ্চিত করব।</p>
+          <p className="mt-2 text-center text-xs text-gray-400">{L("Cash on delivery · we'll call to confirm after you order.","ক্যাশ অন ডেলিভারি · অর্ডারের পর আমরা কল করে নিশ্চিত করব।")}</p>
         </div>
       </form>
     </div>

@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import { getProductsByIds } from "@/app/account/recent-actions";
 import { ProductCard } from "@/components/ProductCard";
+import { useL } from "@/components/i18n/I18nProvider";
 
 export function RecentViewedStrip({ excludeId }: { excludeId?: string }) {
+  const { L } = useL();
   const [products, setProducts] = useState<any[]>([]);
   useEffect(() => {
     let ids: string[] = [];
@@ -17,7 +19,7 @@ export function RecentViewedStrip({ excludeId }: { excludeId?: string }) {
   if (products.length === 0) return null;
   return (
     <section className="mt-14">
-      <h2 className="text-xl font-bold font-display mb-4">সম্প্রতি দেখা</h2>
+      <h2 className="text-xl font-bold font-display mb-4">{L("Recently Viewed", "সম্প্রতি দেখা")}</h2>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {products.map((p) => <ProductCard key={p.id} p={p} />)}
       </div>

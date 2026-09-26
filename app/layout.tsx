@@ -5,7 +5,7 @@ import { MetaPixel } from "@/components/MetaPixel";
 import { TikTokPixel } from "@/components/TikTokPixel";
 import { VisitTracker } from "@/components/VisitTracker";
 import { ScrollTracker } from "@/components/ScrollTracker";
-import { getMetaSettings, getStoreSettings, getTikTokSettings, getNavIcons } from "@/lib/settings";
+import { getMetaSettings, getStoreSettings, getTikTokSettings, getNavIcons, getPromoPopup } from "@/lib/settings";
 
 // Self-hosted via next/font — no render-blocking Google Fonts request, auto-preloaded.
 // Premium, modern type: geometric Jakarta for Latin/numbers, and Anek Bangla for
@@ -31,6 +31,9 @@ import { StorefrontTabBar } from "@/components/store/StorefrontTabBar";
 import { SourceTracker } from "@/components/SourceTracker";
 import { CartDrawer } from "@/components/store/CartDrawer";
 import { LoginModal } from "@/components/store/LoginModal";
+import { PromoPopup } from "@/components/store/PromoPopup";
+import { I18nProvider } from "@/components/i18n/I18nProvider";
+import { getL } from "@/lib/i18n-server";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://dreamcomfortbd.com";
 
@@ -54,7 +57,8 @@ export const viewport: Viewport = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const [landing, meta, store, tiktok, navIcons] = await Promise.all([getLandingConfig(), getMetaSettings(), getStoreSettings(), getTikTokSettings(), getNavIcons()]);
+  const [landing, meta, store, tiktok, navIcons, promo] = await Promise.all([getLandingConfig(), getMetaSettings(), getStoreSettings(), getTikTokSettings(), getNavIcons(), getPromoPopup()]);
+  const { lang, L } = getL();
   const orgJsonLd = {
     "@context": "https://schema.org",
     "@graph": [
@@ -78,7 +82,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }} />
       </head>
       <body className="min-h-screen antialiased flex flex-col">
-        <a href="#main" className="dc-skip">মূল কন্টেন্টে যান</a>
+        <I18nProvider lang={lang}>
+        <a href="#main" className="dc-skip">{L("Skip to main content", "মূল কন্টেন্টে যান")}</a>
         <HeaderGate>
           <Header logoUrl={landing.logoUrl || "/logo.png"} phone={store.phone} />
         </HeaderGate>
@@ -97,25 +102,25 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <p className="mt-2.5 text-gray-500 leading-relaxed max-w-[260px]">{STORE.tagline}</p>
             </div>
             <div>
-              <p className="font-semibold mb-2">শপ</p>
+              <p className="font-semibold mb-2">{L("Shop", "শপ")}</p>
               <ul className="space-y-1 text-gray-500">
-                <li><a href="/" className="hover:text-brand">হোম</a></li>
-                <li><a href="/products" className="hover:text-brand">সব পণ্য</a></li>
-                <li><a href="/track-order" className="hover:text-brand">অর্ডার ট্র্যাক</a></li>
+                <li><a href="/" className="hover:text-brand">{L("Home", "হোম")}</a></li>
+                <li><a href="/products" className="hover:text-brand">{L("All Products", "সব পণ্য")}</a></li>
+                <li><a href="/track-order" className="hover:text-brand">{L("Track Order", "অর্ডার ট্র্যাক")}</a></li>
               </ul>
             </div>
             <div>
-              <p className="font-semibold mb-2">সহায়তা</p>
+              <p className="font-semibold mb-2">{L("Support", "সহায়তা")}</p>
               <ul className="space-y-1 text-gray-500">
-                <li><a href="/about" className="hover:text-brand">আমাদের সম্পর্কে</a></li>
-                <li><a href="/contact" className="hover:text-brand">যোগাযোগ</a></li>
-                <li><a href="/return-policy" className="hover:text-brand">রিটার্ন পলিসি</a></li>
-                <li><a href="/privacy" className="hover:text-brand">প্রাইভেসি</a></li>
-                <li><a href="/terms" className="hover:text-brand">শর্তাবলী</a></li>
+                <li><a href="/about" className="hover:text-brand">{L("About Us", "আমাদের সম্পর্কে")}</a></li>
+                <li><a href="/contact" className="hover:text-brand">{L("Contact", "যোগাযোগ")}</a></li>
+                <li><a href="/return-policy" className="hover:text-brand">{L("Return Policy", "রিটার্ন পলিসি")}</a></li>
+                <li><a href="/privacy" className="hover:text-brand">{L("Privacy", "প্রাইভেসি")}</a></li>
+                <li><a href="/terms" className="hover:text-brand">{L("Terms", "শর্তাবলী")}</a></li>
               </ul>
             </div>
             <div className="col-span-2 md:col-span-1">
-              <p className="font-semibold mb-2">যোগাযোগ</p>
+              <p className="font-semibold mb-2">{L("Contact", "যোগাযোগ")}</p>
               <ul className="space-y-1.5 text-gray-500">
                 <li>📞 <a href={`tel:${STORE.phone}`} className="hover:text-brand">{STORE.phone}</a></li>
                 <li>🌐 <a href={SITE_URL} className="hover:text-brand">DreamcomfortBD.com</a></li>
@@ -126,7 +131,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           </div>
           <div className="border-t border-black/5">
             <div className="mx-auto max-w-6xl px-4 py-4 text-xs text-gray-400">
-              © {STORE_NAME} · সকল অধিকার সংরক্ষিত
+              © {STORE_NAME} · {L("All rights reserved", "সকল অধিকার সংরক্ষিত")}
             </div>
           </div>
         </footer>
@@ -141,6 +146,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {/* Login popup — opens when the account icon/tab is tapped. */}
         <LoginModal />
 
+        {/* First-visit promo banner popup (admin-uploaded). Deferred — never blocks load. */}
+        <PromoPopup enabled={promo.enabled} image={promo.image} link={promo.link || undefined} rev={promo.rev} />
+
         {/* Trackers only on the storefront — never on /admin (keeps visitor &
             Pixel data clean, no admin noise). */}
         <HideOnAdmin>
@@ -150,6 +158,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <ScrollTracker />
           <SourceTracker />
         </HideOnAdmin>
+        </I18nProvider>
       </body>
     </html>
   );
