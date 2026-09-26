@@ -9,7 +9,7 @@ import { useL } from "@/components/i18n/I18nProvider";
  * First-visit promotional popup (admin-uploaded banner).
  *
  * Performance: this renders NOTHING during the initial paint. It waits until the
- * browser is idle (requestIdleCallback / short timeout) AFTER the page has loaded
+ * page has been open for 3 seconds (well after it has loaded)
  * before it even mounts the image, so it never competes with LCP or blocks the
  * first render. The banner image is only requested once the popup actually opens.
  *
@@ -53,12 +53,10 @@ export function PromoPopup({
       try { sessionStorage.setItem(SEEN_KEY, r); } catch {}
       setOpen(true);
     };
-    const ric: any = (window as any).requestIdleCallback;
-    const idle = ric ? ric(show, { timeout: 1600 }) : null;
-    const t = setTimeout(show, 900); // fallback / floor delay
+    // Show 3 seconds after the page opens (never competes with page load).
+    const t = setTimeout(show, 3000);
     return () => {
       clearTimeout(t);
-      if (idle && (window as any).cancelIdleCallback) (window as any).cancelIdleCallback(idle);
     };
   }, [enabled, image, rev, blocked]);
 
@@ -86,7 +84,7 @@ export function PromoPopup({
       alt={L("Offer", "অফার")}
       width={0}
       height={0}
-      sizes="(max-width:768px) 90vw, 400px"
+      sizes="(max-width:768px) 78vw, 320px"
       className="block w-full h-auto"
       priority
     />
@@ -106,7 +104,7 @@ export function PromoPopup({
       ` }} />
 
       <div
-        className="relative w-full max-w-[400px] overflow-hidden rounded-2xl bg-white shadow-2xl"
+        className="relative w-[78vw] max-w-[320px] overflow-hidden rounded-2xl bg-white shadow-2xl"
         style={{ animation: "dcPromoPop .28s cubic-bezier(.34,1.4,.64,1)" }}
         onClick={(e) => e.stopPropagation()}
       >
