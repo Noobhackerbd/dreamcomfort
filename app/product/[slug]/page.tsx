@@ -40,7 +40,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   const { lang } = getL();
   const p = await getProduct(params.slug);
   if (!p) return { title: lang === "bn" ? "পণ্য পাওয়া যায়নি" : "Product not found" };
-  const name = lang === "bn" ? (p.name_bn || p.name_en) : (p.name_en || p.name_bn);
+  const name = (lang === "bn" ? (p.name_bn || p.name_en) : (p.name_en || p.name_bn)) || "";
   const desc = p.meta_description || p.description_bn || p.description_en || `${name} — ${STORE_NAME}`;
   const image = p.images?.[0];
   return {
@@ -79,7 +79,7 @@ export default async function ProductPage({ params }: { params: { slug: string }
   const p = await getProduct(params.slug);
   if (!p) notFound();
 
-  const name = lang === "bn" ? (p.name_bn || p.name_en) : (p.name_en || p.name_bn);
+  const name = (lang === "bn" ? (p.name_bn || p.name_en) : (p.name_en || p.name_bn)) || "";
   const description = lang === "bn" ? (p.description_bn || p.description_en) : (p.description_en || p.description_bn);
   const hasDiscount = p.compare_at_price && p.compare_at_price > p.price;
   const images = p.images?.length ? p.images : [];

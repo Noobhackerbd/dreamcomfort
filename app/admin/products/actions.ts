@@ -214,7 +214,7 @@ export async function backfillTranslations(limit = 10): Promise<{ ok: boolean; u
     // Try to read premium columns too; if they don't exist yet (migration not run),
     // fall back to name + description only.
     let hasPremium = true;
-    let res = await supabase
+    let res: any = await supabase
       .from("products")
       .select("id, name_bn, name_en, description_bn, description_en, highlights, highlights_en, specs, specs_en, faq, faq_en, how_to_use, how_to_use_en")
       .limit(500);

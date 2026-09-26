@@ -30,7 +30,7 @@ function Stars({ rating }: { rating: number }) {
 
 export function ProductCard({ p }: { p: Product }) {
   const { L, lang } = useL();
-  const name = lang === "bn" ? (p.name_bn || p.name_en) : (p.name_en || p.name_bn);
+  const name = (lang === "bn" ? (p.name_bn || p.name_en) : (p.name_en || p.name_bn)) || "";
   const img = p.images?.[0];
   const hasDiscount = !!(p.compare_at_price && p.compare_at_price > p.price);
   const off = hasDiscount ? Math.round((1 - p.price / (p.compare_at_price as number)) * 100) : 0;
