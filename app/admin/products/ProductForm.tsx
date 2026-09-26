@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabaseBrowserClient } from "@/lib/supabase/ssr-browser";
 import { Icon } from "@/components/admin/icons";
-import { saveProduct, previewTranslate, ProductInput } from "./actions";
+import { saveProduct, previewTranslate, aiAutofill, ProductInput } from "./actions";
 import type { Category } from "@/lib/types";
 import { toSlug } from "@/lib/slug";
 
@@ -47,6 +47,9 @@ export function ProductForm({ initial, categories, landings = [] }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [afBusy, setAfBusy] = useState(false);
+  const [afMsg, setAfMsg] = useState<string | null>(null);
+  const [afOverwrite, setAfOverwrite] = useState(false);
 
   const effectiveSlug = slugify(slug || name);
   const BENGALI = /[ঀ-৿]/;
@@ -58,6 +61,35 @@ export function ProductForm({ initial, categories, landings = [] }: Props) {
     if (!res.ok) { setError(res.error ?? "Translation failed."); return; }
     setTPreview({ name: res.name, description: res.description });
   }
+  /** AI auto-fill: drafts every content field from the name (+ first photo). Only
+   *  empty fields are filled unless "Replace existing text" is ticked. */
+  async function runAutofill() {
+    if (!name.trim()) { setError("Enter the product name first."); return; }
+    setAfBusy(true); setAfMsg(null); setError(null);
+    const res = await aiAutofill({ name, description, imageUrl: images[0] });
+    setAfBusy(false);
+    if (!res.ok) { setError(res.error); return; }
+    const d = res.data;
+    const filled: string[] = [];
+    const put = (label: string, current: string, next: string, set: (v: string) => void) => {
+      if (!next) return;
+      if (afOverwrite || !current.trim()) { set(next); filled.push(label); }
+    };
+    put("Description", description, d.description, setDescription);
+    put("Highlights", highlightsText, d.highlights.join("\n"), setHighlightsText);
+    put("Specifications", specsText, d.specs.map((x) => `${x.label}: ${x.value}`).join("\n"), setSpecsText);
+    put("How to use", howToUse, d.howToUse, setHowToUse);
+    put("FAQ", faqText, d.faq.map((x) => `${x.q} | ${x.a}`).join("\n"), setFaqText);
+    put("Slug", slug, d.slug, setSlug);
+    put("Meta title", metaTitle, d.metaTitle, setMetaTitle);
+    put("Meta description", metaDesc, d.metaDescription, setMetaDesc);
+    if (d.categoryId && (afOverwrite || !categoryId)) { setCategoryId(d.categoryId); filled.push("Category"); }
+    setTPreview(null);
+    setAfMsg(filled.length
+      ? `✓ Filled: ${filled.join(", ")}. Please review before saving.`
+      : "Nothing empty to fill. Tick “Replace existing text” to regenerate.");
+  }
+
   const origin =
     (process.env.NEXT_PUBLIC_SITE_URL && process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "")) ||
     (typeof window !== "undefined" ? window.location.origin : "https://dreamcomfortbd.com");
@@ -172,6 +204,22 @@ export function ProductForm({ initial, categories, landings = [] }: Props) {
             {tBusy ? "Translating…" : "Preview AI translation"}
           </button>
         </p>
+      </div>
+
+      {/* AI auto-fill */}
+      <div className="dc-card p-3.5 flex flex-wrap items-center gap-3" style={{ background: "var(--a-violet-soft)" }}>
+        <button type="button" onClick={runAutofill} disabled={afBusy || !name.trim()}
+          className="dc-btn dc-btn-solid disabled:opacity-60" style={{ background: "var(--a-violet)", borderColor: "var(--a-violet)" }}>
+          {afBusy ? "AI is writing…" : "✨ AI Auto-fill"}
+        </button>
+        <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none">
+          <input type="checkbox" checked={afOverwrite} onChange={(e) => setAfOverwrite(e.target.checked)} className="h-3.5 w-3.5 accent-gray-900" />
+          Replace existing text
+        </label>
+        <p className="text-xs dc-muted basis-full">
+          Fills description, highlights, specs, how-to-use, FAQ, category, slug &amp; SEO from the name{images.length ? " and the first photo" : " (upload a photo first for better results)"}. It won&apos;t invent sizes, materials or health claims — add those yourself.
+        </p>
+        {afMsg && <p className="text-xs basis-full" style={{ color: "var(--a-ok)" }}>{afMsg}</p>}
       </div>
 
       <div className="grid md:grid-cols-2 gap-4">

@@ -4,6 +4,8 @@ import { getLandingVariants } from "@/lib/landing";
 import { ProductForm } from "../ProductForm";
 
 export const dynamic = "force-dynamic";
+// AI auto-fill / translate server actions run from this page and can take ~10–20s.
+export const maxDuration = 60;
 
 export default async function NewProduct() {
   const supabase = getServerSupabase();

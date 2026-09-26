@@ -5,6 +5,7 @@ import { requireAdmin } from "@/lib/admin-auth";
 import { revalidatePath } from "next/cache";
 import { toSlug } from "@/lib/slug";
 import { aiTranslate, bilingualize, hasBengali, translateStrings, translateSpecs, translateFaq } from "@/lib/ai-translate";
+import { aiAutofillProduct, type AutofillResult } from "@/lib/ai-autofill";
 
 function slugify(input: string): string {
   // English/ASCII slug — Bengali names are transliterated to Latin so ?color= links work.
@@ -272,6 +273,20 @@ export async function backfillTranslations(limit = 10): Promise<{ ok: boolean; u
   } catch (e: any) {
     return { ok: false, updated: 0, remaining: 0, error: e?.message ?? "Backfill failed." };
   }
+}
+
+/**
+ * AI auto-fill for the product form (no DB write). Drafts description, highlights,
+ * specs, how-to-use, FAQ, SEO, slug and category from the name (+ first photo).
+ */
+export async function aiAutofill(input: { name: string; description?: string; imageUrl?: string }): Promise<
+  { ok: true; data: AutofillResult } | { ok: false; error: string }
+> {
+  await requireAdmin();
+  const supabase = getServerSupabase();
+  const { data: cats } = await supabase.from("categories").select("id, name_bn, name_en").order("sort_order", { ascending: true });
+  const categories = ((cats as any[]) ?? []).map((c) => ({ id: String(c.id), name: [c.name_bn, c.name_en].filter(Boolean).join(" / ") }));
+  return aiAutofillProduct({ name: input.name, description: input.description, imageUrl: input.imageUrl, categories });
 }
 
 export async function deleteProduct(id: string) {
