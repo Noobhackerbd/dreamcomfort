@@ -183,21 +183,6 @@ export default async function ProductPage({ params }: { params: { slug: string }
             )}
           </div>
 
-          {/* Highlights — only when the product actually has them */}
-          {hl.bn.length > 0 && (
-            <Both
-              bn={<HighlightList items={hl.bn} />}
-              en={<HighlightList items={hl.en} />}
-            />
-          )}
-
-          {descBn && (
-            <Both
-              bn={<p className="mt-5 text-gray-700 leading-relaxed whitespace-pre-line">{descBn}</p>}
-              en={<p className="mt-5 text-gray-700 leading-relaxed whitespace-pre-line">{descEn}</p>}
-            />
-          )}
-
           <div className="mt-6">
             <BuyButtons product={{ id: p.id, slug: p.slug, name, price: p.price, image: images[0] }} nameEn={nameEn} />
             <p className="mt-3 text-xs text-gray-400"><T en="Stock" bn="স্টক" />: {p.stock > 0 ? <>{p.stock} <T en="pcs" bn="টি" /></> : <T en="Out of stock" bn="স্টকে নেই" />}</p>
@@ -211,6 +196,25 @@ export default async function ProductPage({ params }: { params: { slug: string }
               </div>
             ))}
           </div>
+
+          {/* Highlights + description — below the Order Now button so buying stays above the fold */}
+          {(hl.bn.length > 0 || descBn) && (
+            <div className="mt-6 pt-5 border-t border-black/[0.07]">
+              <h2 className="text-[15px] font-bold text-gray-900"><T en="About this product" bn="পণ্যের বিবরণ" /></h2>
+              {hl.bn.length > 0 && (
+                <Both
+                  bn={<HighlightList items={hl.bn} />}
+                  en={<HighlightList items={hl.en} />}
+                />
+              )}
+              {descBn && (
+                <Both
+                  bn={<p className="mt-4 text-gray-700 leading-relaxed whitespace-pre-line">{descBn}</p>}
+                  en={<p className="mt-4 text-gray-700 leading-relaxed whitespace-pre-line">{descEn}</p>}
+                />
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -290,7 +294,7 @@ export default async function ProductPage({ params }: { params: { slug: string }
 
 function HighlightList({ items }: { items: string[] }) {
   return (
-    <ul className="mt-5 grid sm:grid-cols-2 gap-2">
+    <ul className="mt-3 grid sm:grid-cols-2 gap-2">
       {items.slice(0, 6).map((h, i) => (
         <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
           <svg viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.2" className="h-4 w-4 mt-0.5 shrink-0"><path d="M5 13l4 4L19 7" /></svg>
