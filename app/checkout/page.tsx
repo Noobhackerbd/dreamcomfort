@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCart } from "@/lib/cart/store";
 import { taka } from "@/lib/format";
 import { SHIPPING, type DeliveryArea } from "@/lib/config";
-import { placeOrder, checkCoupon, getCheckoutPrefill } from "./actions";
+import { placeOrder, checkCoupon, getCheckoutPrefill, quoteShipping } from "./actions";
 import { fireEvent } from "@/components/track";
 import { useL } from "@/components/i18n/I18nProvider";
 import { T } from "@/components/i18n/T";
@@ -60,7 +60,24 @@ export default function CheckoutPage() {
     setAddress([a.address_line, a.area, a.city].filter(Boolean).join(", "));
   }
 
-  const shippingFee = deliveryArea === "outside" ? SHIPPING.outsideDhaka : SHIPPING.insideDhaka;
+  // Delivery can be set per product (Admin → Products), so ask the server what this
+  // exact cart costs instead of assuming the global value. Same function the order
+  // itself uses, so the number shown is the number charged.
+  const [quote, setQuote] = useState<{ inside: number; outside: number }>({
+    inside: SHIPPING.insideDhaka,
+    outside: SHIPPING.outsideDhaka,
+  });
+  const itemIdsKey = items.map((i) => i.id).sort().join(",");
+  useEffect(() => {
+    if (!itemIdsKey) return;
+    let live = true;
+    quoteShipping(itemIdsKey.split(","))
+      .then((q) => { if (live) setQuote(q); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [itemIdsKey]);
+
+  const shippingFee = deliveryArea === "outside" ? quote.outside : quote.inside;
 
   useEffect(() => {
     if (!mounted || items.length === 0) return;
@@ -171,7 +188,7 @@ export default function CheckoutPage() {
               {(["inside", "outside"] as const).map((area) => (
                 <button key={area} type="button" onClick={() => setDeliveryArea(area)}
                   className={"rounded-xl border px-3 py-3 text-sm font-medium transition " + (deliveryArea === area ? "border-brand bg-brand-soft text-brand-dark" : "border-black/10 hover:border-brand/40")}>
-                  {area === "inside" ? <T en="Inside Dhaka" bn="ঢাকার ভিতরে" /> : <T en="Outside Dhaka" bn="ঢাকার বাইরে" />} · {taka(area === "inside" ? SHIPPING.insideDhaka : SHIPPING.outsideDhaka)}
+                  {area === "inside" ? <T en="Inside Dhaka" bn="ঢাকার ভিতরে" /> : <T en="Outside Dhaka" bn="ঢাকার বাইরে" />} · {taka(area === "inside" ? quote.inside : quote.outside)}
                 </button>
               ))}
             </div>

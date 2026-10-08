@@ -4,7 +4,7 @@
 
 import { getSupabaseServerClient } from "@/lib/supabase/ssr-server";
 import { getServerSupabase } from "@/lib/supabase/server";
-import { getCustomerSession, phoneVariants } from "@/lib/customer-auth";
+import { getCustomerSession, phoneVariants, canSeeOrder } from "@/lib/customer-auth";
 import { toLocalBdPhone } from "@/lib/carrybee";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://dreamcomfortbd.com";
@@ -132,12 +132,10 @@ export async function updateProfile(input: { name: string; phone: string }) {
   return { ok: true };
 }
 
-/** One order's full detail — ONLY if it belongs to the signed-in customer's phone. */
+/** One order's full detail — ONLY if it belongs to the signed-in customer (see canSeeOrder). */
 export async function getMyOrderDetail(orderNumber: string) {
   const session = await getCustomerSession();
-  if (!session?.profile?.phone) return { ok: false as const, error: "unauthorized" };
-  const variants = phoneVariants(session.profile.phone);
-  if (!variants.length) return { ok: false as const, error: "unauthorized" };
+  if (!session) return { ok: false as const, error: "unauthorized" };
   try {
     const svc = getServerSupabase();
     const { data: order } = await svc
@@ -145,9 +143,8 @@ export async function getMyOrderDetail(orderNumber: string) {
       .select("*, order_items(*)")
       .eq("order_number", (orderNumber || "").trim())
       .maybeSingle();
-    if (!order) return { ok: false as const, error: "not-found" };
-    // Security: never return an order that isn't this customer's.
-    if (!variants.includes(String((order as any).customer_phone))) return { ok: false as const, error: "forbidden" };
+    // Same answer for "doesn't exist" and "not yours" — never reveal that an order exists.
+    if (!order || !canSeeOrder(session, order)) return { ok: false as const, error: "not-found" };
     let items: any[] = (order as any).order_items ?? [];
     if (!items.length) {
       const { data } = await svc.from("order_items").select("*").eq("order_id", (order as any).id);
@@ -159,21 +156,25 @@ export async function getMyOrderDetail(orderNumber: string) {
   }
 }
 
-/** Orders for the signed-in customer, matched by their profile phone. */
+/** Orders for the signed-in customer: linked to the account OR matching the VERIFIED phone. */
 export async function getMyOrders() {
   const session = await getCustomerSession();
-  if (!session?.profile?.phone) return { ok: true, orders: [] as any[] };
-  const variants = phoneVariants(session.profile.phone);
-  if (!variants.length) return { ok: true, orders: [] as any[] };
+  if (!session) return { ok: true, orders: [] as any[] };
+  const variants = phoneVariants(session.verifiedPhone);
+  const cols = "id, order_number, status, total, created_at";
   try {
     const svc = getServerSupabase();
-    const { data } = await svc
-      .from("orders")
-      .select("id, order_number, status, total, created_at")
-      .in("customer_phone", variants)
-      .order("created_at", { ascending: false })
-      .limit(100);
-    return { ok: true, orders: (data ?? []) as any[] };
+    const [byUser, byPhone] = await Promise.all([
+      // Fails harmlessly (→ no rows) until supabase-migration-order-user.sql adds orders.user_id.
+      svc.from("orders").select(cols).eq("user_id", session.userId).order("created_at", { ascending: false }).limit(100),
+      variants.length
+        ? svc.from("orders").select(cols).in("customer_phone", variants).order("created_at", { ascending: false }).limit(100)
+        : Promise.resolve({ data: [] as any[] }),
+    ]);
+    const map = new Map<string, any>();
+    for (const o of [...((byUser as any).data ?? []), ...((byPhone as any).data ?? [])]) map.set(o.id, o);
+    const orders = [...map.values()].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))).slice(0, 100);
+    return { ok: true, orders };
   } catch {
     return { ok: true, orders: [] as any[] };
   }

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { isLandingPath } from "@/lib/landing-routes";
 import { useEffect, useState } from "react";
 import { useL } from "@/components/i18n/I18nProvider";
 import { LanguageSwitcher } from "@/components/i18n/LanguageSwitcher";
@@ -73,7 +74,7 @@ function IconWrap({ active, children }: { active: boolean; children: React.React
   );
 }
 
-export function StorefrontTabBar({ categoryIcon }: { categoryIcon?: string }) {
+export function StorefrontTabBar({ landingKeys = [], categoryIcon }: { landingKeys?: string[]; categoryIcon?: string }) {
   const { L } = useL();
   const pathname = usePathname() || "/";
   const catIconUrl = categoryIcon ? `data:image/svg+xml,${encodeURIComponent(categoryIcon)}` : "";
@@ -81,9 +82,9 @@ export function StorefrontTabBar({ categoryIcon }: { categoryIcon?: string }) {
   const hide =
     pathname.startsWith("/admin") ||
     pathname.startsWith("/order") ||
-    pathname.startsWith("/landing") ||
     pathname.startsWith("/checkout") ||
-    pathname.startsWith("/worker");
+    pathname.startsWith("/worker") ||
+    isLandingPath(pathname, landingKeys); // every landing variant, not just /landing
 
   useEffect(() => {
     if (hide) { document.body.classList.remove("has-store-tabs"); return; }

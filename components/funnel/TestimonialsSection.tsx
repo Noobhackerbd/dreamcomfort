@@ -14,16 +14,35 @@ export type Testimonial = {
   images?: string[] | null;
 };
 
+// Theme tokens, not fixed hues — a purple avatar would clash on the honey-bee landing.
 const AVATAR_GRADIENTS = [
-  "from-violet-400 to-pink-400",
-  "from-sky-400 to-indigo-400",
-  "from-pink-400 to-rose-500",
-  "from-fuchsia-400 to-purple-500",
-  "from-cyan-400 to-blue-500",
-  "from-rose-400 to-orange-400",
+  "from-accent to-accent-dark",
+  "from-brand to-brand-dark",
+  "from-accent-dark to-brand",
+  "from-brand-dark to-accent-dark",
 ];
 
-export function TestimonialsSection({ reviews, reviewsHref }: { reviews: Testimonial[]; reviewsHref: string }) {
+/**
+ * `title` / `stat` let each landing page speak about ITS product — a page selling the
+ * baby head protector should not be headlined "হাজারো মায়ের বিশ্বাসের নাম". Both fall
+ * back to the site-wide wording, so existing pages are unchanged.
+ *
+ * `hideWhenEmpty` hides the whole section instead of showing the "add reviews" prompt —
+ * used by landing pages, where an empty block in the middle of a funnel looks broken.
+ */
+export function TestimonialsSection({
+  reviews,
+  reviewsHref,
+  title,
+  stat,
+  hideWhenEmpty = false,
+}: {
+  reviews: Testimonial[];
+  reviewsHref: string;
+  title?: string;
+  stat?: string;
+  hideWhenEmpty?: boolean;
+}) {
   const [i, setI] = useState(0);
   const n = reviews.length;
   const dots = Math.min(n, 6);
@@ -35,6 +54,7 @@ export function TestimonialsSection({ reviews, reviewsHref }: { reviews: Testimo
   }, [n]);
 
   const r = n ? reviews[i % n] : null;
+  if (!n && hideWhenEmpty) return null;
   const initial = (r?.name || "গ").trim().charAt(0).toUpperCase();
   const photo = r?.images && r.images.length ? r.images[0] : null;
 
@@ -47,14 +67,16 @@ export function TestimonialsSection({ reviews, reviewsHref }: { reviews: Testimo
             <svg viewBox="0 0 24 24" className="h-4 w-4 fill-white" aria-hidden><path d="M12 21s-6.7-4.4-9.3-8.2C.9 10 1.6 6.5 4.4 5.3c1.9-.8 3.9-.2 5.2 1.3L12 9l2.4-2.4c1.3-1.5 3.3-2.1 5.2-1.3 2.8 1.2 3.5 4.7 1.7 7.5C18.7 16.6 12 21 12 21z" /></svg>
             আমাদের প্রিয় গ্রাহকদের মতামত
           </p>
-          <h2 className="mt-4 font-display text-2xl font-extrabold leading-snug sm:text-[1.9rem]">হাজারো মায়ের বিশ্বাসের নাম <span className="whitespace-nowrap">ড্রিম কমফোর্ট</span></h2>
+          <h2 className="mt-4 font-display text-2xl font-extrabold leading-snug sm:text-[1.9rem]">
+            {title ? title : (<>হাজারো মায়ের বিশ্বাসের নাম <span className="whitespace-nowrap">ড্রিম কমফোর্ট</span></>)}
+          </h2>
           <div className="mt-4 flex items-center gap-2.5">
             <span className="inline-flex gap-0.5">
               {Array.from({ length: 5 }).map((_, k) => (
                 <svg key={k} viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="#FBBF24" aria-hidden><path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z" /></svg>
               ))}
             </span>
-            <span className="text-sm font-semibold">৪.৯/৫ <span className="font-normal text-white/85">(৫০,০০০+ রিভিউ)</span></span>
+            <span className="text-sm font-semibold">{stat ? stat : (<>৪.৯/৫ <span className="font-normal text-white/85">(৫০,০০০+ রিভিউ)</span></>)}</span>
           </div>
         </div>
 

@@ -26,6 +26,9 @@ export function ProductForm({ initial, categories, landings = [] }: Props) {
   const [tBusy, setTBusy] = useState(false);
   const [price, setPrice] = useState(initial?.price?.toString() ?? "");
   const [compare, setCompare] = useState(initial?.compare_at_price?.toString() ?? "");
+  // Per-product delivery charge. Blank = use the global Settings → Shipping value.
+  const [shipIn, setShipIn] = useState(initial?.shipping_inside?.toString() ?? "");
+  const [shipOut, setShipOut] = useState(initial?.shipping_outside?.toString() ?? "");
   const [stock, setStock] = useState(initial?.stock?.toString() ?? "0");
   const [sku, setSku] = useState(initial?.sku ?? "");
   const [categoryId, setCategoryId] = useState(initial?.category_id ?? "");
@@ -179,6 +182,8 @@ export function ProductForm({ initial, categories, landings = [] }: Props) {
       name_bn: nameIsBn ? name : "", name_en: nameIsBn ? "" : name,
       price: Number(price),
       compare_at_price: compare ? Number(compare) : null, stock: Number(stock), sku,
+      shipping_inside: shipIn.trim() === "" ? null : Number(shipIn),
+      shipping_outside: shipOut.trim() === "" ? null : Number(shipOut),
       category_id: categoryId || null,
       description_bn: descIsBn ? description : "", description_en: descIsBn ? "" : description,
       meta_title: metaTitle, meta_description: metaDesc, is_active: active, images,
@@ -260,6 +265,27 @@ export function ProductForm({ initial, categories, landings = [] }: Props) {
         <div><label className={lbl}>Compare-at price (৳)</label><input value={compare} onChange={(e) => setCompare(e.target.value)} inputMode="numeric" className={cls} /></div>
         <div><label className={lbl}>Stock</label><input value={stock} onChange={(e) => setStock(e.target.value)} inputMode="numeric" className={cls} /></div>
         <div><label className={lbl}>SKU</label><input value={sku} onChange={(e) => setSku(e.target.value)} className={cls} /></div>
+      </div>
+
+      {/* Per-product delivery charge — overrides Settings → Shipping for this product. */}
+      <div className="rounded-xl p-4" style={{ border: "1px solid var(--a-border)", background: "var(--a-surface-2)" }}>
+        <div className="flex flex-wrap items-end gap-4">
+          <div>
+            <label className={lbl}>Delivery charge — Inside Dhaka (৳)</label>
+            <input value={shipIn} onChange={(e) => setShipIn(e.target.value.replace(/[^\d]/g, ""))} inputMode="numeric" placeholder="Default" className={cls + " w-40"} />
+          </div>
+          <div>
+            <label className={lbl}>Delivery charge — Outside Dhaka (৳)</label>
+            <input value={shipOut} onChange={(e) => setShipOut(e.target.value.replace(/[^\d]/g, ""))} inputMode="numeric" placeholder="Default" className={cls + " w-40"} />
+          </div>
+          <button type="button" onClick={() => { setShipIn("0"); setShipOut("0"); }} className="dc-btn text-xs py-1.5">Free delivery</button>
+          <button type="button" onClick={() => { setShipIn(""); setShipOut(""); }} className="dc-btn text-xs py-1.5">Use global setting</button>
+        </div>
+        <p className="mt-2 text-xs dc-muted">
+          Leave blank to use Settings → Shipping. If a customer buys several products with
+          different charges, the <b>highest</b> one is charged once — never the sum.
+          A landing page that sets its own delivery charge still wins over this.
+        </p>
       </div>
 
       <div className="grid md:grid-cols-2 gap-4">

@@ -13,11 +13,47 @@ html:not([data-lang="en"]) [data-l="en"] { display: none !important; }
      (The landing page keeps its original cream via body.dc-landing below.) */
   --background: #f7f6f4;
   --foreground: #35313c;
+
+  /* ---- Theme tokens (consumed by tailwind.config.ts as rgb(var(--x) / alpha)) ----
+     These are the Dream Comfort logo colours — the default everywhere. A landing
+     page can re-skin the shared funnel components by setting a theme class. */
+  --c-cream: 251 243 234;        /* #FBF3EA */
+  --c-cream-deep: 246 233 218;   /* #F6E9DA */
+  --c-brand: 47 144 204;         /* #2F90CC logo blue */
+  --c-brand-dark: 30 122 175;    /* #1E7AAF */
+  --c-brand-light: 191 227 245;  /* #BFE3F5 */
+  --c-brand-soft: 234 245 253;   /* #EAF5FD */
+  --c-accent: 240 160 192;       /* #F0A0C0 logo pink */
+  --c-accent-dark: 222 102 153;  /* #DE6699 */
+  --c-accent-light: 251 217 231; /* #FBD9E7 */
+  --c-accent-soft: 253 237 243;  /* #FDEDF3 */
+  --dc-landing-bg: #fbf3ea;
 }
 
-/* Landing pages keep the original cream look — untouched. */
+/* ---- Honey-bee theme: baby head-protector landing ----
+   Yellow + chocolate brown + cream, taken from the bee pillow itself. Every colour
+   is contrast-checked: white text sits only on #B8770C or darker, and bright honey
+   (#F7C12B) is always paired with dark brown text. */
+.dc-theme-bee {
+  --c-cream: 255 251 240;        /* #FFFBF0 warm cream */
+  --c-cream-deep: 255 244 219;   /* #FFF4DB */
+  --c-brand: 107 68 35;          /* #6B4423 chocolate brown (the bee's stripe) */
+  --c-brand-dark: 74 44 23;      /* #4A2C17 deep cocoa — headings */
+  --c-brand-light: 240 222 197;  /* #F0DEC5 */
+  --c-brand-soft: 251 242 230;   /* #FBF2E6 */
+  --c-accent: 184 119 12;        /* #B8770C deep honey — 3.7:1 on white */
+  --c-accent-dark: 138 82 6;     /* #8A5206 amber-brown — 6.4:1 on white */
+  --c-accent-light: 253 232 168; /* #FDE8A8 */
+  --c-accent-soft: 255 247 224;  /* #FFF7E0 */
+  --dc-landing-bg: #fffbf0;
+  /* Bright honey for large blocks that carry DARK text (8.8:1 with cocoa). */
+  --c-honey: #F7C12B;
+  --c-honey-deep: #E8A317;
+}
+
+/* Landing pages keep their themed cream background. */
 body.dc-landing {
-  background: #fbf3ea;
+  background: var(--dc-landing-bg, #fbf3ea);
 }
 
 /* Tasteful entrance animation — content settles in, never parked hidden. */
@@ -144,7 +180,7 @@ img {
   aspect-ratio: 1;
   border-radius: 50%;
   clip-path: inset(-45px);
-  color: #3E9BD1; /* brand-dark — box-shadows below use currentColor */
+  color: rgb(var(--c-brand-dark)); /* follows the page theme; box-shadows below use currentColor */
   box-shadow: -60px 15px, -60px 15px, -60px 15px;
   transform: translateY(-15px);
   animation: dc-dots 1s infinite linear;
@@ -190,8 +226,8 @@ img {
   50% { transform: translateY(-12px) rotate(-1deg); }
 }
 @keyframes dc-pulse {
-  0%, 100% { transform: scale(1); box-shadow: 0 12px 30px -8px rgba(62,155,209,.55); }
-  50% { transform: scale(1.02); box-shadow: 0 18px 42px -6px rgba(62,155,209,.75); }
+  0%, 100% { transform: scale(1); box-shadow: 0 12px 30px -8px rgb(var(--c-brand) / .55); }
+  50% { transform: scale(1.02); box-shadow: 0 18px 42px -6px rgb(var(--c-brand) / .75); }
 }
 @keyframes dc-shine {
   0% { background-position: -200% 0; }
@@ -309,6 +345,10 @@ img {
 
 /* hide the global site header on the landing funnel + thank-you pages */
 body.dc-landing header.site-header { display: none; }
+/* Landing pages are single-purpose funnels: no site nav to leak clicks, and the
+   sticky order button needs the bottom of the screen to itself. (/landing is already
+   hidden by StorefrontTabBar's own path check; this covers every landing variant.) */
+body.dc-landing nav.dc-tab-bar { display: none; }
 
 /* ---- Accessibility: skip link + keyboard focus rings ---- */
 .dc-skip {
@@ -333,4 +373,84 @@ select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
   outline: 2px solid #3E9BD1;
   outline-offset: 2px;
   border-radius: 6px;
+}
+
+/* ===================== Honey-bee landing (/baby-pillow) =====================
+   Motion here is decorative only: every section is readable at rest, and all of
+   it stops under prefers-reduced-motion (see the guard at the end). */
+
+/* A bee drifting across the hero on a gentle wave. */
+@keyframes dc-bee-fly {
+  0%   { transform: translate(-8%, 0) rotate(4deg); }
+  25%  { transform: translate(28%, -22px) rotate(-5deg); }
+  50%  { transform: translate(62%, 6px) rotate(4deg); }
+  75%  { transform: translate(92%, -16px) rotate(-3deg); }
+  100% { transform: translate(118%, 0) rotate(4deg); }
+}
+.dc-bee-fly { animation: dc-bee-fly 17s ease-in-out infinite; }
+
+/* Wings — a fast flutter, scaled from the wing root. */
+@keyframes dc-bee-wing {
+  0%, 100% { transform: scaleY(1) rotate(0deg); }
+  50%      { transform: scaleY(.55) rotate(-8deg); }
+}
+.dc-bee-wing { transform-origin: 85% 80%; animation: dc-bee-wing .22s ease-in-out infinite; }
+
+/* Slow honey-drip sheen across a honeycomb band. */
+@keyframes dc-honey-drift {
+  from { background-position: 0 0, 0 0, 17px 30px; }
+  to   { background-position: 34px 0, 34px 0, 51px 30px; }
+}
+.dc-honeycomb {
+  background-color: rgb(var(--c-accent-soft));
+  background-image:
+    linear-gradient(150deg, rgb(var(--c-accent) / .14) 25%, transparent 25.5%, transparent 74.5%, rgb(var(--c-accent) / .14) 75%),
+    linear-gradient(30deg,  rgb(var(--c-accent) / .14) 25%, transparent 25.5%, transparent 74.5%, rgb(var(--c-accent) / .14) 75%),
+    linear-gradient(90deg,  rgb(var(--c-accent) / .14) 1.5px, transparent 1.5px);
+  background-size: 34px 60px;
+  background-position: 0 0, 0 0, 17px 30px;
+  animation: dc-honey-drift 26s linear infinite;
+}
+
+/* The pillow bobbing as if the baby is crawling. */
+@keyframes dc-bob {
+  0%, 100% { transform: translateY(0) rotate(-1.2deg); }
+  50%      { transform: translateY(-10px) rotate(1.2deg); }
+}
+.dc-bob { animation: dc-bob 4.5s ease-in-out infinite; }
+
+/* Soft protective halo pulsing out from the pillow. */
+@keyframes dc-halo {
+  0%   { transform: scale(.82); opacity: .55; }
+  70%  { opacity: 0; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+.dc-halo { animation: dc-halo 3.2s ease-out infinite; }
+
+/* Honey-drop counter pop used on the stat tiles. */
+@keyframes dc-drop-in {
+  0%   { opacity: 0; transform: translateY(-14px) scale(.8); }
+  60%  { transform: translateY(2px) scale(1.04); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.dc-drop-in { animation: dc-drop-in .6s cubic-bezier(.22,1,.36,1) both; }
+
+/* Bee-stripe divider. */
+.dc-stripe {
+  background: repeating-linear-gradient(
+    115deg,
+    var(--c-honey, #F7C12B) 0 18px,
+    rgb(var(--c-brand-dark)) 18px 36px
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-bee-fly,
+  .dc-bee-wing,
+  .dc-honeycomb,
+  .dc-bob,
+  .dc-halo,
+  .dc-drop-in {
+    animation: none !important;
+  }
 }

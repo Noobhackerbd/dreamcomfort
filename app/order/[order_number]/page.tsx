@@ -6,6 +6,8 @@ import { taka } from "@/lib/format";
 import { getStoreSettings, getBdCourierSettings } from "@/lib/settings";
 import { getRatioForDecision } from "@/lib/bdcourier";
 import { PurchasePixel } from "./PurchasePixel";
+import { hasOrderViewGrant, maskName, maskPhone } from "@/lib/order-access";
+import { getCustomerSession, canSeeOrder } from "@/lib/customer-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -118,10 +120,20 @@ async function OrderContent({
   ]);
   if (!data) notFound();
   const { order, items, imageMap } = data;
-  const suppress = await resolveSuppress(order);
-  const fullAddress = [order.address_line, order.area, order.city || order.district]
-    .filter((s: any) => s && String(s).trim())
-    .join(", ");
+  // SECURITY: order numbers are sequential, so anyone can type /order/DC-xxxxx. Only the
+  // browser that placed the order (signed cookie) or the logged-in owner sees personal
+  // details; everyone else gets a masked view and NO Purchase pixel.
+  const isOwner =
+    hasOrderViewGrant(order.order_number) ||
+    canSeeOrder(await getCustomerSession(), order);
+  const suppress = isOwner ? await resolveSuppress(order) : true;
+  const fullAddress = isOwner
+    ? [order.address_line, order.area, order.city || order.district]
+        .filter((s: any) => s && String(s).trim())
+        .join(", ")
+    : "ঠিকানা গোপন রাখা হয়েছে";
+  const shownName = isOwner ? order.customer_name : maskName(order.customer_name);
+  const shownPhone = isOwner ? order.customer_phone : maskPhone(order.customer_phone);
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -185,12 +197,12 @@ async function OrderContent({
           <div className="grid sm:grid-cols-2 gap-3 text-sm">
             <div className="rounded-2xl ring-1 ring-black/5 p-4">
               <p className="text-gray-400 text-xs mb-1">গ্রাহক</p>
-              <p className="font-semibold text-gray-900">{order.customer_name}</p>
-              <p className="text-gray-600 mt-0.5">{order.customer_phone}</p>
+              <p className="font-semibold text-gray-900">{shownName}</p>
+              <p className="text-gray-600 mt-0.5">{shownPhone}</p>
             </div>
             <div className="rounded-2xl ring-1 ring-black/5 p-4">
               <p className="text-gray-400 text-xs mb-1">বিলিং / ডেলিভারি ঠিকানা</p>
-              <p className="text-gray-700 leading-relaxed">{fullAddress || order.address_line}</p>
+              <p className="text-gray-700 leading-relaxed">{fullAddress || (isOwner ? order.address_line : "")}</p>
               <p className="mt-2 inline-flex items-center gap-1 rounded-md bg-green-50 text-green-700 text-xs font-medium px-2 py-0.5 ring-1 ring-green-200">💵 ক্যাশ অন ডেলিভারি</p>
             </div>
           </div>
@@ -234,6 +246,7 @@ async function OrderContent({
         </div>
       </div>
 
+      {isOwner && (
       <PurchasePixel
         eventId={order.event_id ?? null}
         suppress={suppress}
@@ -246,6 +259,7 @@ async function OrderContent({
           email: order.customer_email || undefined,
         }}
       />
+      )}
     </div>
   );
 }

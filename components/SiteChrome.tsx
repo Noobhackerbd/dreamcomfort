@@ -6,6 +6,7 @@
 // never counted as a store visit or sent to the Meta Pixel (cleaner tracking).
 
 import { usePathname } from "next/navigation";
+import { isLandingPath } from "@/lib/landing-routes";
 
 export function HideOnAdmin({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() || "";
@@ -13,18 +14,16 @@ export function HideOnAdmin({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-// Header gate: no site header on /admin, on the thank-you pages (/order/*), or on
-// the homepage landing funnel. Landing *variants* (/landing2, …) additionally hide
-// it via the `body.dc-landing header.site-header` CSS rule (LandingBodyClass).
-export function HeaderGate({ children }: { children: React.ReactNode }) {
+// Header gate: no site header on /admin, on the thank-you pages (/order/*), or on any
+// landing funnel — including variants like /baby-pillow, whose keys come from the root
+// layout. Deciding it here means the header never reaches the HTML, so there is no
+// flash of chrome that a client effect then removes.
+export function HeaderGate({ children, landingKeys = [] }: { children: React.ReactNode; landingKeys?: string[] }) {
   const pathname = usePathname() || "";
-  // The store homepage ("/") now shows the header. It's hidden on admin, on the
-  // thank-you pages, and on the landing funnel (/landing, /landing2, …) — those also
-  // hide it via the body.dc-landing CSS rule (belt and suspenders).
   const hide =
     pathname.startsWith("/admin") ||
     pathname.startsWith("/order") ||
-    pathname.startsWith("/landing");
+    isLandingPath(pathname, landingKeys);
   if (hide) return null;
   return <>{children}</>;
 }

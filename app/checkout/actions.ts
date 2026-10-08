@@ -2,6 +2,7 @@
 
 import { getServerSupabase } from "@/lib/supabase/server";
 import { getCustomerSession } from "@/lib/customer-auth";
+import { grantOrderView } from "@/lib/order-access";
 import { getServerMatchSignals, getExternalId } from "@/lib/meta/fb-cookies";
 import { headers, cookies } from "next/headers";
 import { newEventId } from "@/lib/meta/event-id";
@@ -9,7 +10,9 @@ import { sendServerEvent } from "@/lib/meta/capi";
 import { sendTikTokEvent, toTikTokProps } from "@/lib/tiktok/events";
 import { getTikTokSignals } from "@/lib/tiktok/signals";
 import { logEvent } from "@/lib/meta/log";
-import { resolveShippingFee, getSmsTemplates, getMetaSettings, getBdCourierSettings } from "@/lib/settings";
+import { resolveShippingFee, getShippingSettings, getSmsTemplates, getMetaSettings, getBdCourierSettings } from "@/lib/settings";
+import { getLandingVariant } from "@/lib/landing";
+import { pickShippingFee, toAreaFees, type Area } from "@/lib/shipping-rules";
 import { sendSmsAsync } from "@/lib/sms";
 import { fillTemplate } from "@/lib/sms/templates";
 import { markLeadConverted } from "./lead-actions";
@@ -50,6 +53,40 @@ export interface PlaceOrderInput {
   fbclid?: string;
   leadId?: string; // abandoned-cart lead to mark converted
   couponCode?: string; // store checkout only — never on the landing funnel
+  /**
+   * URL key of the landing page the order came from (e.g. "baby-pillow"). Used to
+   * look up THAT landing's delivery charge server-side. Only the key travels from
+   * the browser — never the amount — so the fee can't be tampered with.
+   */
+  landingKey?: string;
+}
+
+/**
+ * What delivery will cost for these products, per area. The checkout page calls this
+ * so the customer is shown exactly what placeOrder will charge — both go through
+ * pickShippingFee, so the figure on screen and the figure saved can never disagree.
+ */
+export async function quoteShipping(
+  productIds: string[]
+): Promise<{ inside: number; outside: number }> {
+  const globalP = getShippingSettings().catch(() => null);
+  let fees: { inside: number | null; outside: number | null }[] = [];
+  const ids = [...new Set((productIds || []).filter(Boolean))];
+  if (ids.length) {
+    try {
+      const { data } = await getServerSupabase()
+        .from("products").select("shipping_inside, shipping_outside").in("id", ids);
+      fees = (data ?? []).map((p: any) => toAreaFees(p.shipping_inside, p.shipping_outside));
+    } catch {
+      /* column not migrated yet → globals apply */
+    }
+  }
+  const g = await globalP;
+  const global = { inside: g?.insideDhaka ?? 0, outside: g?.outsideDhaka ?? 0 };
+  return {
+    inside: pickShippingFee("inside", { products: fees, global }),
+    outside: pickShippingFee("outside", { products: fees, global }),
+  };
 }
 
 /** Server action: check a coupon against a subtotal (used by the checkout page). */
@@ -116,6 +153,9 @@ function splitName(full: string): { first: string; last?: string } {
 }
 
 export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResult> {
+  // Started now, awaited just before the insert → runs in parallel with the product/price
+  // lookups, so linking the order to the account adds ~0 ms to checkout.
+  const sessionP = getCustomerSession().catch(() => null);
   try {
     const name = input.name?.trim();
     const address = input.address?.trim();
@@ -135,11 +175,26 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
     // Kick off the shipping-fee lookup CONCURRENTLY (independent round-trip) so the
     // two DB reads overlap instead of running one-after-another → faster checkout.
     const ids = input.items.map((i) => i.id);
-    const shippingP = resolveShippingFee(deliveryArea);
-    const { data: products, error: pErr } = await supabase
+    // Delivery charge inputs, fetched concurrently with the product read below.
+    // The amount itself is always computed HERE, never taken from the browser.
+    const feeInputsP = Promise.all([
+      input.landingKey ? getLandingVariant(input.landingKey).catch(() => null) : Promise.resolve(null),
+      getShippingSettings().catch(() => null),
+    ]);
+    // `any` because the fallback below selects a narrower shape (TS can't widen a
+    // destructured supabase result in place — same pattern as admin/products/actions.ts).
+    let pRes: any = await supabase
       .from("products")
-      .select("id, name_bn, name_en, price")
+      .select("id, name_bn, name_en, price, shipping_inside, shipping_outside")
       .in("id", ids);
+    let products = pRes.data as any[] | null;
+    let pErr = pRes.error;
+    if (pErr && ((pErr as any).code === "42703" || /shipping_inside|shipping_outside/i.test(pErr.message || ""))) {
+      // supabase-migration-product-shipping.sql not run yet — fall back to the globals.
+      pRes = await supabase.from("products").select("id, name_bn, name_en, price").in("id", ids);
+      products = pRes.data as any[] | null;
+      pErr = pRes.error;
+    }
     if (pErr) return { ok: false, error: pErr.message };
     if (!products?.length) return { ok: false, error: "পণ্য খুঁজে পাওয়া যায়নি।" };
 
@@ -166,7 +221,19 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
       })
       .filter(Boolean) as any[];
 
-    const shippingFee = await shippingP;
+    // Landing charge wins; otherwise the highest per-product charge (each item
+    // falling back to the global value); otherwise the global value. See lib/shipping-rules.ts.
+    const [landingVariant, globalShipping] = await feeInputsP;
+    const shippingFee = pickShippingFee(deliveryArea as Area, {
+      landing: landingVariant
+        ? { inside: landingVariant.shippingInside, outside: landingVariant.shippingOutside }
+        : null,
+      products: (products ?? []).map((p: any) => toAreaFees(p.shipping_inside, p.shipping_outside)),
+      global: {
+        inside: globalShipping?.insideDhaka ?? (await resolveShippingFee("inside")),
+        outside: globalShipping?.outsideDhaka ?? (await resolveShippingFee("outside")),
+      },
+    });
 
     // Coupon (store checkout only) — re-validated server-side against the real subtotal.
     let discount = 0;
@@ -243,17 +310,26 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
       client_ip: signals.client_ip_address ?? null,
       client_user_agent: signals.client_user_agent ?? null,
     };
+    // Link the order to the logged-in customer's account (the ONLY way "My Orders"
+    // shows an order without an SMS-verified phone). Guests: no link.
+    try {
+      const sess = await sessionP;
+      if (sess?.userId) orderRow.user_id = sess.userId;
+    } catch { /* never block checkout */ }
     let { data: order, error: oErr } = await supabase
       .from("orders").insert(orderRow).select("id, order_number, total, created_at").single();
-    if (oErr && ((oErr as any).code === "42703" || /coupon_code|track_suppressed|source/i.test(oErr.message || ""))) {
+    if (oErr && ((oErr as any).code === "42703" || /coupon_code|track_suppressed|source|user_id/i.test(oErr.message || ""))) {
       // Optional columns not migrated yet — save the order without them.
       delete orderRow.coupon_code;
       delete orderRow.track_suppressed;
       delete orderRow.source;
+      delete orderRow.user_id;
       ({ data: order, error: oErr } = await supabase.from("orders").insert(orderRow).select("id, order_number, total, created_at").single());
     }
 
     if (oErr || !order) return { ok: false, error: oErr?.message ?? "অর্ডার তৈরি ব্যর্থ।" };
+    // Signed cookie: only THIS browser may see the full thank-you page for this order.
+    grantOrderView(order.order_number);
 
     // Count the coupon use (best-effort, after the order exists).
     if (couponCode) void redeemCoupon(couponCode);

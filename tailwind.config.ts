@@ -5,19 +5,23 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Palette pulled straight from the Dream Comfort logo.
-        cream: { DEFAULT: "#FBF3EA", deep: "#F6E9DA" },
+        /* Palette pulled straight from the Dream Comfort logo.
+         * Driven by CSS variables (defined in globals.css) so a landing page can
+         * re-skin the shared funnel components — order form, sticky bar, reviews —
+         * just by setting a theme class. :root keeps the original logo colours, so
+         * every existing page renders exactly as before. */
+        cream: { DEFAULT: "rgb(var(--c-cream) / <alpha-value>)", deep: "rgb(var(--c-cream-deep) / <alpha-value>)" },
         brand: {
-          DEFAULT: "#2F90CC", // deeper, more confident blue (better contrast on off-white)
-          dark: "#1E7AAF",
-          light: "#BFE3F5",
-          soft: "#EAF5FD",
+          DEFAULT: "rgb(var(--c-brand) / <alpha-value>)",
+          dark: "rgb(var(--c-brand-dark) / <alpha-value>)",
+          light: "rgb(var(--c-brand-light) / <alpha-value>)",
+          soft: "rgb(var(--c-brand-soft) / <alpha-value>)",
         },
         accent: {
-          DEFAULT: "#F0A0C0", // soft logo pink ("COMFORT") — identity kept
-          dark: "#DE6699",    // deeper pink for legible price / emphasis text
-          light: "#FBD9E7",
-          soft: "#FDEDF3",
+          DEFAULT: "rgb(var(--c-accent) / <alpha-value>)",
+          dark: "rgb(var(--c-accent-dark) / <alpha-value>)",
+          light: "rgb(var(--c-accent-light) / <alpha-value>)",
+          soft: "rgb(var(--c-accent-soft) / <alpha-value>)",
         },
       },
       fontFamily: {
@@ -25,8 +29,9 @@ const config: Config = {
         sans: ["var(--font-bengali)", "var(--font-display)", "system-ui", "sans-serif"],
       },
       boxShadow: {
-        soft: "0 10px 40px -12px rgba(47,144,204,0.35)",
-        pink: "0 10px 40px -12px rgba(240,160,192,0.45)",
+        soft: "0 10px 40px -12px rgb(var(--c-brand) / 0.35)",
+        pink: "0 10px 40px -12px rgb(var(--c-accent) / 0.45)",
+        cta: "0 14px 30px -8px rgb(var(--c-accent-dark) / 0.55)",
       },
     },
   },

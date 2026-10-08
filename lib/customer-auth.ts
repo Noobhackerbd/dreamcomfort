@@ -21,6 +21,12 @@ export interface CustomerSession {
   userId: string;
   email: string | null;
   profile: CustomerProfile | null;
+  /**
+   * Phone number PROVEN by SMS code (Supabase Auth phone, confirmed via OTP) — or null.
+   * SECURITY: use ONLY this (never profile.phone, which the customer can type freely)
+   * to decide which phone-matched orders an account may see.
+   */
+  verifiedPhone: string | null;
 }
 
 /** Orders store phone as 8801XXXXXXXXX; return both that and the local 01XXXXXXXXX form. */
@@ -46,8 +52,22 @@ export const getCustomerSession = cache(async (): Promise<CustomerSession | null
       const { data } = await svc.from("customer_profiles").select("id, name, phone, email").eq("id", user.id).maybeSingle();
       if (data) profile = data as CustomerProfile;
     } catch { /* table not migrated yet */ }
-    return { userId: user.id, email: user.email ?? null, profile };
+    const verifiedPhone = user.phone && (user as any).phone_confirmed_at ? String(user.phone) : null;
+    return { userId: user.id, email: user.email ?? null, profile, verifiedPhone };
   } catch {
     return null;
   }
 });
+
+/**
+ * SECURITY: may this account see this order?
+ *   1) placed while logged into this account (orders.user_id), or
+ *   2) its phone matches a number PROVEN by SMS code (session.verifiedPhone).
+ * NEVER the free-text profile phone — anyone could type someone else's number there.
+ */
+export function canSeeOrder(session: { userId: string; verifiedPhone: string | null } | null, order: any): boolean {
+  if (!session || !order) return false;
+  if (order.user_id && order.user_id === session.userId) return true;
+  const variants = phoneVariants(session.verifiedPhone);
+  return variants.length > 0 && variants.includes(String(order.customer_phone ?? ""));
+}

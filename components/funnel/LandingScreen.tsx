@@ -336,7 +336,11 @@ export async function LandingScreen({
           </div>
         </section>
 
-        <TestimonialsSection reviews={landing.reviews.map((r, idx) => ({ id: String(idx), name: r.name, rating: r.stars, body: r.text, images: r.image ? [r.image] : null }))} reviewsHref={products[0] ? `/product/${products[0].slug}#reviews` : "#order-form"} />
+        <TestimonialsSection reviews={landing.reviews.map((r, idx) => ({ id: String(idx), name: r.name, rating: r.stars, body: r.text, images: r.image ? [r.image] : null }))} reviewsHref={products[0] ? `/product/${products[0].slug}#reviews` : "#order-form"}
+          title={landing.reviewTitle || undefined}
+          stat={landing.reviewStat || undefined}
+          hideWhenEmpty
+        />
       </div>
 
       <div className="relative z-10 mx-auto max-w-6xl px-1">
@@ -358,6 +362,7 @@ export async function LandingScreen({
           statText={landing.statText}
           badges={landing.badges}
           ctaText={landing.ctaText}
+          shippingOverride={landing.shippingOverride ?? null}
         />
 
         {/* WHY USE — commitment rows with illustration icons */}
@@ -408,7 +413,7 @@ export async function LandingScreen({
             ))}
           </div>
           <div className="mt-6 text-center">
-            <a href="#order-form" className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-accent to-accent-dark text-white px-9 py-4 text-lg font-bold shadow-[0_14px_30px_-8px_rgba(224,105,154,0.55)] hover:scale-[1.03] transition">
+            <a href="#order-form" className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-accent to-accent-dark text-white px-9 py-4 text-lg font-bold shadow-cta hover:scale-[1.03] transition">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden><circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" /><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6" /></svg>
               এখনই অর্ডার করুন <span aria-hidden>→</span>
             </a>

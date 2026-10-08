@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { usePathname } from "next/navigation";
+import { isLandingPath } from "@/lib/landing-routes";
 import { useEffect, useState } from "react";
 import { useL } from "@/components/i18n/I18nProvider";
 
@@ -18,8 +19,8 @@ import { useL } from "@/components/i18n/I18nProvider";
  * uploads a NEW banner (rev changes), which brings everyone back once.
  */
 export function PromoPopup({
-  enabled, image, link, rev,
-}: { enabled: boolean; image: string; link?: string; rev: number }) {
+  enabled, image, link, rev, landingKeys = [],
+}: { enabled: boolean; image: string; link?: string; rev: number; landingKeys?: string[] }) {
   const { L } = useL();
   const pathname = usePathname() || "/";
   const [open, setOpen] = useState(false);
@@ -28,12 +29,14 @@ export function PromoPopup({
   const OFF_KEY = "dc-promo-off";     // localStorage: permanent opt-out (stores rev)
   const SEEN_KEY = "dc-promo-seen";   // sessionStorage: already shown this session (stores rev)
 
+  // Never on a landing funnel (any variant), the thank-you page, checkout or admin —
+  // a popup over a sales funnel costs orders.
   const blocked =
     pathname.startsWith("/admin") ||
     pathname.startsWith("/order") ||
-    pathname.startsWith("/landing") ||
     pathname.startsWith("/checkout") ||
-    pathname.startsWith("/worker");
+    pathname.startsWith("/worker") ||
+    isLandingPath(pathname, landingKeys);
 
   useEffect(() => {
     if (!enabled || !image || blocked) return;

@@ -20,6 +20,8 @@ export interface ProductInput {
   name_en: string;
   price: number;
   compare_at_price?: number | null;
+  shipping_inside?: number | null;
+  shipping_outside?: number | null;
   stock: number;
   sku?: string;
   category_id?: string | null;
@@ -40,7 +42,7 @@ export interface ProductInput {
   video_url?: string;
 }
 
-const OPTIONAL_COLS = ["rating", "review_count", "highlights", "specs", "how_to_use", "faq", "video_url", "description_images", "highlights_en", "specs_en", "faq_en", "how_to_use_en"];
+const OPTIONAL_COLS = ["rating", "review_count", "highlights", "specs", "how_to_use", "faq", "video_url", "description_images", "highlights_en", "specs_en", "faq_en", "how_to_use_en", "shipping_inside", "shipping_outside"];
 /** True when the error is a "column doesn't exist" for one of the optional/newer columns. */
 function isMissingOptionalCol(error: any): boolean {
   return !!error && (error.code === "42703" || new RegExp(OPTIONAL_COLS.join("|"), "i").test(error.message || ""));
@@ -135,6 +137,9 @@ export async function saveProduct(input: ProductInput) {
     name_en: nameEn || nameBn || "Product",
     price: Number(input.price) || 0,
     compare_at_price: input.compare_at_price ? Number(input.compare_at_price) : null,
+    // null = no override; the global Settings → Shipping value applies.
+    shipping_inside: input.shipping_inside == null || (input.shipping_inside as any) === "" ? null : Math.max(0, Math.round(Number(input.shipping_inside))),
+    shipping_outside: input.shipping_outside == null || (input.shipping_outside as any) === "" ? null : Math.max(0, Math.round(Number(input.shipping_outside))),
     stock: Math.max(0, Math.floor(Number(input.stock) || 0)),
     sku: input.sku?.trim() || null,
     category_id: input.category_id || null,

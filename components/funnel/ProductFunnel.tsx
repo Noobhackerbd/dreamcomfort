@@ -9,6 +9,7 @@ import { fireEvent } from "@/components/track";
 import { taka } from "@/lib/format";
 import { playSelect } from "@/lib/sound";
 import type { Product } from "@/lib/types";
+import { pickShippingFee, toAreaFees, type AreaFees } from "@/lib/shipping-rules";
 
 interface FunnelProduct {
   id: string;
@@ -17,6 +18,8 @@ interface FunnelProduct {
   price: number;
   compare_at_price: number | null;
   images: string[];
+  /** This product's own delivery charge, if the admin set one. */
+  fees: AreaFees;
 }
 
 function toFunnel(p: Product): FunnelProduct {
@@ -27,6 +30,7 @@ function toFunnel(p: Product): FunnelProduct {
     price: Number(p.price),
     compare_at_price: p.compare_at_price != null ? Number(p.compare_at_price) : null,
     images: p.images ?? [],
+    fees: toAreaFees(p.shipping_inside, p.shipping_outside),
   };
 }
 
@@ -35,6 +39,9 @@ export function ProductFunnel({
   shipping,
   ctaText,
   initialProductId,
+  landingKey,
+  theme = "pillow",
+  shippingOverride = null,
 }: {
   products: Product[];
   shipping: { inside: number; outside: number };
@@ -46,6 +53,15 @@ export function ProductFunnel({
   ctaText: string;
   /** Pre-selected product id (resolved server-side from the ?color= URL param). */
   initialProductId?: string;
+  /** Landing page key — lets checkout charge THIS page's delivery fee. */
+  landingKey?: string;
+  /** "bee" switches the picker + order form to the honey/bee colour scheme. */
+  theme?: "pillow" | "bee";
+  /**
+   * This landing's own delivery charge, when it sets one. It wins over the product's
+   * own charge; without it the selected product's charge (then the global value) applies.
+   */
+  shippingOverride?: AreaFees | null;
 }) {
   const list = products.map(toFunnel);
   // Seed the selection from the URL (?color=) when it matches a featured
@@ -96,6 +112,13 @@ export function ProductFunnel({
   }, [products]);
 
   if (!p) return null;
+
+  // Same rule the server applies when the order is placed (lib/shipping-rules.ts),
+  // so what the customer sees here is what they are charged.
+  const effShipping = {
+    inside: pickShippingFee("inside", { landing: shippingOverride, products: [p.fees], global: shipping }),
+    outside: pickShippingFee("outside", { landing: shippingOverride, products: [p.fees], global: shipping }),
+  };
 
   const hasDiscount = p.compare_at_price && p.compare_at_price > p.price;
   const off = hasDiscount ? Math.round((1 - p.price / (p.compare_at_price as number)) * 100) : 0;
@@ -148,8 +171,10 @@ export function ProductFunnel({
             images={p.images}
             variants={[]}
             hasOptions={list.length > 1}
-            shipping={shipping}
+            shipping={effShipping}
             ctaText={ctaText}
+            landingKey={landingKey}
+            theme={theme}
           />
         </div>
       </div>

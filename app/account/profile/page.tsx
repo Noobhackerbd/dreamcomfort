@@ -17,7 +17,12 @@ export default async function ProfilePage() {
         <h1 className="font-display text-2xl font-bold text-gray-900">প্রোফাইল</h1>
         <p className="mt-1 text-sm text-gray-500">আপনার তথ্য আপডেট করুন।</p>
       </div>
-      <ProfileForm initialName={name} initialPhone={session.profile?.phone || ""} email={session.email || ""} />
+      <ProfileForm
+        initialName={name}
+        initialPhone={session.profile?.phone || ""}
+        email={session.email || ""}
+        verifiedPhone={session.verifiedPhone || ""}
+      />
     </DashboardShell>
   );
 }

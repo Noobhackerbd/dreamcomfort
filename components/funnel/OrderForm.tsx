@@ -39,6 +39,10 @@ interface Props {
   hasOptions?: boolean;
   shipping: { inside: number; outside: number };
   ctaText: string;
+  /** Landing page this form lives on — the server uses it to pick that page's delivery charge. */
+  landingKey?: string;
+  /** "bee" switches the form to the honey/bee colour scheme. */
+  theme?: "pillow" | "bee";
 }
 
 export function OrderForm({
@@ -52,14 +56,20 @@ export function OrderForm({
   hasOptions = false,
   shipping,
   ctaText,
+  landingKey,
+  theme = "pillow",
 }: Props) {
+  const bee = theme === "bee";
   const router = useRouter();
   const [variantId, setVariantId] = useState<string>(variants[0]?.id ?? "");
   const [qty, setQty] = useState(1);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
-  const deliveryArea: DeliveryArea = "inside";
+  // Only ask for the area when the two charges actually differ — a landing with one
+  // flat rate (or free delivery everywhere) keeps the shorter, faster form.
+  const asksArea = shipping.inside !== shipping.outside;
+  const [deliveryArea, setDeliveryArea] = useState<DeliveryArea>("inside");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [invalid, setInvalid] = useState({ name: false, phone: false, address: false });
@@ -76,7 +86,7 @@ export function OrderForm({
   const unitPrice = selected ? selected.price : basePrice;
   const unitCompare = selected ? selected.compare_at_price ?? null : baseCompare ?? null;
   const subtotal = unitPrice * qty;
-  const shippingFee = shipping.inside;
+  const shippingFee = deliveryArea === "outside" ? shipping.outside : shipping.inside;
   const total = subtotal + shippingFee;
   const freeDelivery = shipping.inside === 0 && shipping.outside === 0;
 
@@ -208,6 +218,7 @@ export function OrderForm({
       items: [{ id: productId, qty, variantId: variantId || undefined }],
       fbclid,
       leadId: leadIdRef.current || undefined,
+      landingKey,
     });
     if (!res.ok) {
       setSubmitting(false);
@@ -280,6 +291,36 @@ export function OrderForm({
           <button type="button" onClick={() => { setQty((q) => q + 1); playPop(); }} className="grid h-9 w-9 place-items-center rounded-full border border-accent/30 bg-white text-lg font-bold text-accent-dark transition hover:bg-accent-soft">+</button>
         </div>
       </div>
+
+      {asksArea && (
+        <div className="mb-4">
+          <label className="mb-2 block text-sm font-semibold text-gray-700">ডেলিভারি এরিয়া</label>
+          <div className="grid grid-cols-2 gap-2">
+            {(["inside", "outside"] as const).map((area) => {
+              const on = deliveryArea === area;
+              return (
+                <button
+                  type="button"
+                  key={area}
+                  onClick={() => { setDeliveryArea(area); playTick(); }}
+                  aria-pressed={on}
+                  className={
+                    "rounded-2xl border px-3 py-3 text-center text-sm font-semibold transition " +
+                    (on ? "border-accent bg-accent-soft text-accent-dark ring-4 ring-accent/15" : "border-brand/15 bg-white text-gray-600 hover:border-brand/40")
+                  }
+                >
+                  <span className="block">{area === "inside" ? "ঢাকার ভিতরে" : "ঢাকার বাইরে"}</span>
+                  <span className="mt-0.5 block text-[13px] font-bold">
+                    {(area === "inside" ? shipping.inside : shipping.outside) === 0
+                      ? "ফ্রি"
+                      : taka(area === "inside" ? shipping.inside : shipping.outside)}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="space-y-3">
         <div>
@@ -356,7 +397,7 @@ export function OrderForm({
           </button>
         )}
         <div className="flex justify-between">
-          <span className="text-gray-500">ডেলিভারি</span>
+          <span className="text-gray-500">ডেলিভারি{asksArea ? (deliveryArea === "inside" ? " (ঢাকার ভিতরে)" : " (ঢাকার বাইরে)") : ""}</span>
           <span>{shippingFee === 0 ? "ফ্রি 🎉" : taka(shippingFee)}</span>
         </div>
         <div className="flex justify-between border-t border-black/5 pt-2 text-base font-bold">
@@ -381,7 +422,7 @@ export function OrderForm({
         id="order-submit"
         type="submit"
         disabled={submitting}
-        className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-accent to-accent-dark px-6 py-4 text-lg font-bold text-white shadow-[0_14px_30px_-8px_rgba(224,105,154,0.55)] transition hover:scale-[1.01] active:translate-y-px disabled:opacity-60"
+        className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-accent to-accent-dark px-6 py-4 text-lg font-bold text-white shadow-cta transition hover:scale-[1.01] active:translate-y-px disabled:opacity-60"
       >
         {submitting ? (
           "অর্ডার হচ্ছে..."
@@ -395,9 +436,19 @@ export function OrderForm({
       </button>
       <div className="mt-3 rounded-xl border border-accent/25 bg-accent-light/25 px-3 py-2.5 text-center shadow-sm">
         <p className="text-[12.5px] font-bold leading-relaxed text-accent-dark sm:text-sm">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1 -mt-0.5 inline-block h-4 w-4 align-middle text-accent" aria-hidden><rect x="2" y="6" width="20" height="12" rx="2" /><circle cx="12" cy="12" r="2" /><path d="M6 12h.01M18 12h.01" /></svg>সম্পূর্ণ{" "}
-          <span className="whitespace-nowrap rounded-md bg-accent px-1.5 py-0.5 text-white">ফ্রি</span>{" "}
-          ক্যাশ অন ডেলিভারি, কোনো অগ্রিম টাকা দিতে হবে না
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1 -mt-0.5 inline-block h-4 w-4 align-middle text-accent" aria-hidden><rect x="2" y="6" width="20" height="12" rx="2" /><circle cx="12" cy="12" r="2" /><path d="M6 12h.01M18 12h.01" /></svg>
+          {/* Only call delivery "free" when it actually is — this page charges for it. */}
+          {freeDelivery ? (
+            <>
+              সম্পূর্ণ <span className="whitespace-nowrap rounded-md bg-accent px-1.5 py-0.5 text-white">ফ্রি</span>{" "}
+              ক্যাশ অন ডেলিভারি, কোনো অগ্রিম টাকা দিতে হবে না
+            </>
+          ) : (
+            <>
+              <span className="whitespace-nowrap rounded-md bg-accent px-1.5 py-0.5 text-white">ক্যাশ অন ডেলিভারি</span>{" "}
+              — পণ্য হাতে পেয়ে টাকা দিন, কোনো অগ্রিম টাকা দিতে হবে না
+            </>
+          )}
         </p>
       </div>
 

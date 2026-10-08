@@ -35,6 +35,10 @@ export interface Product {
   how_to_use?: string | null;
   faq?: { q: string; a: string }[] | null;
   video_url?: string | null;
+  // Per-product delivery charge (see supabase-migration-product-shipping.sql).
+  // null = use the global Settings → Shipping value for that area.
+  shipping_inside?: number | null;
+  shipping_outside?: number | null;
 }
 
 export interface Category {

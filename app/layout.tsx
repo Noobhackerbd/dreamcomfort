@@ -26,7 +26,7 @@ const notoBengali = Anek_Bangla({
 import { Header } from "@/components/Header";
 import { HideOnAdmin, HeaderGate, SiteMain } from "@/components/SiteChrome";
 import { STORE, STORE_NAME } from "@/lib/config";
-import { getLandingConfig } from "@/lib/landing";
+import { getLandingConfig, getLandingVariants } from "@/lib/landing";
 import { StorefrontTabBar } from "@/components/store/StorefrontTabBar";
 import { SourceTracker } from "@/components/SourceTracker";
 import { CartDrawer } from "@/components/store/CartDrawer";
@@ -58,7 +58,11 @@ export const viewport: Viewport = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const [landing, meta, store, tiktok, navIcons, promo] = await Promise.all([getLandingConfig(), getMetaSettings(), getStoreSettings(), getTikTokSettings(), getNavIcons(), getPromoPopup()]);
+  const [landing, meta, store, tiktok, navIcons, promo, landingVariants] = await Promise.all([getLandingConfig(), getMetaSettings(), getStoreSettings(), getTikTokSettings(), getNavIcons(), getPromoPopup(), getLandingVariants()]);
+  // Landing funnels get no header, no tab bar and no popup. Passing the real keys down
+  // means a variant like /baby-pillow is recognised too, so none of that chrome is ever
+  // rendered into the HTML (it used to appear and then vanish after hydration).
+  const landingKeys = landingVariants.map((v) => v.key);
   const orgJsonLd = {
     "@context": "https://schema.org",
     "@graph": [
@@ -87,7 +91,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className="min-h-screen antialiased flex flex-col">
         <I18nProvider>
         <a href="#main" className="dc-skip"><T en="Skip to main content" bn="মূল কন্টেন্টে যান" /></a>
-        <HeaderGate>
+        <HeaderGate landingKeys={landingKeys}>
           <Header logoUrl={landing.logoUrl || "/logo.png"} phone={store.phone} />
         </HeaderGate>
 
@@ -141,7 +145,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         </HideOnAdmin>
 
         {/* Mobile bottom tab bar — storefront only (self-hides on admin/order/landing). */}
-        <StorefrontTabBar categoryIcon={navIcons.category} />
+        <StorefrontTabBar categoryIcon={navIcons.category} landingKeys={landingKeys} />
 
         {/* Slide-out cart drawer (opens from the header cart icon / add-to-cart). */}
         <CartDrawer />
@@ -150,7 +154,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <LoginModal />
 
         {/* First-visit promo banner popup (admin-uploaded). Deferred — never blocks load. */}
-        <PromoPopup enabled={promo.enabled} image={promo.image} link={promo.link || undefined} rev={promo.rev} />
+        <PromoPopup enabled={promo.enabled} image={promo.image} link={promo.link || undefined} rev={promo.rev} landingKeys={landingKeys} />
 
         {/* Trackers only on the storefront — never on /admin (keeps visitor &
             Pixel data clean, no admin noise). */}
