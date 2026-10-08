@@ -401,7 +401,7 @@ export async function LandingScreen({
           <div className="grid gap-4 md:grid-cols-2">
             {DOUBLE_LAYER.map((d, i) => (
               <Reveal key={i} delay={i * 70}>
-                <div className="rounded-[1.6rem] bg-white p-6 h-full shadow-sm ring-1 ring-black/5 hover:shadow-xl hover:-translate-y-0.5 transition-all">
+                <div className="rounded-[1.6rem] bg-white p-6 h-full shadow-sm ring-1 ring-black/5 hover:shadow-xl hover:-translate-y-0.5 transition-[transform,box-shadow]">
                   <div className="flex items-center gap-4">
                     <IconBadge d={d.d} i={i} />
                     <h3 className="font-display text-lg font-bold">{d.title}</h3>
@@ -426,7 +426,7 @@ export async function LandingScreen({
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {WHY_US.map((w, i) => (
               <Reveal key={i} delay={i * 80}>
-                <div className="rounded-[1.6rem] bg-white p-6 h-full text-center shadow-sm ring-1 ring-black/5 hover:shadow-xl hover:-translate-y-0.5 transition-all">
+                <div className="rounded-[1.6rem] bg-white p-6 h-full text-center shadow-sm ring-1 ring-black/5 hover:shadow-xl hover:-translate-y-0.5 transition-[transform,box-shadow]">
                   <div className="mx-auto w-max"><IconBadge d={w.d} i={i} size="lg" /></div>
                   <h3 className="mt-4 font-display font-bold text-gray-900">{w.title}</h3>
                   <p className="mt-1.5 text-sm text-gray-600 leading-relaxed">{w.text}</p>

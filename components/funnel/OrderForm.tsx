@@ -405,7 +405,7 @@ export function OrderForm({
           <span className="text-accent-dark">{taka(total)}</span>
         </div>
         {unitCompare && unitCompare > unitPrice && (
-          <p className="text-xs text-green-600">🎁 আপনি সাশ্রয় করছেন {taka((unitCompare - unitPrice) * qty)}!</p>
+          <p className="text-xs text-green-700">🎁 আপনি সাশ্রয় করছেন {taka((unitCompare - unitPrice) * qty)}!</p>
         )}
       </div>
 
@@ -440,12 +440,12 @@ export function OrderForm({
           {/* Only call delivery "free" when it actually is — this page charges for it. */}
           {freeDelivery ? (
             <>
-              সম্পূর্ণ <span className="whitespace-nowrap rounded-md bg-accent px-1.5 py-0.5 text-white">ফ্রি</span>{" "}
+              সম্পূর্ণ <span className="whitespace-nowrap rounded-md bg-accent-dark px-1.5 py-0.5 text-white">ফ্রি</span>{" "}
               ক্যাশ অন ডেলিভারি, কোনো অগ্রিম টাকা দিতে হবে না
             </>
           ) : (
             <>
-              <span className="whitespace-nowrap rounded-md bg-accent px-1.5 py-0.5 text-white">ক্যাশ অন ডেলিভারি</span>{" "}
+              <span className="whitespace-nowrap rounded-md bg-accent-dark px-1.5 py-0.5 text-white">ক্যাশ অন ডেলিভারি</span>{" "}
               — পণ্য হাতে পেয়ে টাকা দিন, কোনো অগ্রিম টাকা দিতে হবে না
             </>
           )}

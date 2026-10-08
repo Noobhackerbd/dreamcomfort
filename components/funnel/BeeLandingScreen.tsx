@@ -583,7 +583,7 @@ export async function BeeLandingScreen({
           <div className="grid gap-4 md:grid-cols-2">
             {QUALITY.map((d, i) => (
               <Reveal key={i} delay={i * 70}>
-                <div className="h-full rounded-[1.5rem] bg-white p-5 shadow-sm ring-1 ring-brand-dark/5 transition-all hover:-translate-y-0.5 hover:shadow-xl sm:p-6">
+                <div className="h-full rounded-[1.5rem] bg-white p-5 shadow-sm ring-1 ring-brand-dark/5 transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-xl sm:p-6">
                   <div className="flex items-center gap-4">
                     <Hex bright={i % 2 === 0}><Ic d={d.d} /></Hex>
                     <h3 className="font-display text-base font-bold text-brand-dark sm:text-lg">{d.title}</h3>
@@ -607,7 +607,7 @@ export async function BeeLandingScreen({
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {WHY_US.map((w, i) => (
               <Reveal key={i} delay={i * 80}>
-                <div className="h-full rounded-[1.5rem] bg-white p-6 text-center shadow-sm ring-1 ring-brand-dark/5 transition-all hover:-translate-y-0.5 hover:shadow-xl">
+                <div className="h-full rounded-[1.5rem] bg-white p-6 text-center shadow-sm ring-1 ring-brand-dark/5 transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-xl">
                   <div className="mx-auto w-max"><Hex bright={i % 2 === 1}><Ic d={w.d} /></Hex></div>
                   <h3 className="mt-4 font-display font-bold text-brand-dark">{w.title}</h3>
                   <p className="mt-1.5 text-[14px] leading-relaxed text-gray-600">{w.text}</p>

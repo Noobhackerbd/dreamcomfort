@@ -94,7 +94,7 @@ export function TestimonialsSection({
                 )}
                 <div>
                   <p className="font-bold text-gray-900">{r.name || "গ্রাহক"}</p>
-                  <p className="mt-0.5 inline-flex items-center gap-1 text-[12px] font-semibold text-green-600">
+                  <p className="mt-0.5 inline-flex items-center gap-1 text-[12px] font-semibold text-green-700">
                     <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="currentColor" aria-hidden><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-1.2 14.2-4-4 1.4-1.4 2.6 2.6 5.6-5.6 1.4 1.4z" /></svg>
                     ভেরিফায়েড ক্রেতা
                   </p>

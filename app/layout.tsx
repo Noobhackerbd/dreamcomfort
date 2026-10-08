@@ -110,34 +110,34 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             </div>
             <div>
               <p className="font-semibold mb-2"><T en="Shop" bn="শপ" /></p>
-              <ul className="space-y-1 text-gray-500">
-                <li><a href="/" className="hover:text-brand"><T en="Home" bn="হোম" /></a></li>
-                <li><a href="/products" className="hover:text-brand"><T en="All Products" bn="সব পণ্য" /></a></li>
-                <li><a href="/track-order" className="hover:text-brand"><T en="Track Order" bn="অর্ডার ট্র্যাক" /></a></li>
+              <ul className="space-y-0.5 text-gray-500">
+                <li><a href="/" className="inline-flex min-h-[24px] items-center py-1 hover:text-brand"><T en="Home" bn="হোম" /></a></li>
+                <li><a href="/products" className="inline-flex min-h-[24px] items-center py-1 hover:text-brand"><T en="All Products" bn="সব পণ্য" /></a></li>
+                <li><a href="/track-order" className="inline-flex min-h-[24px] items-center py-1 hover:text-brand"><T en="Track Order" bn="অর্ডার ট্র্যাক" /></a></li>
               </ul>
             </div>
             <div>
               <p className="font-semibold mb-2"><T en="Support" bn="সহায়তা" /></p>
-              <ul className="space-y-1 text-gray-500">
-                <li><a href="/about" className="hover:text-brand"><T en="About Us" bn="আমাদের সম্পর্কে" /></a></li>
-                <li><a href="/contact" className="hover:text-brand"><T en="Contact" bn="যোগাযোগ" /></a></li>
-                <li><a href="/return-policy" className="hover:text-brand"><T en="Return Policy" bn="রিটার্ন পলিসি" /></a></li>
-                <li><a href="/privacy" className="hover:text-brand"><T en="Privacy" bn="প্রাইভেসি" /></a></li>
-                <li><a href="/terms" className="hover:text-brand"><T en="Terms" bn="শর্তাবলী" /></a></li>
+              <ul className="space-y-0.5 text-gray-500">
+                <li><a href="/about" className="inline-flex min-h-[24px] items-center py-1 hover:text-brand"><T en="About Us" bn="আমাদের সম্পর্কে" /></a></li>
+                <li><a href="/contact" className="inline-flex min-h-[24px] items-center py-1 hover:text-brand"><T en="Contact" bn="যোগাযোগ" /></a></li>
+                <li><a href="/return-policy" className="inline-flex min-h-[24px] items-center py-1 hover:text-brand"><T en="Return Policy" bn="রিটার্ন পলিসি" /></a></li>
+                <li><a href="/privacy" className="inline-flex min-h-[24px] items-center py-1 hover:text-brand"><T en="Privacy" bn="প্রাইভেসি" /></a></li>
+                <li><a href="/terms" className="inline-flex min-h-[24px] items-center py-1 hover:text-brand"><T en="Terms" bn="শর্তাবলী" /></a></li>
               </ul>
             </div>
             <div className="col-span-2 md:col-span-1">
               <p className="font-semibold mb-2"><T en="Contact" bn="যোগাযোগ" /></p>
-              <ul className="space-y-1.5 text-gray-500">
-                <li>📞 <a href={`tel:${STORE.phone}`} className="hover:text-brand">{STORE.phone}</a></li>
-                <li>🌐 <a href={SITE_URL} className="hover:text-brand">DreamcomfortBD.com</a></li>
+              <ul className="space-y-0.5 text-gray-500">
+                <li>📞 <a href={`tel:${STORE.phone}`} className="inline-flex min-h-[24px] items-center py-1 hover:text-brand">{STORE.phone}</a></li>
+                <li>🌐 <a href={SITE_URL} className="inline-flex min-h-[24px] items-center py-1 hover:text-brand">DreamcomfortBD.com</a></li>
                 <li>📍 {STORE.address}</li>
-                <li><a href={STORE.facebook} className="hover:text-brand" rel="noopener" target="_blank">Facebook</a></li>
+                <li><a href={STORE.facebook} className="inline-flex min-h-[24px] items-center py-1 hover:text-brand" rel="noopener" target="_blank">Facebook</a></li>
               </ul>
             </div>
           </div>
           <div className="border-t border-black/5">
-            <div className="mx-auto max-w-6xl px-4 py-4 text-xs text-gray-400">
+            <div className="mx-auto max-w-6xl px-4 py-4 text-xs text-gray-500">
               © {STORE_NAME} · <T en="All rights reserved" bn="সকল অধিকার সংরক্ষিত" />
             </div>
           </div>

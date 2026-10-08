@@ -398,11 +398,22 @@ select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
 
 /* Slow honey-drip sheen across a honeycomb band. */
 @keyframes dc-honey-drift {
-  from { background-position: 0 0, 0 0, 17px 30px; }
-  to   { background-position: 34px 0, 34px 0, 51px 30px; }
+  from { transform: translateX(0); }
+  to   { transform: translateX(34px); }
 }
 .dc-honeycomb {
+  position: relative;
+  overflow: hidden;
   background-color: rgb(var(--c-accent-soft));
+}
+/* The comb texture lives on a pseudo-element and drifts with a TRANSFORM, which the
+   compositor can run off the main thread. Animating background-position (the obvious
+   way) cannot be composited and costs main-thread work on every frame — Lighthouse
+   flags it as "Unsupported CSS Property: background-position-x". */
+.dc-honeycomb::before {
+  content: "";
+  position: absolute;
+  inset: 0 -34px;            /* overhang both sides so the slide never shows a seam */
   background-image:
     linear-gradient(150deg, rgb(var(--c-accent) / .14) 25%, transparent 25.5%, transparent 74.5%, rgb(var(--c-accent) / .14) 75%),
     linear-gradient(30deg,  rgb(var(--c-accent) / .14) 25%, transparent 25.5%, transparent 74.5%, rgb(var(--c-accent) / .14) 75%),
@@ -410,7 +421,11 @@ select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
   background-size: 34px 60px;
   background-position: 0 0, 0 0, 17px 30px;
   animation: dc-honey-drift 26s linear infinite;
+  will-change: transform;
+  pointer-events: none;
 }
+.dc-honeycomb > * { position: relative; } /* keep the columns above the texture */
+
 
 /* The pillow bobbing as if the baby is crawling. */
 @keyframes dc-bob {
@@ -447,7 +462,7 @@ select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .dc-bee-fly,
   .dc-bee-wing,
-  .dc-honeycomb,
+  .dc-honeycomb::before,
   .dc-bob,
   .dc-halo,
   .dc-drop-in {
