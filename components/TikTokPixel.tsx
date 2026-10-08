@@ -81,16 +81,30 @@ function loadTikTok() {
 export function TikTokPixel({ pixelId }: { pixelId?: string }) {
   if (pixelId) TT_PIXEL_ID = pixelId;
 
+  // Same deferral as the Meta Pixel: load on the visitor's FIRST interaction, or when
+  // they leave the tab, or after a long safety timeout — whichever comes first.
+  //
+  // The old 3.5s timeout fired in the middle of the initial-load window, and TikTok's
+  // SDK then pulled ~155 KB over seven requests and blocked the main thread right when
+  // the page was still painting. Coverage does NOT drop: anyone who scrolls or taps
+  // loads it instantly (that is nearly everyone on mobile), and a visitor who bounces
+  // without touching anything now fires on page-leave, which the old version missed.
   useEffect(() => {
     if (!TT_PIXEL_ID || window.__dcTTLoaded) return;
     const events = ["pointerdown", "touchstart", "scroll", "keydown", "mousemove"];
+    const leaveEvents = ["visibilitychange", "pagehide"];
     const trigger = () => { cleanup(); loadTikTok(); };
+    const onLeave = () => {
+      if (document.visibilityState === "hidden") { cleanup(); loadTikTok(); }
+    };
     function cleanup() {
       events.forEach((ev) => window.removeEventListener(ev, trigger));
+      leaveEvents.forEach((ev) => document.removeEventListener(ev, onLeave));
       clearTimeout(timer);
     }
     events.forEach((ev) => window.addEventListener(ev, trigger, { once: true, passive: true }));
-    const timer = setTimeout(trigger, 3500);
+    leaveEvents.forEach((ev) => document.addEventListener(ev, onLeave));
+    const timer = setTimeout(trigger, 8000);
     return cleanup;
   }, []);
 

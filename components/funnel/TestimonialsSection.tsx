@@ -102,15 +102,18 @@ export function TestimonialsSection({
               </div>
 
               {dots > 1 && (
-                <div className="mt-6 flex items-center gap-2">
+                <div className="mt-6 flex items-center gap-0.5">
                   {Array.from({ length: dots }).map((_, k) => (
                     <button
                       key={k}
                       type="button"
                       aria-label={`রিভিউ ${k + 1}`}
                       onClick={() => setI(k)}
-                      className={`h-2 rounded-full transition-all ${k === i % dots ? "w-5 bg-accent" : "w-2 bg-gray-300"}`}
-                    />
+                      className="grid h-6 min-w-6 place-items-center px-0.5"
+                    >
+                      {/* 24px tappable button, small visual dot inside (WCAG 2.5.8). */}
+                      <span className={`block h-2 rounded-full transition-[width,background-color] ${k === i % dots ? "w-5 bg-accent" : "w-2 bg-gray-300"}`} />
+                    </button>
                   ))}
                 </div>
               )}

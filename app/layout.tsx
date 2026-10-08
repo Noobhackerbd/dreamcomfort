@@ -22,6 +22,12 @@ const notoBengali = Anek_Bangla({
   weight: ["400", "500", "600", "700"],
   variable: "--font-bengali",
   display: "swap",
+  // Bengali glyph sets are huge — this face is ~194 KB, by far the biggest asset on
+  // every page. Preloading it put that download at top priority, competing with the
+  // hero image during first paint. Without the preload the text paints immediately in
+  // the metric-matched fallback (so CLS stays 0) and swaps to Anek Bangla a moment
+  // later: same final typography, 194 KB off the critical path.
+  preload: false,
 });
 import { Header } from "@/components/Header";
 import { HideOnAdmin, HeaderGate, SiteMain } from "@/components/SiteChrome";

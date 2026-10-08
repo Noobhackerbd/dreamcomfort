@@ -96,15 +96,18 @@ export function HeroSlider({ images, alt }: { images: string[]; alt: string }) {
               {i + 1}/{images.length}
             </span>
 
-            <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
+            <div className="absolute bottom-1.5 left-0 right-0 flex justify-center gap-0">
               {images.map((_, idx) => (
                 <button
                   key={idx}
                   type="button"
                   aria-label={`ছবি ${idx + 1}`}
                   onClick={() => go(idx)}
-                  className={"h-2.5 rounded-full transition-all " + (idx === i ? "w-7 bg-accent" : "w-2.5 bg-white/90 ring-1 ring-black/5")}
-                />
+                  className="grid h-6 min-w-6 place-items-center px-0.5"
+                >
+                  {/* 24px tappable button, small visual dot inside (WCAG 2.5.8). */}
+                  <span className={"block h-2.5 rounded-full transition-[width,background-color] " + (idx === i ? "w-7 bg-accent" : "w-2.5 bg-white/90 ring-1 ring-black/5")} />
+                </button>
               ))}
             </div>
           </>
