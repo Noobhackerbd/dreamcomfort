@@ -116,6 +116,7 @@ const NAV = [
   { href: "/admin/customers", label: "Customers", icon: "customers" },
   { href: "/admin/registered", label: "Registered", icon: "workers" },
   { href: "/admin/support", label: "Support", icon: "chat", badgeKey: "support" },
+  { href: "/admin/chatbot", label: "AI Chat Bot", icon: "chat" },
   { href: "/admin/reviews", label: "Reviews", icon: "target" },
   { href: "/admin/subscribers", label: "Subscribers", icon: "bell" },
   { href: "/admin/workers", label: "Workers", icon: "workers" },
