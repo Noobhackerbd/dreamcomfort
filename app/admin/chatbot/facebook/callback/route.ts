@@ -2,7 +2,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { requireAdmin } from "@/lib/admin-auth";
-import { getChatbotSettings } from "@/lib/chatbot";
+import { getChatbotSettings, fbApp } from "@/lib/chatbot";
 import { pagesFromCode, savePending, connectPage, callbackPath } from "@/lib/facebook-connect";
 
 export const dynamic = "force-dynamic";
@@ -37,7 +37,8 @@ export async function GET(req: NextRequest) {
   if (!code) return back("denied");
 
   const s = await getChatbotSettings();
-  if (!s.appId || !s.appSecret) return back("noapp");
+  const app = fbApp(s);
+  if (!app.appId || !app.appSecret) return back("noapp");
 
   try {
     const { user, pages } = await pagesFromCode(s, code, req.nextUrl.origin + callbackPath);

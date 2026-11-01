@@ -10,7 +10,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { getServerSupabase } from "@/lib/supabase/server";
-import { getChatbotSettings, aiReply, type ChatTurn, type ChatImage } from "@/lib/chatbot";
+import { getChatbotSettings, fbApp, aiReply, type ChatTurn, type ChatImage } from "@/lib/chatbot";
 import { verifySignature, sendText, sendTyping, getProfile, fetchPhoto } from "@/lib/messenger";
 import { PHOTO_LABEL, withPhotos, splitPhotos } from "@/lib/chat-media";
 
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
   const raw = await req.text();
   const s = await getChatbotSettings();
 
-  if (!verifySignature(raw, req.headers.get("x-hub-signature-256"), s.appSecret)) {
+  if (!verifySignature(raw, req.headers.get("x-hub-signature-256"), fbApp(s).appSecret)) {
     return new NextResponse("Bad signature", { status: 401 });
   }
 

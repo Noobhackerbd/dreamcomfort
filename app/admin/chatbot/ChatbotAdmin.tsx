@@ -14,7 +14,7 @@ type Example = { question: string; answer: string };
 type Training = { botName: string; storeInfo: string; products: Product[]; examples: Example[] };
 type Connection = {
   pageAccessToken: string; appSecret: string; anthropicKey: string; verifyToken: string;
-  appId: string; fbConfigId: string; page: FbPageInfo | null;
+  appId: string; fbConfigId: string; fbAppFromEnv: boolean; page: FbPageInfo | null;
   model: string; autoReply: boolean; pauseAiOnManual: boolean; photoMatch: boolean; maxReplyTokens: number; usdToBdt: number;
 };
 type FbPageInfo = { id: string; name: string; by: string; at: string };
@@ -482,11 +482,16 @@ function FacebookLogin({ conn, set, fb, secret, setSecret, saveFirst }: {
     if (fb && typeof window !== "undefined") window.history.replaceState(null, "", "/admin/chatbot");
   }, [fb]);
 
+  const appReady = conn.fbAppFromEnv || (!!conn.appId.trim() && !!conn.appSecret);
+  const [showApp, setShowApp] = useState(!appReady);
+
   async function start() {
-    if (!conn.appId.trim()) { setNote({ ok: false, text: "Type your App ID first." }); return; }
-    if (!conn.appSecret && !secret.trim()) { setNote({ ok: false, text: "Paste your App secret first." }); return; }
+    if (!conn.fbAppFromEnv) {
+      if (!conn.appId.trim()) { setShowApp(true); setNote({ ok: false, text: "Your Facebook app isn't set up yet — see below." }); return; }
+      if (!conn.appSecret && !secret.trim()) { setShowApp(true); setNote({ ok: false, text: "Your Facebook app isn't set up yet — see below." }); return; }
+    }
     setBusy("start");
-    if (!(await saveFirst())) { setBusy(null); return; }
+    if (!conn.fbAppFromEnv && !(await saveFirst())) { setBusy(null); return; }
     window.location.href = "/admin/chatbot/facebook";
   }
 
@@ -552,15 +557,6 @@ function FacebookLogin({ conn, set, fb, secret, setSecret, saveFirst }: {
         </div>
       ) : (
         <div className="grid gap-3">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <label htmlFor="fb-appid" className="block text-xs font-medium dc-muted mb-1">App ID</label>
-              <input id="fb-appid" inputMode="numeric" value={conn.appId} onChange={(e) => set({ appId: e.target.value })} className="dc-input font-mono" placeholder="e.g. 1234567890123456" />
-              <p className="mt-1 text-[11px] dc-muted">App settings → Basic → App ID.</p>
-            </div>
-            <Secret id="fb-secret" label="App secret" saved={conn.appSecret} value={secret} onChange={setSecret}
-              hint="App settings → Basic → App secret (press Show)." />
-          </div>
           <button type="button" onClick={start} disabled={!!busy}
             className="inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 font-semibold text-white disabled:opacity-60 sm:w-fit"
             style={{ background: "#1877F2" }}>
@@ -569,6 +565,28 @@ function FacebookLogin({ conn, set, fb, secret, setSecret, saveFirst }: {
           </button>
         </div>
       )}
+
+      {!conn.fbAppFromEnv && (showApp ? (
+        <div className="mt-4 rounded-xl p-3 text-xs" style={{ border: "1px solid var(--a-border)" }}>
+          <p className="font-semibold text-sm mb-1">Your Facebook app (one time only)</p>
+          <p className="dc-muted mb-3">
+            Facebook only lets a website log in to Pages through your own Facebook app, so the site needs that app&apos;s ID and secret once.
+            The App ID is already filled in (DreamComfort Chat). Easiest: add the secret in <b>Vercel → your project → Settings → Environment Variables</b> as <code>FACEBOOK_APP_SECRET</code>, then redeploy —
+            after that this screen shows only the Facebook button. Or paste it here:
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label htmlFor="fb-appid" className="block text-xs font-medium dc-muted mb-1">App ID</label>
+              <input id="fb-appid" inputMode="numeric" value={conn.appId} onChange={(e) => set({ appId: e.target.value })} className="dc-input font-mono" placeholder="e.g. 1234567890123456" />
+              <p className="mt-1 text-[11px] dc-muted">developers.facebook.com → your app → App settings → Basic.</p>
+            </div>
+            <Secret id="fb-secret" label="App secret" saved={conn.appSecret} value={secret} onChange={setSecret}
+              hint="Same page → App secret (press Show). Never shown again after saving." />
+          </div>
+        </div>
+      ) : (
+        <button type="button" onClick={() => setShowApp(true)} className="mt-3 text-xs underline dc-muted">Facebook app settings</button>
+      ))}
 
       <details className="mt-3 text-xs dc-muted">
         <summary className="cursor-pointer">One-time Facebook app setting for this button</summary>
@@ -691,7 +709,8 @@ function Connect({ conn, setConn, fb }: { conn: Connection; setConn: (c: Connect
         <ol className="list-decimal space-y-1.5 pl-5 dc-muted">
           <li>developers.facebook.com → My Apps → your app (or Create app → type "Business"). Add the <b>Messenger</b> and <b>Facebook Login</b> products.</li>
           <li>Facebook Login → Settings → add the redirect URI shown under "One-time Facebook app setting" above.</li>
-          <li>Type the <b>App ID</b> and <b>App secret</b> above → <b>Continue with Facebook</b> → allow everything → pick your Page. The bot subscribes the Page and registers the webhook by itself.</li>
+          <li>Put the app&apos;s secret in Vercel (<code>FACEBOOK_APP_SECRET</code>) once — or under "Facebook app settings" above.</li>
+          <li><b>Continue with Facebook</b> → allow everything → pick your Page. The bot subscribes the Page and registers the webhook by itself.</li>
           <li>Press <b>Test connection</b>, then message your Page from another account.</li>
         </ol>
         <p className="mt-2 dc-muted">Do this from your live site (www.dreamcomfortbd.com), not localhost — Facebook can't send messages to your computer. While the Facebook app is in Development mode, only people with a role on the app get bot replies; switch it to Live (pages_messaging approved) for all customers.</p>

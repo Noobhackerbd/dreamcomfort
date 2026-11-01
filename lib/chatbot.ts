@@ -112,6 +112,25 @@ export async function getChatbotSettings(): Promise<ChatbotSettings> {
   }
 }
 
+/**
+ * The Facebook app's ID and secret. Set once in Vercel (FACEBOOK_APP_ID,
+ * FACEBOOK_APP_SECRET) and the admin screen shows only "Continue with Facebook";
+ * values typed in the admin screen are used if there are no environment variables.
+ */
+// DreamComfort's own Facebook app ("DreamComfort Chat", Messenger use case) and its
+// Facebook Login for Business configuration. Both are public values, not secrets.
+const DEFAULT_FB_APP_ID = "1664840661809947";
+const DEFAULT_FB_CONFIG_ID = "1807175923662419";
+
+export function fbApp(s: ChatbotSettings): { appId: string; appSecret: string; configId: string; fromEnv: boolean } {
+  const env = (k: string) => (process.env[k] || "").trim();
+  const appId = env("FACEBOOK_APP_ID") || s.appId || DEFAULT_FB_APP_ID;
+  const appSecret = env("FACEBOOK_APP_SECRET") || s.appSecret;
+  const configId =
+    env("FACEBOOK_LOGIN_CONFIG_ID") || s.fbConfigId || (appId === DEFAULT_FB_APP_ID ? DEFAULT_FB_CONFIG_ID : "");
+  return { appId, appSecret, configId, fromEnv: !!env("FACEBOOK_APP_SECRET") };
+}
+
 export async function saveChatbotSettings(s: ChatbotSettings): Promise<void> {
   await saveSettingQuiet("chatbot", s);
 }
@@ -154,7 +173,7 @@ export function buildSystemPrompt(s: ChatbotSettings): { rules: string; knowledg
   const rules = [
     `তুমি "${s.botName}"-এর Facebook Messenger সহকারী। গ্রাহকের সাথে ভদ্র, উষ্ণ, সংক্ষিপ্ত বাংলায় কথা বলো।`,
     "Rules:",
-    "- Reply in the customer's language: Bangla script by default; if they write Banglish (Bangla in English letters) or English, reply the same way.",
+    "- Always reply in Bangla (Bangla script), even when the customer writes in English or Banglish (Bangla in English letters). Product names, prices and numbers may stay as written in PRODUCTS.",
     "- Keep it short: 1–4 short lines. Plain text only — no markdown, no ** or #. Emoji at most one.",
     "- Use ONLY facts from STORE INFO, PRODUCTS and EXAMPLE REPLIES below. Never invent a price, discount, offer, stock level, delivery date, size or policy.",
     "- If you don't know something, say a team member will confirm shortly, and ask for their mobile number.",

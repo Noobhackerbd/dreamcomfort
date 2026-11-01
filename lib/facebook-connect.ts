@@ -13,7 +13,7 @@
 import "server-only";
 import { randomBytes } from "crypto";
 import { getServerSupabase } from "@/lib/supabase/server";
-import { getChatbotSettings, saveChatbotSettings, saveSettingQuiet, type ChatbotSettings } from "@/lib/chatbot";
+import { getChatbotSettings, saveChatbotSettings, saveSettingQuiet, fbApp, type ChatbotSettings } from "@/lib/chatbot";
 
 export const GRAPH_VERSION = "v23.0";
 const GRAPH = `https://graph.facebook.com/${GRAPH_VERSION}`;
@@ -60,14 +60,15 @@ type Pending = { at: number; user: string; pages: FbPage[] };
 
 /** Login code → long-lived user token → the Pages it manages. */
 export async function pagesFromCode(s: ChatbotSettings, code: string, redirectUri: string) {
+  const app = fbApp(s);
   const short = await graph("/oauth/access_token", {
-    query: { client_id: s.appId, client_secret: s.appSecret, redirect_uri: redirectUri, code },
+    query: { client_id: app.appId, client_secret: app.appSecret, redirect_uri: redirectUri, code },
   });
   const long = await graph("/oauth/access_token", {
     query: {
       grant_type: "fb_exchange_token",
-      client_id: s.appId,
-      client_secret: s.appSecret,
+      client_id: app.appId,
+      client_secret: app.appSecret,
       fb_exchange_token: short.access_token,
     },
   });
@@ -140,14 +141,15 @@ export async function connectPage(page: FbPage, connectedBy: string, origin: str
     warnings.push("You are on a local address, so the webhook was not registered. Connect again from https://www.dreamcomfortbd.com/admin/chatbot.");
   } else {
     try {
-      await graph(`/${encodeURIComponent(s.appId)}/subscriptions`, {
+      const app = fbApp(s);
+      await graph(`/${encodeURIComponent(app.appId)}/subscriptions`, {
         method: "POST",
         query: {
           object: "page",
           callback_url: callbackUrl,
           fields: WEBHOOK_FIELDS,
           verify_token: verifyToken,
-          access_token: `${s.appId}|${s.appSecret}`,
+          access_token: `${app.appId}|${app.appSecret}`,
         },
       });
     } catch (e: any) {

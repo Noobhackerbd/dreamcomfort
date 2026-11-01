@@ -3,7 +3,7 @@
 import { requireAdmin } from "@/lib/admin-auth";
 import { getServerSupabase } from "@/lib/supabase/server";
 import {
-  getChatbotSettings, saveChatbotSettings, aiReply, getStoreProductsForTraining,
+  getChatbotSettings, saveChatbotSettings, fbApp, aiReply, getStoreProductsForTraining,
   CHATBOT_MODEL_DEFAULT, type ChatbotProduct, type ChatbotReplyExample, type ChatTurn, type ChatImage,
 } from "@/lib/chatbot";
 import { sendText, checkPageToken, fetchPhoto } from "@/lib/messenger";
@@ -23,7 +23,8 @@ export async function loadChatbotAdmin() {
       appSecret: mask(s.appSecret),
       anthropicKey: mask(s.anthropicKey),
       verifyToken: s.verifyToken,
-      appId: s.appId,
+      appId: fbApp(s).appId,
+      fbAppFromEnv: fbApp(s).fromEnv,
       fbConfigId: s.fbConfigId,
       page: s.pageId ? { id: s.pageId, name: s.pageName, by: s.connectedBy, at: s.connectedAt } : null,
       model: s.model || CHATBOT_MODEL_DEFAULT,
@@ -165,7 +166,7 @@ export async function testConnection() {
     ai: ai.ok
       ? { ok: true, detail: `AI answered (${ai.model}) — cost $${(ai.costUsd ?? 0).toFixed(6)}`, reply: ai.reply }
       : { ok: false, detail: ai.error || "Failed" },
-    appSecret: !!s.appSecret,
+    appSecret: !!fbApp(s).appSecret,
     verifyToken: !!s.verifyToken,
   };
 }
