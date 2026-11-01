@@ -10,8 +10,9 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { getServerSupabase } from "@/lib/supabase/server";
-import { getChatbotSettings, aiReply, type ChatTurn } from "@/lib/chatbot";
-import { verifySignature, sendText, sendTyping, getProfile } from "@/lib/messenger";
+import { getChatbotSettings, aiReply, type ChatTurn, type ChatImage } from "@/lib/chatbot";
+import { verifySignature, sendText, sendTyping, getProfile, fetchPhoto } from "@/lib/messenger";
+import { PHOTO_LABEL, withPhotos, splitPhotos } from "@/lib/chat-media";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -64,11 +65,18 @@ async function handleEvent(ev: any, s: Awaited<ReturnType<typeof getChatbotSetti
   const psid: string | undefined = isEcho ? ev.recipient?.id : ev.sender?.id;
   if (!psid) return;
 
-  const text: string =
+  // Photos (not stickers — the 👍 button is a sticker too) can be read by the AI.
+  const attachments: any[] = Array.isArray(msg?.attachments) ? msg.attachments : [];
+  const photoUrls: string[] = attachments
+    .filter((a) => a?.type === "image" && !a?.payload?.sticker_id && typeof a?.payload?.url === "string")
+    .map((a) => a.payload.url as string)
+    .slice(0, 3);
+  const baseText: string =
     (msg?.text as string) ||
     (ev.postback?.title as string) ||
-    (msg?.attachments?.length ? "📎 " + (msg.attachments[0]?.type === "image" ? "ছবি পাঠিয়েছেন" : "ফাইল পাঠিয়েছেন") : "");
-  if (!text) return;
+    (photoUrls.length ? PHOTO_LABEL : attachments.length ? "📎 " + (attachments[0]?.payload?.sticker_id ? "স্টিকার" : "ফাইল পাঠিয়েছেন") : "");
+  if (!baseText) return;
+  const text = withPhotos(baseText, photoUrls);
   const mid: string | null = msg?.mid || ev.postback?.mid || null;
 
   const conv = await getOrCreateConversation(psid, s.pageAccessToken);
@@ -99,15 +107,16 @@ async function handleEvent(ev: any, s: Awaited<ReturnType<typeof getChatbotSetti
 
   const now = new Date().toISOString();
   await db.from("chat_conversations").update({
-    last_message: text.slice(0, 200),
+    last_message: baseText.slice(0, 200),
     last_message_at: now,
     last_customer_at: now,
     unread: (conv.unread ?? 0) + 1,
   }).eq("id", conv.id);
 
-  // Attachments (photos, stickers) wait for a human — the AI can't see them.
+  // Stickers, videos, voice and files wait for a human. Photos go to the AI (if on).
   const isPlainText = !!msg?.text || !!ev.postback;
-  if (!s.autoReply || !conv.ai_enabled || !isPlainText) return;
+  const aiCanRead = isPlainText || (photoUrls.length > 0 && s.photoMatch !== false);
+  if (!s.autoReply || !conv.ai_enabled || !aiCanRead) return;
 
   void sendTyping(s.pageAccessToken, psid);
 
@@ -119,8 +128,19 @@ async function handleEvent(ev: any, s: Awaited<ReturnType<typeof getChatbotSetti
     .limit(12);
   const history: ChatTurn[] = (rows ?? []).reverse().map((r: any) => ({
     role: r.direction === "in" ? "customer" : "shop",
-    text: r.text,
+    text: splitPhotos(r.text).text,
   }));
+
+  // Attach this message's photos to the newest customer turn.
+  if (photoUrls.length) {
+    const imgs = (await Promise.all(photoUrls.map(fetchPhoto))).filter(Boolean) as ChatImage[];
+    const lastCustomer = [...history].reverse().find((t) => t.role === "customer");
+    if (imgs.length && lastCustomer) lastCustomer.images = imgs;
+    if (!imgs.length && !isPlainText) {
+      console.error("[messenger] could not download the customer's photo");
+      return; // left for a human
+    }
+  }
 
   const ai = await aiReply(history, s);
   if (!ai.ok || !ai.reply) {

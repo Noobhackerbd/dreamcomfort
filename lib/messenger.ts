@@ -95,7 +95,7 @@ export async function getProfile(token: string, psid: string): Promise<{ name: s
 
 /** Is a check of the token itself OK? Used by the Connect tab's "Test connection". */
 export async function checkPageToken(token: string): Promise<{ ok: boolean; pageName?: string; error?: string }> {
-  if (!token) return { ok: false, error: "Paste a Page access token first." };
+  if (!token) return { ok: false, error: "Connect your Page first (AI Chat Bot → Connect → Continue with Facebook)." };
   try {
     const r = await fetch(`${GRAPH}/me?fields=id,name&access_token=${encodeURIComponent(token)}`, {
       signal: AbortSignal.timeout(8_000),
@@ -105,5 +105,29 @@ export async function checkPageToken(token: string): Promise<{ ok: boolean; page
     return { ok: true, pageName: j?.name };
   } catch (e: any) {
     return { ok: false, error: e?.message || "Could not reach Facebook." };
+  }
+}
+
+const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+
+/**
+ * Download a photo the customer sent, for the AI to look at. Only Facebook's own media
+ * hosts are fetched (the link comes from a signed webhook, but there is no reason to
+ * fetch anything else).
+ */
+export async function fetchPhoto(url: string): Promise<{ mediaType: string; data: string } | null> {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== "https:" || !/(^|\.)(fbcdn\.net|fbsbx\.com|facebook\.com)$/.test(u.hostname)) return null;
+    const r = await fetch(u, { signal: AbortSignal.timeout(10_000), cache: "no-store" });
+    if (!r.ok) return null;
+    const type = (r.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+    if (!PHOTO_TYPES.includes(type)) return null;
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (!buf.length || buf.length > PHOTO_MAX_BYTES) return null;
+    return { mediaType: type, data: buf.toString("base64") };
+  } catch {
+    return null;
   }
 }

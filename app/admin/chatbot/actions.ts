@@ -4,9 +4,12 @@ import { requireAdmin } from "@/lib/admin-auth";
 import { getServerSupabase } from "@/lib/supabase/server";
 import {
   getChatbotSettings, saveChatbotSettings, aiReply, getStoreProductsForTraining,
-  CHATBOT_MODEL_DEFAULT, type ChatbotProduct, type ChatbotReplyExample, type ChatTurn,
+  CHATBOT_MODEL_DEFAULT, type ChatbotProduct, type ChatbotReplyExample, type ChatTurn, type ChatImage,
 } from "@/lib/chatbot";
-import { sendText, checkPageToken } from "@/lib/messenger";
+import { sendText, checkPageToken, fetchPhoto } from "@/lib/messenger";
+import { splitPhotos } from "@/lib/chat-media";
+import { headers } from "next/headers";
+import { readPending, clearPending, connectPage, disconnectPage } from "@/lib/facebook-connect";
 
 const mask = (v: string) => (v ? "••••" + v.slice(-4) : "");
 
@@ -20,9 +23,13 @@ export async function loadChatbotAdmin() {
       appSecret: mask(s.appSecret),
       anthropicKey: mask(s.anthropicKey),
       verifyToken: s.verifyToken,
+      appId: s.appId,
+      fbConfigId: s.fbConfigId,
+      page: s.pageId ? { id: s.pageId, name: s.pageName, by: s.connectedBy, at: s.connectedAt } : null,
       model: s.model || CHATBOT_MODEL_DEFAULT,
       autoReply: s.autoReply,
       pauseAiOnManual: s.pauseAiOnManual,
+      photoMatch: s.photoMatch !== false,
       maxReplyTokens: s.maxReplyTokens,
       usdToBdt: s.usdToBdt,
     },
@@ -42,7 +49,10 @@ export async function saveTraining(input: {
       botName: clean(input.botName, 80).trim() || s.botName,
       storeInfo: clean(input.storeInfo, 6000),
       products: (input.products || [])
-        .map((p) => ({ name: clean(p.name, 200), price: clean(p.price, 120), details: clean(p.details, 1200) }))
+        .map((p) => ({
+          name: clean(p.name, 200), price: clean(p.price, 120), details: clean(p.details, 1200),
+          image: /^https:\/\//.test(String(p.image || "")) ? clean(p.image, 600) : "",
+        }))
         .filter((p) => p.name.trim())
         .slice(0, 150),
       examples: (input.examples || [])
@@ -62,7 +72,7 @@ export async function saveTraining(input: {
  */
 export async function saveConnection(input: {
   pageAccessToken?: string; appSecret?: string; anthropicKey?: string; verifyToken: string;
-  model: string; autoReply: boolean; pauseAiOnManual: boolean; maxReplyTokens: number; usdToBdt: number;
+  appId?: string; fbConfigId?: string; model: string; autoReply: boolean; pauseAiOnManual: boolean; photoMatch?: boolean; maxReplyTokens: number; usdToBdt: number;
   clear?: ("pageAccessToken" | "appSecret" | "anthropicKey")[];
 }) {
   await requireAdmin();
@@ -74,9 +84,15 @@ export async function saveConnection(input: {
     if (input.clear?.includes(k)) next[k] = "";
   }
   next.verifyToken = (input.verifyToken || "").trim().slice(0, 120);
+  if (input.appId !== undefined) next.appId = String(input.appId).replace(/\D/g, "").slice(0, 30);
+  if (input.fbConfigId !== undefined) next.fbConfigId = String(input.fbConfigId).replace(/\D/g, "").slice(0, 30);
+  // A token pasted by hand replaces one connected with Facebook login.
+  if ((input.pageAccessToken || "").trim()) { next.pageId = ""; next.pageName = ""; next.connectedBy = ""; next.connectedAt = ""; }
+  if (input.clear?.includes("pageAccessToken")) { next.pageId = ""; next.pageName = ""; }
   next.model = (input.model || CHATBOT_MODEL_DEFAULT).trim();
   next.autoReply = !!input.autoReply;
   next.pauseAiOnManual = !!input.pauseAiOnManual;
+  if (input.photoMatch !== undefined) next.photoMatch = !!input.photoMatch;
   next.maxReplyTokens = Math.min(Math.max(Math.round(Number(input.maxReplyTokens) || 350), 80), 1000);
   next.usdToBdt = Math.max(1, Number(input.usdToBdt) || 124);
   try {
@@ -84,6 +100,58 @@ export async function saveConnection(input: {
     return { ok: true };
   } catch (e: any) {
     return { ok: false, error: e?.message || "Save failed." };
+  }
+}
+
+// ------------------------------------------------------ Continue with Facebook --
+
+/** After Facebook login with several Pages: the list to choose from (no tokens). */
+export async function listPendingPages() {
+  await requireAdmin();
+  const p = await readPending();
+  if (!p) return { ok: false, error: "The Facebook login expired. Press Continue with Facebook again.", pages: [] as any[] };
+  return {
+    ok: true,
+    user: p.user,
+    pages: p.pages.map((x) => ({ id: x.id, name: x.name, picture: x.picture, canMessage: x.canMessage })),
+  };
+}
+
+function siteOrigin() {
+  const h = headers();
+  const origin = h.get("origin");
+  if (origin) return origin;
+  const host = h.get("x-forwarded-host") || h.get("host") || "";
+  const proto = h.get("x-forwarded-proto") || (host.startsWith("localhost") ? "http" : "https");
+  return `${proto}://${host}`;
+}
+
+export async function choosePage(pageId: string) {
+  await requireAdmin();
+  const p = await readPending();
+  const page = p?.pages.find((x) => x.id === pageId);
+  if (!p || !page) return { ok: false, error: "The Facebook login expired. Press Continue with Facebook again." };
+  try {
+    const { warnings } = await connectPage(page, p.user, siteOrigin());
+    await clearPending();
+    const s = await getChatbotSettings();
+    return {
+      ok: true, warnings,
+      page: { id: s.pageId, name: s.pageName, by: s.connectedBy, at: s.connectedAt },
+      verifyToken: s.verifyToken, pageAccessToken: mask(s.pageAccessToken),
+    };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || "Could not connect the Page." };
+  }
+}
+
+export async function disconnectFacebook() {
+  await requireAdmin();
+  try {
+    await disconnectPage();
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || "Could not disconnect." };
   }
 }
 
@@ -118,7 +186,15 @@ export async function testChat(history: ChatTurn[], training?: {
   await requireAdmin();
   const s = await getChatbotSettings();
   const merged = training ? { ...s, ...training } : s;
-  const r = await aiReply(history.slice(-12), merged);
+  const OK_TYPES = ["image/jpeg", "image/png", "image/webp"];
+  const clean: ChatTurn[] = history.slice(-12).map((t) => ({
+    role: t.role === "shop" ? "shop" : "customer",
+    text: String(t.text || "").slice(0, 2000),
+    images: (t.images ?? [])
+      .filter((i) => OK_TYPES.includes(i?.mediaType) && typeof i?.data === "string" && i.data.length < 1_500_000)
+      .slice(0, 3),
+  }));
+  const r = await aiReply(clean, merged);
   return { ...r, usdToBdt: s.usdToBdt };
 }
 
@@ -203,8 +279,16 @@ export async function suggestReply(id: string) {
     .order("created_at", { ascending: false })
     .limit(12);
   const history: ChatTurn[] = (rows ?? []).reverse().map((r: any) => ({
-    role: r.direction === "in" ? "customer" : "shop", text: r.text,
+    role: r.direction === "in" ? "customer" : "shop", text: splitPhotos(r.text).text,
   }));
+  // The newest customer photos, so the draft can name the product.
+  const lastIn = (rows ?? []).find((r: any) => r.direction === "in");
+  const urls = lastIn ? splitPhotos(lastIn.text).photos : [];
+  if (urls.length) {
+    const imgs = (await Promise.all(urls.slice(0, 3).map(fetchPhoto))).filter(Boolean) as ChatImage[];
+    const lastCustomer = [...history].reverse().find((t) => t.role === "customer");
+    if (imgs.length && lastCustomer) lastCustomer.images = imgs;
+  }
   // The draft must answer the customer; if the last word was ours, add a nudge.
   if (!history.length || history[history.length - 1].role !== "customer") {
     history.push({ role: "customer", text: "(follow up with the customer politely)" });
