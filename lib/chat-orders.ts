@@ -1,10 +1,10 @@
 // lib/chat-orders.ts — turn a confirmed Messenger chat into a real order (Admin → Orders).
 //
 // When the customer has given name, address and phone, the AI ends its reply with
-//   [[CONFIRM {"name":"…","phone":"01…","address":"…","area":"inside|outside","items":[{"n":1,"qty":1}]}]]
-// "n" is the product's # in the bot's PRODUCTS list. Prices come from the store's product
-// (matched by its page link or name), never from the AI. Delivery charge comes from
-// Saved replies → Order confirmed.
+//   [[CONFIRM {"name":"…","phone":"01…","address":"…","area":"inside|outside","color":"Pink","qty":1}]]
+// The order line is the product name + price set in Saved replies → Order confirmed
+// (plus the colour the customer chose) — never a price from the AI, and not linked to a
+// store product, so the order list shows its placeholder picture.
 import "server-only";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { namedProducts, type ChatbotSettings } from "@/lib/chatbot";
@@ -15,7 +15,8 @@ export interface ChatOrderDetails {
   phone: string;
   address: string;
   area: "inside" | "outside";
-  items: { n: number; qty: number }[];
+  color: string;
+  qty: number;
 }
 
 const bnDigits = (v: string) => v.replace(/[০-৯]/g, (ch) => String("০১২৩৪৫৬৭৮৯".indexOf(ch)));
@@ -39,45 +40,28 @@ export function parseConfirmDetails(json: string | undefined | null): ChatOrderD
   const phone = bdMobile(String(j?.phone || ""));
   if (!name || !address || !phone) return null;
   const area = String(j?.area || "").toLowerCase().startsWith("in") ? "inside" : "outside";
-  const items = (Array.isArray(j?.items) ? j.items : [])
-    .map((i: any) => ({ n: Math.floor(Number(i?.n)), qty: Math.min(Math.max(Math.floor(Number(i?.qty) || 1), 1), 20) }))
-    .filter((i: any) => i.n >= 1)
-    .slice(0, 10);
-  return { name, phone, address, area, items };
+  const color = String(j?.color || "").trim().slice(0, 60);
+  const qty = Math.min(Math.max(Math.floor(Number(j?.qty) || 1), 1), 20);
+  return { name, phone, address, area, color, qty };
 }
 
 const priceNumber = (v: string) => Number(bnDigits(String(v || "")).replace(/,/g, "").match(/\d+(\.\d+)?/)?.[0] || 0);
 
 interface Line { product_id: string | null; product_name: string; unit_price: number; quantity: number; line_total: number }
 
-/** Lines + totals for the order, priced from the store. */
+/** The order line + totals: product name and price from Saved replies → Order confirmed. */
 export async function priceChatOrder(s: ChatbotSettings, d: ChatOrderDetails) {
-  const list = namedProducts(s);
-  const db = getServerSupabase();
-  const wanted = d.items.length ? d.items : list.length === 1 ? [{ n: 1, qty: 1 }] : [];
-  const lines: Line[] = [];
-  for (const it of wanted) {
-    const p = list[it.n - 1];
-    if (!p) continue;
-    let store: any = null;
-    const slug = (p.url || "").match(/\/product\/([^/?#]+)/)?.[1];
-    if (slug) {
-      ({ data: store } = await db.from("products").select("id, name_bn, name_en, price").eq("slug", decodeURIComponent(slug)).maybeSingle());
-    }
-    if (!store) {
-      ({ data: store } = await db.from("products").select("id, name_bn, name_en, price").eq("name_bn", p.name.trim()).limit(1).maybeSingle());
-    }
-    const unit = store ? Number(store.price) : priceNumber(p.price);
-    lines.push({
-      product_id: store?.id ?? null,
-      product_name: (store?.name_bn || store?.name_en || p.name).trim(),
-      unit_price: unit,
-      quantity: it.qty,
-      line_total: unit * it.qty,
-    });
-  }
-  const subtotal = lines.reduce((a, l) => a + l.line_total, 0);
   const cr = s.confirmReply;
+  const base = (cr.productName || namedProducts(s)[0]?.name || "Messenger order").trim();
+  const unit = Math.max(0, Number(cr.productPrice) || priceNumber(namedProducts(s)[0]?.price || ""));
+  const lines: Line[] = [{
+    product_id: null,
+    product_name: d.color ? `${base} (${d.color})` : base,
+    unit_price: unit,
+    quantity: d.qty,
+    line_total: unit * d.qty,
+  }];
+  const subtotal = unit * d.qty;
   const shipping = Math.max(0, Number(d.area === "inside" ? cr.shippingInside : cr.shippingOutside) || 0);
   return { lines, subtotal, shipping, total: subtotal + shipping };
 }
@@ -97,7 +81,7 @@ export async function createChatOrder(s: ChatbotSettings, d: ChatOrderDetails, c
   if (recent?.[0]) return { ok: true as const, duplicate: true, orderNumber: recent[0].order_number as string, total: Number(recent[0].total) };
 
   const priced = await priceChatOrder(s, d);
-  if (!priced.lines.length) return { ok: false as const, error: "Couldn't tell which product was ordered." };
+  if (!priced.subtotal) return { ok: false as const, error: "Set the chat order price in Saved replies → Order confirmed." };
 
   const row: Record<string, unknown> = {
     status: "pending",

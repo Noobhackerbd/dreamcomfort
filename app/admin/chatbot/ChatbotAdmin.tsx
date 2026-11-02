@@ -12,15 +12,16 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/ssr-browser";
 
 type Product = { name: string; price: string; details: string; image?: string; url?: string };
 type Example = { question: string; answer: string };
-type PriceReply = { enabled: boolean; text: string; image: string };
+type PriceReply = { enabled: boolean; photoMode: "products" | "picture"; text: string; image: string };
 type OrderReply = { enabled: boolean; text: string };
 type NoMatchReply = { enabled: boolean; text: string };
 type GreetReply = { enabled: boolean; text: string };
 type MatchReply = { enabled: boolean; text: string };
-type ConfirmReply = { enabled: boolean; text: string; createOrder: boolean; shippingInside: number; shippingOutside: number };
+type ConfirmReply = { enabled: boolean; text: string; createOrder: boolean; productName: string; productPrice: number; shippingInside: number; shippingOutside: number };
+type ItemsReply = { enabled: boolean; text: string };
 type Training = {
   botName: string; storeInfo: string; products: Product[]; examples: Example[];
-  priceReply: PriceReply; orderReply: OrderReply; noMatchReply: NoMatchReply; greetReply: GreetReply; matchReply: MatchReply; confirmReply: ConfirmReply;
+  priceReply: PriceReply; orderReply: OrderReply; noMatchReply: NoMatchReply; greetReply: GreetReply; matchReply: MatchReply; confirmReply: ConfirmReply; itemsReply: ItemsReply;
 };
 type Connection = {
   pageAccessToken: string; appSecret: string; anthropicKey: string; verifyToken: string;
@@ -554,6 +555,14 @@ function SavedReplies({ training, setTraining }: { training: Training; setTraini
       />
 
       <SavedReplyCard
+        title="সেটে কী কী থাকবে (What's included)"
+        hint="কেউ “কি কি থাকবে”, “কয় পিস”, “set e ki ache” জিজ্ঞেস করলে এটা যায়।"
+        value={t.itemsReply}
+        onChange={(itemsReply) => set({ itemsReply })}
+        rows={10}
+      />
+
+      <SavedReplyCard
         title="অর্ডার কনফার্মেশন (Order confirmed)"
         hint="কাস্টমার নাম, সম্পূর্ণ ঠিকানা আর মোবাইল নম্বর দিলে এটা যায়। কিছু বাকি থাকলে AI শুধু সেটুকু চায়।"
         value={t.confirmReply}
@@ -565,6 +574,14 @@ function SavedReplies({ training, setTraining }: { training: Training; setTraini
             <input type="checkbox" checked={t.confirmReply.createOrder !== false} onChange={(e) => set({ confirmReply: { ...t.confirmReply, createOrder: e.target.checked } })} />
             অর্ডারটা Admin → Orders-এ যোগ করুন (স্ট্যাটাস Pending, সোর্স Messenger)
           </label>
+          <div className="grid gap-2 sm:grid-cols-[1fr_140px]">
+            <label className="text-xs dc-muted">অর্ডারে পণ্যের নাম (কাস্টমারের বেছে নেওয়া কালার পাশে বসবে)
+              <input value={t.confirmReply.productName ?? ""} onChange={(e) => set({ confirmReply: { ...t.confirmReply, productName: e.target.value } })} className="dc-input mt-1" />
+            </label>
+            <label className="text-xs dc-muted">দাম (৳)
+              <input type="number" min={0} value={t.confirmReply.productPrice ?? 0} onChange={(e) => set({ confirmReply: { ...t.confirmReply, productPrice: Number(e.target.value) } })} className="dc-input mt-1" />
+            </label>
+          </div>
           <div className="grid gap-2 sm:grid-cols-2">
             <label className="text-xs dc-muted">ডেলিভারি চার্জ — ঢাকার ভিতরে (৳)
               <input type="number" min={0} value={t.confirmReply.shippingInside ?? 0} onChange={(e) => set({ confirmReply: { ...t.confirmReply, shippingInside: Number(e.target.value) } })} className="dc-input mt-1" />
@@ -573,7 +590,7 @@ function SavedReplies({ training, setTraining }: { training: Training; setTraini
               <input type="number" min={0} value={t.confirmReply.shippingOutside ?? 0} onChange={(e) => set({ confirmReply: { ...t.confirmReply, shippingOutside: Number(e.target.value) } })} className="dc-input mt-1" />
             </label>
           </div>
-          <p className="text-[11px] dc-muted">দাম নেওয়া হয় আপনার স্টোরের পণ্য থেকে। ফ্রি ডেলিভারি হলে ০ রাখুন। একই নম্বরে ৬ ঘণ্টার মধ্যে দ্বিতীয়বার অর্ডার তৈরি হয় না।</p>
+          <p className="text-[11px] dc-muted">অর্ডারে এই নাম আর দামই বসে (যেমন "…পিলো সেট (Pink)"), ছবির জায়গায় placeholder থাকে। ফ্রি ডেলিভারি হলে ০ রাখুন। একই নম্বরে ৬ ঘণ্টার মধ্যে দ্বিতীয়বার অর্ডার তৈরি হয় না।</p>
         </div>
       </SavedReplyCard>
 
@@ -692,8 +709,26 @@ function PriceReplyCard({ value, onChange, productPhotos }: { value: PriceReply;
       <p className="text-xs dc-muted mb-3">
         কেউ দাম জিজ্ঞেস করলে AI শুধু বুঝবে যে এটা দামের প্রশ্ন — তারপর বট এই ছবিটা আর নিচের লেখাটা হুবহু পাঠাবে। ~~লেখা~~ দিলে দাম কাটা দেখাবে।
       </p>
-      <div className="grid gap-3 sm:grid-cols-[220px_1fr]">
-        <div>
+      <div className="mb-3 grid gap-1.5 text-sm">
+        <label className="flex items-start gap-2">
+          <input type="radio" name="price-photo-mode" className="mt-1" checked={value.photoMode !== "picture"} onChange={() => set({ photoMode: "products" })} />
+          <span><b>প্রতিটা পণ্যের ছবি আলাদা</b>, একসাথে পাঠাবে ({unique.length}টা) — Messenger-এ গ্রিড আকারে দেখাবে, কাস্টমার যেকোনোটা খুলে দেখে বেছে নিতে পারবে।</span>
+        </label>
+        <label className="flex items-start gap-2">
+          <input type="radio" name="price-photo-mode" className="mt-1" checked={value.photoMode === "picture"} onChange={() => set({ photoMode: "picture" })} />
+          <span><b>একটা ছবি</b> — নিচের কোলাজ বা আপনার নিজের ছবি।</span>
+        </label>
+      </div>
+      {value.photoMode !== "picture" && unique.length > 0 && (
+        <div className="mb-3 grid max-w-md grid-cols-4 gap-1">
+          {unique.slice(0, 30).map((u) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img key={u} src={u} alt="" className="aspect-square w-full rounded-md object-cover" />
+          ))}
+        </div>
+      )}
+      <div className={"grid gap-3 " + (value.photoMode === "picture" ? "sm:grid-cols-[220px_1fr]" : "")}>
+        <div className={value.photoMode === "picture" ? "" : "hidden"}>
           {value.image ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={value.image} alt="Price picture" className="w-full rounded-xl object-cover" style={{ border: "1px solid var(--a-border)" }} />
@@ -1035,10 +1070,24 @@ function Connect({ conn, setConn, fb }: { conn: Connection; setConn: (c: Connect
   );
 }
 
+/** How Messenger shows several photos sent together: a grid, tap to open. */
+function PhotoGrid({ urls }: { urls: string[] }) {
+  return (
+    <div className={"my-1 grid max-w-[280px] gap-1 overflow-hidden rounded-xl " + (urls.length === 1 ? "grid-cols-1" : "grid-cols-2")}>
+      {urls.map((u) => (
+        <a key={u} href={u} target="_blank" rel="noreferrer">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={u} alt="" className="aspect-square w-full object-cover" />
+        </a>
+      ))}
+    </div>
+  );
+}
+
 /* ================================================================= TEST ==== */
 
 type TestCard = { name: string; price: string; details: string; image: string; url: string };
-type TestMsg = { role: "customer" | "shop"; text: string; note?: string; meta?: string; photo?: { mediaType: string; data: string }; cards?: TestCard[]; picture?: string; pictureAfter?: boolean };
+type TestMsg = { role: "customer" | "shop"; text: string; note?: string; meta?: string; photo?: { mediaType: string; data: string }; cards?: TestCard[]; picture?: string; pictures?: string[]; pictureAfter?: boolean };
 
 /** Shrink a photo in the browser (long edge 1024 px, JPEG) — small enough to send, plenty for the AI. */
 async function shrinkPhoto(file: File): Promise<{ mediaType: string; data: string }> {
@@ -1100,8 +1149,8 @@ function TestChat({ training }: { training: Training }) {
     const cached = u.cacheRead > 0 ? ` · ${u.cacheRead} cached` : u.cacheWrite > 0 ? ` · ${u.cacheWrite} written to cache` : "";
     setTotal((t) => ({ usd: t.usd + (r.costUsd ?? 0), rate: r.usdToBdt, n: t.n + 1 }));
     setMsgs([...next, {
-      role: "shop", text: r.reply!, note: (r as any).orderPreview || undefined, cards: r.cards, picture: r.priceImage || undefined, pictureAfter: !!(r as any).pictureAfter,
-      meta: `${u.input + u.cacheWrite + u.cacheRead} in${cached} · ${u.output} out · ${taka(r.costUsd ?? 0, r.usdToBdt)}`,
+      role: "shop", text: r.reply!, note: (r as any).orderPreview || undefined, cards: r.cards, picture: r.priceImage || undefined, pictures: (r as any).priceImages || undefined, pictureAfter: !!(r as any).pictureAfter,
+      meta: `${r.seen ? `👁 ${r.seen} · ` : ""}${u.input + u.cacheWrite + u.cacheRead} in${cached} · ${u.output} out · ${taka(r.costUsd ?? 0, r.usdToBdt)}`,
     }]);
   }
 
@@ -1121,6 +1170,7 @@ function TestChat({ training }: { training: Training }) {
           {msgs.length === 0 && <p className="text-sm dc-muted">Write like a customer would, tap a question below, or press 📷 Photo and send a product picture — the bot should say which product it is and its price. The last two questions try to trick the bot into a discount; it should politely refuse.</p>}
           {msgs.map((m, i) => (
             <div key={i} className={"flex flex-col " + (m.role === "shop" ? "items-start" : "items-end")}>
+              {m.pictures && m.pictures.length > 0 && !m.pictureAfter && <PhotoGrid urls={m.pictures} />}
               {m.picture && !m.pictureAfter && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={m.picture} alt="Price picture" className="mb-1 max-h-72 max-w-[260px] rounded-xl object-cover" />
@@ -1137,6 +1187,7 @@ function TestChat({ training }: { training: Training }) {
                   {m.text}
                 </div>
               )}
+              {m.pictures && m.pictures.length > 0 && m.pictureAfter && <PhotoGrid urls={m.pictures} />}
               {m.picture && m.pictureAfter && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={m.picture} alt="Similar product" className="mt-1 max-h-72 max-w-[260px] rounded-xl object-cover" />

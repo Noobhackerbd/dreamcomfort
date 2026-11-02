@@ -3,8 +3,8 @@
 import { requireAdmin } from "@/lib/admin-auth";
 import { getServerSupabase } from "@/lib/supabase/server";
 import {
-  getChatbotSettings, saveChatbotSettings, fbApp, aiReply, extractProductCards, extractPriceTag, extractOrderTag, extractNoMatchTag, extractGreetTag, extractMatchTag, extractConfirmTag, messengerText, personalize,
-  type PriceReply, type OrderReply, type NoMatchReply, type GreetReply, type MatchReply, type ConfirmReply, getStoreProductsForTraining,
+  getChatbotSettings, saveChatbotSettings, fbApp, aiReply, extractProductCards, extractPriceTag, extractOrderTag, extractNoMatchTag, extractGreetTag, extractMatchTag, extractConfirmTag, extractItemsTag, pricePhotos, messengerText, personalize,
+  type PriceReply, type OrderReply, type NoMatchReply, type GreetReply, type MatchReply, type ConfirmReply, type ItemsReply, getStoreProductsForTraining,
   CHATBOT_MODEL_DEFAULT, type ChatbotProduct, type ChatbotReplyExample, type ChatTurn, type ChatImage,
 } from "@/lib/chatbot";
 import { sendText, checkPageToken, fetchPhoto } from "@/lib/messenger";
@@ -37,12 +37,12 @@ export async function loadChatbotAdmin() {
       maxReplyTokens: s.maxReplyTokens,
       usdToBdt: s.usdToBdt,
     },
-    training: { botName: s.botName, storeInfo: s.storeInfo, products: s.products, examples: s.examples, priceReply: s.priceReply, orderReply: s.orderReply, noMatchReply: s.noMatchReply, greetReply: s.greetReply, matchReply: s.matchReply, confirmReply: s.confirmReply },
+    training: { botName: s.botName, storeInfo: s.storeInfo, products: s.products, examples: s.examples, priceReply: s.priceReply, orderReply: s.orderReply, noMatchReply: s.noMatchReply, greetReply: s.greetReply, matchReply: s.matchReply, confirmReply: s.confirmReply, itemsReply: s.itemsReply },
   };
 }
 
 export async function saveTraining(input: {
-  botName: string; storeInfo: string; products: ChatbotProduct[]; examples: ChatbotReplyExample[]; priceReply?: PriceReply; orderReply?: OrderReply; noMatchReply?: NoMatchReply; greetReply?: GreetReply; matchReply?: MatchReply; confirmReply?: ConfirmReply;
+  botName: string; storeInfo: string; products: ChatbotProduct[]; examples: ChatbotReplyExample[]; priceReply?: PriceReply; orderReply?: OrderReply; noMatchReply?: NoMatchReply; greetReply?: GreetReply; matchReply?: MatchReply; confirmReply?: ConfirmReply; itemsReply?: ItemsReply;
 }) {
   await requireAdmin();
   const s = await getChatbotSettings();
@@ -67,6 +67,7 @@ export async function saveTraining(input: {
       priceReply: input.priceReply
         ? {
             enabled: !!input.priceReply.enabled,
+            photoMode: input.priceReply.photoMode === "picture" ? "picture" : "products",
             text: clean(input.priceReply.text, 1900),
             image: /^https:\/\//.test(String(input.priceReply.image || "")) ? clean(input.priceReply.image, 600) : "",
           }
@@ -88,10 +89,15 @@ export async function saveTraining(input: {
             enabled: !!input.confirmReply.enabled,
             text: clean(input.confirmReply.text, 1900),
             createOrder: input.confirmReply.createOrder !== false,
+            productName: clean(input.confirmReply.productName, 200).trim(),
+            productPrice: Math.max(0, Number(input.confirmReply.productPrice) || 0),
             shippingInside: Math.max(0, Number(input.confirmReply.shippingInside) || 0),
             shippingOutside: Math.max(0, Number(input.confirmReply.shippingOutside) || 0),
           }
         : s.confirmReply,
+      itemsReply: input.itemsReply
+        ? { enabled: !!input.itemsReply.enabled, text: clean(input.itemsReply.text, 1900) }
+        : s.itemsReply,
     });
     return { ok: true };
   } catch (e: any) {
@@ -227,7 +233,7 @@ export async function importStoreProducts() {
 
 /** Try the bot without Facebook. Uses the training on screen, saved or not. */
 export async function testChat(history: ChatTurn[], training?: {
-  botName: string; storeInfo: string; products: ChatbotProduct[]; examples: ChatbotReplyExample[]; priceReply?: PriceReply; orderReply?: OrderReply; noMatchReply?: NoMatchReply; greetReply?: GreetReply; matchReply?: MatchReply; confirmReply?: ConfirmReply;
+  botName: string; storeInfo: string; products: ChatbotProduct[]; examples: ChatbotReplyExample[]; priceReply?: PriceReply; orderReply?: OrderReply; noMatchReply?: NoMatchReply; greetReply?: GreetReply; matchReply?: MatchReply; confirmReply?: ConfirmReply; itemsReply?: ItemsReply;
 }, customerName?: string) {
   await requireAdmin();
   const s = await getChatbotSettings();
@@ -245,8 +251,9 @@ export async function testChat(history: ChatTurn[], training?: {
   const gr = extractGreetTag(r.reply, merged);
   const mt = extractMatchTag(gr.text, merged);
   const cf = extractConfirmTag(mt.text, merged);
-  if (gr.greet || mt.match || cf.confirm) {
-    const saved = gr.greet ? merged.greetReply.text : mt.match ? merged.matchReply.text : merged.confirmReply.text;
+  const it = extractItemsTag(cf.text, merged);
+  if (gr.greet || mt.match || cf.confirm || it.items) {
+    const saved = gr.greet ? merged.greetReply.text : mt.match ? merged.matchReply.text : cf.confirm ? merged.confirmReply.text : merged.itemsReply.text;
     // Test only: show the order that WOULD be created — nothing is saved.
     let orderPreview = "";
     if (cf.confirm && merged.confirmReply.createOrder !== false) {
@@ -254,25 +261,25 @@ export async function testChat(history: ChatTurn[], training?: {
       if (!d) orderPreview = "⚠️ Order would NOT be created: name, address or a valid 01… number is missing.";
       else {
         const p = await priceChatOrder(merged, d);
-        orderPreview = p.lines.length
+        orderPreview = p.subtotal
           ? `🧾 Order that would be created (test — not saved):\n${d.name} · ${d.phone}\n${d.address} (${d.area === "inside" ? "ঢাকার ভিতরে" : "ঢাকার বাইরে"})\n` +
             p.lines.map((l) => `• ${l.product_name} × ${l.quantity} = ৳${l.line_total}`).join("\n") +
             `\nডেলিভারি ৳${p.shipping} · মোট ৳${p.total}`
-          : "⚠️ Order would NOT be created: couldn't tell which product.";
+          : "⚠️ Order would NOT be created: set the chat order price in Saved replies → Order confirmed.";
       }
     }
     return { ...r, reply: messengerText(personalize(saved, r.gender)), orderPreview, cards: [] as ReturnType<typeof extractProductCards>["cards"], priceImage: "", usdToBdt: s.usdToBdt };
   }
-  const nm = extractNoMatchTag(cf.text, merged);
+  const nm = extractNoMatchTag(it.text, merged);
   if (nm.noMatch) {
     return {
       ...r, reply: messengerText(personalize(merged.noMatchReply.text, r.gender)), cards: [] as ReturnType<typeof extractProductCards>["cards"],
-      priceImage: nm.similar?.image || merged.priceReply?.image || "", pictureAfter: true, usdToBdt: s.usdToBdt,
+      priceImage: "", priceImages: nm.similar ? [nm.similar.image] : pricePhotos(merged).map((p) => p.url), pictureAfter: true, usdToBdt: s.usdToBdt,
     };
   }
   const pt = extractPriceTag(nm.text, merged);
   if (pt.price) {
-    return { ...r, reply: messengerText(personalize(merged.priceReply.text, r.gender)), cards: [] as ReturnType<typeof extractProductCards>["cards"], priceImage: merged.priceReply.image, usdToBdt: s.usdToBdt };
+    return { ...r, reply: messengerText(personalize(merged.priceReply.text, r.gender)), cards: [] as ReturnType<typeof extractProductCards>["cards"], priceImage: "", priceImages: pricePhotos(merged).map((p) => p.url), usdToBdt: s.usdToBdt };
   }
   const ot = extractOrderTag(pt.text, merged);
   if (ot.order) {
@@ -385,10 +392,11 @@ export async function suggestReply(id: string) {
   const gr = extractGreetTag(r.reply!, s);
   const mt = extractMatchTag(gr.text, s);
   const cf = extractConfirmTag(mt.text, s);
-  const nm = extractNoMatchTag(cf.text, s);
+  const it = extractItemsTag(cf.text, s);
+  const nm = extractNoMatchTag(it.text, s);
   const pt = extractPriceTag(nm.text, s);
   const ot = extractOrderTag(pt.text, s);
   const g = r.gender;
-  const draft = gr.greet ? messengerText(personalize(s.greetReply.text, g)) : mt.match ? messengerText(personalize(s.matchReply.text, g)) : cf.confirm ? messengerText(personalize(s.confirmReply.text, g)) : nm.noMatch ? messengerText(personalize(s.noMatchReply.text, g)) : pt.price ? messengerText(personalize(s.priceReply.text, g)) : ot.order ? messengerText(personalize(s.orderReply.text, g)) : extractProductCards(ot.text, s).text;
+  const draft = gr.greet ? messengerText(personalize(s.greetReply.text, g)) : mt.match ? messengerText(personalize(s.matchReply.text, g)) : cf.confirm ? messengerText(personalize(s.confirmReply.text, g)) : it.items ? messengerText(personalize(s.itemsReply.text, g)) : nm.noMatch ? messengerText(personalize(s.noMatchReply.text, g)) : pt.price ? messengerText(personalize(s.priceReply.text, g)) : ot.order ? messengerText(personalize(s.orderReply.text, g)) : extractProductCards(ot.text, s).text;
   return { ok: true, draft, costUsd: r.costUsd };
 }

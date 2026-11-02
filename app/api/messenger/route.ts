@@ -11,10 +11,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getServerSupabase } from "@/lib/supabase/server";
 import {
-  getChatbotSettings, fbApp, aiReply, extractProductCards, extractPriceTag, extractOrderTag, extractNoMatchTag, extractGreetTag, extractMatchTag, extractConfirmTag, messengerText, personalize,
+  getChatbotSettings, fbApp, aiReply, extractProductCards, extractPriceTag, extractOrderTag, extractNoMatchTag, extractGreetTag, extractMatchTag, extractConfirmTag, extractItemsTag, pricePhotos, messengerText, personalize,
   type ChatTurn, type ChatImage,
 } from "@/lib/chatbot";
-import { verifySignature, sendText, sendTyping, getProfile, fetchPhoto, sendProductCards, cardsSummary, sendImage } from "@/lib/messenger";
+import { verifySignature, sendText, sendTyping, getProfile, fetchPhoto, sendProductCards, cardsSummary, sendImage, sendImages } from "@/lib/messenger";
 import { PHOTO_LABEL, withPhotos, splitPhotos } from "@/lib/chat-media";
 import { parseConfirmDetails, createChatOrder } from "@/lib/chat-orders";
 
@@ -155,6 +155,7 @@ async function handleEvent(ev: any, s: Awaited<ReturnType<typeof getChatbotSetti
   }
 
   const ai = await aiReply(history, s, conv.name);
+  if (ai.seen) console.log("[messenger] photo check:", ai.seen);
   if (!ai.ok || !ai.reply) {
     console.error("[messenger] AI reply failed:", ai.error);
     return; // leave it unanswered in the inbox for you, rather than send something wrong
@@ -170,8 +171,9 @@ async function handleEvent(ev: any, s: Awaited<ReturnType<typeof getChatbotSetti
   const gr = extractGreetTag(ai.reply, s);
   const mt = extractMatchTag(gr.text, s);
   const cf = extractConfirmTag(mt.text, s);
-  if (gr.greet || mt.match || cf.confirm) {
-    const saved = gr.greet ? s.greetReply.text : mt.match ? s.matchReply.text : s.confirmReply.text;
+  const it = extractItemsTag(cf.text, s);
+  if (gr.greet || mt.match || cf.confirm || it.items) {
+    const saved = gr.greet ? s.greetReply.text : mt.match ? s.matchReply.text : cf.confirm ? s.confirmReply.text : s.itemsReply.text;
     const hello = messengerText(personalize(saved, ai.gender));
     const sentHello = await sendText(s.pageAccessToken, psid, hello);
     if (!sentHello.ok) {
@@ -201,7 +203,7 @@ async function handleEvent(ev: any, s: Awaited<ReturnType<typeof getChatbotSetti
 
   // [[NOMATCH:n]] → saved "we don't have that one" message, then the similar product's photo
   // (or the price picture when nothing is similar).
-  const nm = extractNoMatchTag(cf.text, s);
+  const nm = extractNoMatchTag(it.text, s);
   if (nm.noMatch) {
     const body = messengerText(personalize(s.noMatchReply.text, ai.gender));
     const sentNm = await sendText(s.pageAccessToken, psid, body);
@@ -212,13 +214,13 @@ async function handleEvent(ev: any, s: Awaited<ReturnType<typeof getChatbotSetti
     await db.from("chat_messages").insert({
       conversation_id: conv.id, direction: "out", sender: "ai", text: body, mid: sentNm.mid ?? null, ...usage,
     });
-    const pic = nm.similar?.image || s.priceReply?.image || "";
-    if (pic) {
-      const shown = await sendImage(s.pageAccessToken, psid, pic);
+    const pics = nm.similar ? [{ url: nm.similar.image, name: nm.similar.name }] : pricePhotos(s);
+    if (pics.length) {
+      const shown = await sendImages(s.pageAccessToken, psid, pics.map((p) => p.url));
       if (shown.ok) {
         await db.from("chat_messages").insert({
           conversation_id: conv.id, direction: "out", sender: "ai",
-          text: withPhotos(nm.similar ? `🖼️ ${nm.similar.name}${nm.similar.price ? ` — ${nm.similar.price}` : ""}` : "🖼️ পণ্যের ছবি", [pic]),
+          text: withPhotos(nm.similar ? `🖼️ ${nm.similar.name}${nm.similar.price ? ` — ${nm.similar.price}` : ""}` : photoCaption(pics), pics.map((p) => p.url)),
           mid: shown.mid ?? null,
         });
       } else {
@@ -237,12 +239,13 @@ async function handleEvent(ev: any, s: Awaited<ReturnType<typeof getChatbotSetti
   if (priceTag.price) {
     const pr = s.priceReply;
     let costLogged = false;
-    if (pr.image) {
-      const pic = await sendImage(s.pageAccessToken, psid, pr.image);
+    const pics = pricePhotos(s);
+    if (pics.length) {
+      const pic = await sendImages(s.pageAccessToken, psid, pics.map((p) => p.url));
       if (pic.ok) {
         await db.from("chat_messages").insert({
           conversation_id: conv.id, direction: "out", sender: "ai",
-          text: withPhotos("🖼️ পণ্যের ছবি", [pr.image]), mid: pic.mid ?? null, ...usage,
+          text: withPhotos(photoCaption(pics), pics.map((p) => p.url)), mid: pic.mid ?? null, ...usage,
         });
         costLogged = true;
       } else {
@@ -316,6 +319,15 @@ async function handleEvent(ev: any, s: Awaited<ReturnType<typeof getChatbotSetti
     last_message: last.split("\n")[0].slice(0, 200),
     last_message_at: new Date().toISOString(),
   }).eq("id", conv.id);
+}
+
+/** What the inbox (and the AI's memory) says about photos we sent: numbered names, so
+ *  "the 3rd one" can be understood later. */
+function photoCaption(pics: { name: string }[]): string {
+  const named = pics.filter((p) => p.name);
+  return named.length
+    ? ["🖼️ পণ্যের ছবি পাঠানো হয়েছে:", ...named.map((p, i) => `${i + 1}. ${p.name}`)].join("\n")
+    : "🖼️ পণ্যের ছবি";
 }
 
 async function getOrCreateConversation(psid: string, token: string) {

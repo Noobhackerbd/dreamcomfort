@@ -38,6 +38,9 @@ export interface ChatbotProduct {
 /** The shop's own price message: one picture of all products + a fixed text. */
 export interface PriceReply {
   enabled: boolean;
+  /** "products": every product photo, sent together (Messenger shows them as a grid the
+   *  customer can tap through). "picture": the one picture below. */
+  photoMode: "products" | "picture";
   text: string;   // sent exactly as written (~~x~~ = strikethrough)
   image: string;  // one picture with all the products (made in Train → Price reply)
 }
@@ -48,11 +51,19 @@ export interface OrderReply {
   text: string;
 }
 
+/** Sent when a customer asks what is in the set. */
+export interface ItemsReply {
+  enabled: boolean;
+  text: string;
+}
+
 /** Sent when a customer has given everything needed for an order. */
 export interface ConfirmReply {
   enabled: boolean;
   text: string;
   createOrder: boolean;     // also add the order to Admin → Orders
+  productName: string;      // what the order line says (the colour the customer chose is added)
+  productPrice: number;     // price per set for chat orders (৳)
   shippingInside: number;   // delivery charge for chat orders (৳)
   shippingOutside: number;
 }
@@ -111,6 +122,7 @@ export interface ChatbotSettings {
   greetReply: GreetReply;
   matchReply: MatchReply;
   confirmReply: ConfirmReply;
+  itemsReply: ItemsReply;
 }
 
 export const DEFAULT_CHATBOT: ChatbotSettings = {
@@ -144,8 +156,14 @@ export const DEFAULT_CHATBOT: ChatbotSettings = {
   ].join("\n"),
   products: [],
   examples: [],
+  itemsReply: {
+    enabled: true,
+    text: "🌸 প্রিমিয়াম ডাবল লেয়ার প্রেগনেন্সি পিলো সেটে মোট ৬ পিস আইটেম থাকছে: ❤️\n1️⃣ ২টি অ্যাটাচড প্রেগনেন্সি পিলো\n2️⃣ ১টি মুন শেপ সাপোর্ট পিলো\n3️⃣ ১টি D-শেপ সাপোর্ট পিলো\n4️⃣ ১টি নেক পিলো\n5️⃣ ১টি আই মাস্ক\n✨ সব মিলিয়ে সম্পূর্ণ ৬ পিসের প্রিমিয়াম সেট।\n🏷️ অফার প্রাইস মাত্র ৯৫০ টাকা!\n🚚 সারা বাংলাদেশে ফ্রি হোম ডেলিভারি।",
+  },
   confirmReply: {
     enabled: true,
+    productName: "প্রিমিয়াম ডাবল লেয়ার প্রেগনেন্সি পিলো সেট",
+    productPrice: 950,
     createOrder: true,
     shippingInside: 0,
     shippingOutside: 0,
@@ -169,6 +187,7 @@ export const DEFAULT_CHATBOT: ChatbotSettings = {
   },
   priceReply: {
     enabled: true,
+    photoMode: "products",
     image: "",
     text: "🌸 প্রিমিয়াম ডাবল লেয়ার প্রেগনেন্সি পিলো সেট 💕\n\n🛍️ ৬ পিসের সম্পূর্ণ সেটের মূল্য:\n~~৳১,২০০ টাকা~~\n\n🔥 অফার প্রাইস মাত্র ৳৯৫০ টাকা!\n\n🚚 সারা বাংলাদেশে সম্পূর্ণ ফ্রি হোম ডেলিভারি।\n❤️ কোনো অগ্রিম পেমেন্ট লাগবে না। পণ্য হাতে পেয়ে মূল্য পরিশোধ করুন।",
   },
@@ -189,6 +208,7 @@ export async function getChatbotSettings(): Promise<ChatbotSettings> {
       greetReply: { ...DEFAULT_CHATBOT.greetReply, ...(v.greetReply ?? {}) },
       matchReply: { ...DEFAULT_CHATBOT.matchReply, ...(v.matchReply ?? {}) },
       confirmReply: { ...DEFAULT_CHATBOT.confirmReply, ...(v.confirmReply ?? {}) },
+      itemsReply: { ...DEFAULT_CHATBOT.itemsReply, ...(v.itemsReply ?? {}) },
     };
   } catch {
     return DEFAULT_CHATBOT;
@@ -252,8 +272,39 @@ export async function getStoreProductsForTraining(): Promise<ChatbotProduct[]> {
   });
 }
 
+/** All product photos (unique, max 30 — Messenger's limit for one message). */
+export function productPhotoList(s: ChatbotSettings): { url: string; name: string }[] {
+  const seen = new Set<string>();
+  const out: { url: string; name: string }[] = [];
+  for (const p of namedProducts(s)) {
+    if (!p.image || !/^https:\/\//.test(p.image) || seen.has(p.image)) continue;
+    seen.add(p.image);
+    out.push({ url: p.image, name: p.name.trim() });
+  }
+  return out.slice(0, 30);
+}
+
+/** The photos to send with the price message, by the chosen mode. */
+export function pricePhotos(s: ChatbotSettings): { url: string; name: string }[] {
+  const pr = s.priceReply;
+  if (pr?.photoMode !== "picture") {
+    const list = productPhotoList(s);
+    if (list.length) return list;
+  }
+  return pr?.image ? [{ url: pr.image, name: "" }] : [];
+}
+
 export const usePriceReply = (s: ChatbotSettings) => !!(s.priceReply?.enabled && s.priceReply.text.trim());
 export const useOrderReply = (s: ChatbotSettings) => !!(s.orderReply?.enabled && s.orderReply.text.trim());
+export const useItemsReply = (s: ChatbotSettings) => !!(s.itemsReply?.enabled && s.itemsReply.text.trim());
+
+/** Did the AI signal "what's in the set" ([[ITEMS]])? */
+export function extractItemsTag(reply: string, s: ChatbotSettings): { text: string; items: boolean } {
+  let items = false;
+  const text = reply.replace(/\[\[\s*ITEMS\s*\]\]/gi, () => { items = true; return ""; }).trim();
+  return { text, items: items && useItemsReply(s) };
+}
+
 export const useConfirmReply = (s: ChatbotSettings) => !!(s.confirmReply?.enabled && s.confirmReply.text.trim());
 
 /** Did the AI signal "order details complete" ([[CONFIRM {…}]])? `json` holds the details. */
@@ -376,7 +427,7 @@ export function buildSystemPrompt(s: ChatbotSettings): { rules: string; knowledg
     ] : []),
     ...(useOrderReply(s) ? [
       "- ORDER: when the customer wants to order or buy (e.g. \"অর্ডার করব\", \"order korbo\", \"নিবো\", \"kivabe order korbo\", \"confirm\") and has NOT yet given their name, full address and mobile number, reply with exactly [[ORDER]] and nothing else — the shop's saved order form is sent automatically. " + (useConfirmReply(s)
-        ? "Once they have given name, full address AND mobile number (in one message or across the chat), reply with ONLY the tag [[CONFIRM {\"name\":\"…\",\"phone\":\"01…\",\"address\":\"full address\",\"area\":\"inside or outside (Dhaka)\",\"items\":[{\"n\":PRODUCT#,\"qty\":1}]}]] (after the [[G:…]] tag) — valid JSON with the details exactly as the customer gave them, n = the product # they want (ask which one if several and unclear). The shop's saved thank-you is sent and the order is created automatically. If something is missing or the mobile number doesn't look like a Bangladeshi number (11 digits starting 01), ask only for what is missing."
+        ? "Once they have given name, full address AND mobile number (in one message or across the chat), reply with ONLY the tag [[CONFIRM {\"name\":\"…\",\"phone\":\"01…\",\"address\":\"full address\",\"area\":\"inside or outside (Dhaka)\",\"color\":\"colour/design they chose, or empty\",\"qty\":1}]] (after the [[G:…]] tag) — valid JSON with the details exactly as the customer gave them. The shop's saved thank-you is sent and the order is created automatically. If something is missing or the mobile number doesn't look like a Bangladeshi number (11 digits starting 01), ask only for what is missing."
         : "Once they send their details, confirm them back normally and say the team will call to confirm."),
     ] : []),
     ...(usePriceReply(s) ? [
@@ -384,11 +435,17 @@ export function buildSystemPrompt(s: ChatbotSettings): { rules: string; knowledg
     ] : s.productCards !== false ? [
       "- SHOWING PRODUCTS: when the customer asks the price or what we have without naming a product (e.g. \"দাম কত\", \"price koto\", \"ki ki ache\"), write ONE short friendly line like \"আমাদের পণ্যগুলোর ছবি আর দাম নিচে দিলাম 👇\" and end your reply with [[SHOW:ALL]]. When they ask about specific products, end with [[SHOW:n]] or [[SHOW:n,m]] using the # numbers in PRODUCTS. Photos with prices are sent automatically right after your text, so don't write a long price list. Use the tag at most once per reply, only for products marked [has photo], and not again if you already showed the same products in this chat.",
     ] : []),
+    ...(useItemsReply(s) ? [
+      "- WHAT'S INCLUDED: when the customer asks what comes in the set / how many pieces / what items (e.g. \"ki ki thakbe\", \"কি কি থাকবে\", \"set e ki ache\", \"koy piece\"), reply with exactly [[ITEMS]] (after the [[G:…]] tag) and nothing else — the shop's saved list is sent automatically.",
+    ] : []),
     ...(useMatchReply(s) ? [
-      "- PHOTO THAT MATCHES ONE OF OUR PRODUCTS: when the customer sends a photo that clearly is one of our products, reply with exactly [[MATCH]] (after the [[G:…]] tag) and nothing else — the shop's saved \"yes, in stock\" message is sent automatically.",
+      "- PHOTO THAT MATCHES ONE OF OUR PRODUCTS: only when the [[SEEN …]] check says same: yes, reply [[MATCH:n]] (n = that product's #) and nothing else — the shop's saved \"yes, in stock\" message is sent automatically.",
     ] : []),
     ...(useNoMatchReply(s) ? [
       "- PHOTO THAT MATCHES NONE OF OUR PRODUCTS (e.g. a colour or design we don't have): reply with exactly [[NOMATCH:n]] and nothing else, where n is the # of the most similar product in PRODUCTS that is marked [has photo]. If nothing is similar at all, reply [[NOMATCH]]. The shop's saved message and the similar product's photo are sent automatically." + (useMatchReply(s) ? "" : " If the photo DOES match one of our products, answer normally (name + price)."),
+    ] : []),
+    ...((useMatchReply(s) || useNoMatchReply(s)) ? [
+      "- CHECK EVERY CUSTOMER PHOTO FIRST: before anything else write [[SEEN: colour and print/pattern of the customer's item | closest #n: that product's colour and print | same: yes/no]]. Look at the PRODUCT PHOTOS carefully. \"same: yes\" ONLY if both the colour AND the print/pattern clearly match that product photo. The same shape in another colour or another print is NOT the same — that is \"no\". If you are not sure, it is \"no\". If the photo is not a product at all (address, payment screenshot…), write [[SEEN: not a product]] and help normally. This check is removed before sending.",
     ] : []),
     "- (Only when no [[MATCH]] / [[NOMATCH]] rule above applies.) If the customer sends a photo, compare it with the PRODUCT PHOTOS and PRODUCTS. If it clearly is one of our products, name it and give its price from PRODUCTS (and colour if visible). If it looks similar but you are not sure, name the closest product and ask them to confirm. If it is not something we sell, say so kindly and suggest the closest product we have. Never give a price for an item that is not in PRODUCTS. If the photo is not a product (a screenshot of an address, a payment, etc.), read it and help, or say a team member will check.",
   ].join("\n");
@@ -426,6 +483,7 @@ export interface AiReplyResult {
   costUsd?: number;
   model?: string;
   gender?: Gender;  // the AI's guess from the customer's name ([[G:…]], removed from reply)
+  seen?: string;    // the AI's photo check ([[SEEN: …]]), removed from reply
 }
 
 function costOf(model: string, u: NonNullable<AiReplyResult["usage"]>): number {
@@ -587,15 +645,31 @@ export async function aiReply(history: ChatTurn[], settingsIn?: ChatbotSettings,
       .replace(/\*\*/g, "") // Messenger shows markdown literally
       .trim();
     let gender: Gender = "U";
-    const replyClean = reply.replace(/\[\[\s*G\s*:\s*([FMU])\s*\]\]/gi, (_m: string, g: string) => { gender = g.toUpperCase() as Gender; return ""; }).trim();
+    let seen = "";
+    const replyClean = reply
+      .replace(/\[\[\s*SEEN\s*:([^\]]*)\]\]/gi, (_m: string, v: string) => { seen = v.trim(); return ""; })
+      .replace(/\[\[\s*G\s*:\s*([FMU])\s*\]\]/gi, (_m: string, g: string) => { gender = g.toUpperCase() as Gender; return ""; }).trim();
+    // Safety net: the check said "different" but the AI still answered "in stock" → treat
+    // it as not available (better to offer the closest product than promise the wrong one).
+    let finalReply = replyClean;
+    const sameNo = !!seen && /same\s*:\s*(no|না)/i.test(seen);
+    const sameYes = !!seen && /same\s*:\s*(yes|হ্যাঁ)/i.test(seen);
+    const closest = seen.match(/closest\s*#?\s*(\d+)/i)?.[1];
+    if (sameNo) {
+      finalReply = finalReply.replace(/\[\[\s*MATCH\s*(:\s*\d+)?\s*\]\]/gi, (_m: string, n?: string) => `[[NOMATCH${n ? n.replace(/\s/g, "") : ""}]]`);
+      // The check said "different" but the AI wrote its own answer instead of the signal.
+      if (useNoMatchReply(s) && !/\[\[\s*NO\s*_?MATCH/i.test(finalReply)) finalReply = closest ? `[[NOMATCH:${closest}]]` : "[[NOMATCH]]";
+    } else if (sameYes && useMatchReply(s) && !/\[\[\s*(NO\s*_?)?MATCH/i.test(finalReply)) {
+      finalReply = closest ? `[[MATCH:${closest}]]` : "[[MATCH]]";
+    }
     const usage = {
       input: Number(j.usage?.input_tokens || 0),
       cacheWrite: Number(j.usage?.cache_creation_input_tokens || 0),
       cacheRead: Number(j.usage?.cache_read_input_tokens || 0),
       output: Number(j.usage?.output_tokens || 0),
     };
-    if (!replyClean) return { ok: false, error: "AI returned an empty reply.", usage, costUsd: costOf(model, usage), model };
-    return { ok: true, reply: replyClean, gender, usage, costUsd: costOf(model, usage), model };
+    if (!finalReply) return { ok: false, error: "AI returned an empty reply.", usage, costUsd: costOf(model, usage), model };
+    return { ok: true, reply: finalReply, gender, seen, usage, costUsd: costOf(model, usage), model };
   } catch (e: any) {
     return { ok: false, error: e?.name === "TimeoutError" ? "AI took too long to answer." : e?.message || "AI request failed." };
   }

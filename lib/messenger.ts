@@ -202,3 +202,30 @@ export async function sendImage(token: string, psid: string, url: string): Promi
     return { ok: false, error: e?.message || "Could not reach Facebook." };
   }
 }
+
+/**
+ * Several pictures in ONE message (max 30). Messenger shows them as a grid; the customer
+ * taps to see each one full size.
+ */
+export async function sendImages(token: string, psid: string, urls: string[]): Promise<SendResult> {
+  const list = urls.filter(Boolean).slice(0, 30);
+  if (list.length <= 1) return list.length ? sendImage(token, psid, list[0]) : { ok: false, error: "No pictures." };
+  if (!token) return { ok: false, error: "Page access token is not set." };
+  try {
+    const r = await fetch(`${GRAPH}/me/messages?access_token=${encodeURIComponent(token)}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        recipient: { id: psid },
+        messaging_type: "RESPONSE",
+        message: { attachments: list.map((url) => ({ type: "image", payload: { url, is_reusable: true } })) },
+      }),
+      signal: AbortSignal.timeout(25_000),
+    });
+    const j: any = await r.json().catch(() => ({}));
+    if (!r.ok) return { ok: false, error: j?.error?.message || `Facebook error ${r.status}`, code: Number(j?.error?.code || 0) };
+    return { ok: true, mid: j?.message_id };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || "Could not reach Facebook." };
+  }
+}
