@@ -8,10 +8,20 @@ import {
   listPendingPages, choosePage, disconnectFacebook, setBotEnabled,
 } from "./actions";
 import { splitPhotos } from "@/lib/chat-media";
+import { getSupabaseBrowserClient } from "@/lib/supabase/ssr-browser";
 
 type Product = { name: string; price: string; details: string; image?: string; url?: string };
 type Example = { question: string; answer: string };
-type Training = { botName: string; storeInfo: string; products: Product[]; examples: Example[] };
+type PriceReply = { enabled: boolean; text: string; image: string };
+type OrderReply = { enabled: boolean; text: string };
+type NoMatchReply = { enabled: boolean; text: string };
+type GreetReply = { enabled: boolean; text: string };
+type MatchReply = { enabled: boolean; text: string };
+type ConfirmReply = { enabled: boolean; text: string; createOrder: boolean; shippingInside: number; shippingOutside: number };
+type Training = {
+  botName: string; storeInfo: string; products: Product[]; examples: Example[];
+  priceReply: PriceReply; orderReply: OrderReply; noMatchReply: NoMatchReply; greetReply: GreetReply; matchReply: MatchReply; confirmReply: ConfirmReply;
+};
 type Connection = {
   pageAccessToken: string; appSecret: string; anthropicKey: string; verifyToken: string;
   appId: string; fbConfigId: string; fbAppFromEnv: boolean; page: FbPageInfo | null;
@@ -24,6 +34,7 @@ type FbReturn = { status: string; message: string } | null;
 const TABS = [
   { id: "inbox", label: "Inbox" },
   { id: "train", label: "Train" },
+  { id: "replies", label: "Saved replies" },
   { id: "connect", label: "Connect" },
   { id: "test", label: "Test" },
 ] as const;
@@ -70,6 +81,7 @@ export function ChatbotAdmin({ initial, startTab, fb }: { initial: Initial; star
       </div>
       {tab === "inbox" && <Inbox rate={conn.usdToBdt} />}
       {tab === "train" && <Train training={training} setTraining={setTraining} />}
+      {tab === "replies" && <SavedReplies training={training} setTraining={setTraining} />}
       {tab === "connect" && <Connect conn={conn} setConn={setConn} fb={fb ?? null} />}
       {tab === "test" && <TestChat training={training} />}
     </div>
@@ -477,6 +489,238 @@ function Train({ training, setTraining }: { training: Training; setTraining: (t:
   );
 }
 
+/* ======================================================== SAVED REPLIES ==== */
+
+/** One saved message: on/off, explanation, text. */
+function SavedReplyCard({ title, hint, value, onChange, rows = 7, children }: {
+  title: string; hint: string; value: { enabled: boolean; text: string };
+  onChange: (v: { enabled: boolean; text: string }) => void; rows?: number; children?: React.ReactNode;
+}) {
+  return (
+    <div className="dc-card p-4">
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="font-bold">{title}</h2>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={value.enabled} onChange={(e) => onChange({ ...value, enabled: e.target.checked })} />
+          চালু
+        </label>
+      </div>
+      <p className="text-xs dc-muted mb-3">{hint}</p>
+      <textarea value={value.text} onChange={(e) => onChange({ ...value, text: e.target.value })} rows={rows} className="dc-input" />
+      {children}
+    </div>
+  );
+}
+
+/** Messages the bot sends word for word when the AI gives a signal. Edit any time. */
+function SavedReplies({ training, setTraining }: { training: Training; setTraining: (t: Training) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const t = training;
+  const set = (patch: Partial<Training>) => setTraining({ ...t, ...patch });
+
+  async function save() {
+    setBusy(true); setMsg(null);
+    const r = await saveTraining(t);
+    setBusy(false);
+    setMsg(r.ok ? "Saved ✓ — the bot uses this from the next message." : r.error || "Save failed.");
+  }
+
+  return (
+    <div className="grid gap-4">
+      <p className="text-sm dc-muted">
+        AI শুধু বুঝে নেয় কাস্টমার কী চাইছে — তারপর বট এখানের লেখা হুবহু পাঠায়। যখন খুশি বদলাতে পারবেন। ~~লেখা~~ দিলে লেখা কাটা দেখাবে।
+      </p>
+
+      <SavedReplyCard
+        title="শুভেচ্ছা (Greeting)"
+        hint="কেউ শুধু hello / hi / আসসালামু আলাইকুম লিখলে এটা যায়। শুভেচ্ছার সাথে প্রশ্ন থাকলে AI প্রশ্নের উত্তর দেয়।"
+        value={t.greetReply}
+        onChange={(greetReply) => set({ greetReply })}
+        rows={4}
+      />
+
+      <PriceReplyCard
+        value={t.priceReply}
+        onChange={(priceReply) => set({ priceReply })}
+        productPhotos={t.products.map((p) => p.image || "").filter(Boolean)}
+      />
+
+      <SavedReplyCard
+        title="অর্ডার ফর্ম (Order form)"
+        hint="কেউ অর্ডার করতে চাইলে এটা যায়। কাস্টমার তথ্য দিলে AI সেগুলো মিলিয়ে কনফার্ম করে।"
+        value={t.orderReply}
+        onChange={(orderReply) => set({ orderReply })}
+      />
+
+      <SavedReplyCard
+        title="অর্ডার কনফার্মেশন (Order confirmed)"
+        hint="কাস্টমার নাম, সম্পূর্ণ ঠিকানা আর মোবাইল নম্বর দিলে এটা যায়। কিছু বাকি থাকলে AI শুধু সেটুকু চায়।"
+        value={t.confirmReply}
+        onChange={(v) => set({ confirmReply: { ...t.confirmReply, ...v } })}
+        rows={5}
+      >
+        <div className="mt-3 grid gap-2 rounded-xl p-3 text-sm" style={{ background: "var(--a-surface-2)" }}>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={t.confirmReply.createOrder !== false} onChange={(e) => set({ confirmReply: { ...t.confirmReply, createOrder: e.target.checked } })} />
+            অর্ডারটা Admin → Orders-এ যোগ করুন (স্ট্যাটাস Pending, সোর্স Messenger)
+          </label>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <label className="text-xs dc-muted">ডেলিভারি চার্জ — ঢাকার ভিতরে (৳)
+              <input type="number" min={0} value={t.confirmReply.shippingInside ?? 0} onChange={(e) => set({ confirmReply: { ...t.confirmReply, shippingInside: Number(e.target.value) } })} className="dc-input mt-1" />
+            </label>
+            <label className="text-xs dc-muted">ডেলিভারি চার্জ — ঢাকার বাইরে (৳)
+              <input type="number" min={0} value={t.confirmReply.shippingOutside ?? 0} onChange={(e) => set({ confirmReply: { ...t.confirmReply, shippingOutside: Number(e.target.value) } })} className="dc-input mt-1" />
+            </label>
+          </div>
+          <p className="text-[11px] dc-muted">দাম নেওয়া হয় আপনার স্টোরের পণ্য থেকে। ফ্রি ডেলিভারি হলে ০ রাখুন। একই নম্বরে ৬ ঘণ্টার মধ্যে দ্বিতীয়বার অর্ডার তৈরি হয় না।</p>
+        </div>
+      </SavedReplyCard>
+
+      <SavedReplyCard
+        title="ছবি মিলেছে (Photo in stock)"
+        hint="কাস্টমার আমাদের কোনো পণ্যের ছবি দিলে (স্টকে আছে এমন) এটা যায়।"
+        value={t.matchReply}
+        onChange={(matchReply) => set({ matchReply })}
+        rows={7}
+      />
+
+      <SavedReplyCard
+        title="ছবি মেলেনি (Photo not available)"
+        hint="কাস্টমার এমন ছবি দিলে যেটা আমাদের কোনো পণ্যের সাথে মেলে না (যেমন স্টক আউট কালার), এটা যায় — তারপর বট সবচেয়ে কাছাকাছি পণ্যের ছবি পাঠায়।"
+        value={t.noMatchReply}
+        onChange={(noMatchReply) => set({ noMatchReply })}
+        rows={5}
+      />
+
+      <div className="flex items-center gap-3">
+        <button type="button" onClick={save} disabled={busy} className="dc-btn dc-btn-solid disabled:opacity-50">{busy ? "Saving…" : "Save replies"}</button>
+        {msg && <span className="text-sm dc-muted">{msg}</span>}
+      </div>
+    </div>
+  );
+}
+
+/* ========================================================== PRICE REPLY ==== */
+
+async function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((ok, bad) => {
+    const i = new Image();
+    i.crossOrigin = "anonymous"; // Supabase Storage allows it; needed to save the canvas
+    i.onload = () => ok(i);
+    i.onerror = () => bad(new Error("Could not load " + src));
+    i.src = src;
+  });
+}
+
+/** All product photos in one picture: 2 per row, square tiles, white gaps. */
+async function makeCollage(urls: string[]): Promise<Blob> {
+  const imgs = (await Promise.allSettled(urls.map(loadImage)))
+    .filter((r): r is PromiseFulfilledResult<HTMLImageElement> => r.status === "fulfilled")
+    .map((r) => r.value);
+  if (!imgs.length) throw new Error("None of the product photos could be loaded.");
+  const cols = imgs.length === 1 ? 1 : 2;
+  const tile = 540, gap = 12;
+  const rows = Math.ceil(imgs.length / cols);
+  const c = document.createElement("canvas");
+  c.width = cols * tile + (cols + 1) * gap;
+  c.height = rows * tile + (rows + 1) * gap;
+  const g = c.getContext("2d")!;
+  g.fillStyle = "#ffffff";
+  g.fillRect(0, 0, c.width, c.height);
+  imgs.forEach((img, i) => {
+    const r = Math.floor(i / cols);
+    const inRow = Math.min(cols, imgs.length - r * cols);
+    const offset = inRow < cols ? (tile + gap) / 2 : 0; // centre a lone last tile
+    const x = gap + (i % cols) * (tile + gap) + offset;
+    const y = gap + r * (tile + gap);
+    const s = Math.min(img.naturalWidth, img.naturalHeight); // centre-crop to a square
+    g.drawImage(img, (img.naturalWidth - s) / 2, (img.naturalHeight - s) / 2, s, s, x, y, tile, tile);
+  });
+  return new Promise((ok, bad) => c.toBlob((b) => (b ? ok(b) : bad(new Error("Could not make the picture."))), "image/jpeg", 0.86));
+}
+
+async function uploadPicture(file: Blob, ext = "jpg"): Promise<string> {
+  const supabase = getSupabaseBrowserClient();
+  const path = `chatbot/price-${Date.now()}-${Math.floor(Math.random() * 1e6)}.${ext}`;
+  const { error } = await supabase.storage.from("product-images").upload(path, file, { cacheControl: "604800", contentType: file.type || "image/jpeg" });
+  if (error) throw new Error(error.message);
+  return supabase.storage.from("product-images").getPublicUrl(path).data.publicUrl;
+}
+
+/** The shop's saved price message: when a customer asks the price, the bot sends this. */
+function PriceReplyCard({ value, onChange, productPhotos }: { value: PriceReply; onChange: (v: PriceReply) => void; productPhotos: string[] }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const set = (patch: Partial<PriceReply>) => onChange({ ...value, ...patch });
+  const unique = Array.from(new Set(productPhotos));
+
+  async function collage() {
+    setBusy("collage"); setMsg(null);
+    try {
+      set({ image: await uploadPicture(await makeCollage(unique)) });
+      setMsg(`Made one picture from ${unique.length} product photos. Press Save.`);
+    } catch (e: any) {
+      setMsg(e?.message || "Could not make the picture.");
+    }
+    setBusy(null);
+  }
+
+  async function upload(file?: File | null) {
+    if (!file) return;
+    setBusy("upload"); setMsg(null);
+    try {
+      set({ image: await uploadPicture(file, (file.name.split(".").pop() || "jpg").toLowerCase()) });
+      setMsg("Picture uploaded. Press Save.");
+    } catch (e: any) {
+      setMsg(e?.message || "Upload failed.");
+    }
+    setBusy(null);
+    if (fileRef.current) fileRef.current.value = "";
+  }
+
+  return (
+    <div className="dc-card p-4">
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="font-bold">দামের উত্তর (Price reply)</h2>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={value.enabled} onChange={(e) => set({ enabled: e.target.checked })} />
+          চালু
+        </label>
+      </div>
+      <p className="text-xs dc-muted mb-3">
+        কেউ দাম জিজ্ঞেস করলে AI শুধু বুঝবে যে এটা দামের প্রশ্ন — তারপর বট এই ছবিটা আর নিচের লেখাটা হুবহু পাঠাবে। ~~লেখা~~ দিলে দাম কাটা দেখাবে।
+      </p>
+      <div className="grid gap-3 sm:grid-cols-[220px_1fr]">
+        <div>
+          {value.image ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={value.image} alt="Price picture" className="w-full rounded-xl object-cover" style={{ border: "1px solid var(--a-border)" }} />
+          ) : (
+            <div className="grid aspect-square w-full place-items-center rounded-xl p-3 text-center text-xs dc-muted" style={{ border: "1px dashed var(--a-border)" }}>
+              No picture yet — only the text will be sent
+            </div>
+          )}
+          <div className="mt-2 grid gap-1.5">
+            <button type="button" onClick={collage} disabled={!!busy || !unique.length} className="dc-btn text-xs disabled:opacity-50"
+              title={unique.length ? "" : "Add product photos first (Import from my store)"}>
+              {busy === "collage" ? "Making…" : `🖼️ Make one picture from ${unique.length} product photos`}
+            </button>
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => upload(e.target.files?.[0])} />
+            <button type="button" onClick={() => fileRef.current?.click()} disabled={!!busy} className="dc-btn text-xs disabled:opacity-50">
+              {busy === "upload" ? "Uploading…" : "⬆️ Upload my own picture"}
+            </button>
+            {value.image && <button type="button" onClick={() => set({ image: "" })} className="dc-btn text-xs" style={{ color: "#dc2626" }}>Remove picture</button>}
+          </div>
+        </div>
+        <textarea value={value.text} onChange={(e) => set({ text: e.target.value })} rows={12} className="dc-input" placeholder="দামের মেসেজ লিখুন…" />
+      </div>
+      {msg && <p className="mt-2 text-xs dc-muted">{msg}</p>}
+    </div>
+  );
+}
+
 /* ============================================================== CONNECT ==== */
 
 /** A password box that never shows the saved value — only "saved ••••1234". Defined at
@@ -794,7 +1038,7 @@ function Connect({ conn, setConn, fb }: { conn: Connection; setConn: (c: Connect
 /* ================================================================= TEST ==== */
 
 type TestCard = { name: string; price: string; details: string; image: string; url: string };
-type TestMsg = { role: "customer" | "shop"; text: string; meta?: string; photo?: { mediaType: string; data: string }; cards?: TestCard[] };
+type TestMsg = { role: "customer" | "shop"; text: string; note?: string; meta?: string; photo?: { mediaType: string; data: string }; cards?: TestCard[]; picture?: string; pictureAfter?: boolean };
 
 /** Shrink a photo in the browser (long edge 1024 px, JPEG) — small enough to send, plenty for the AI. */
 async function shrinkPhoto(file: File): Promise<{ mediaType: string; data: string }> {
@@ -818,6 +1062,7 @@ function TestChat({ training }: { training: Training }) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [total, setTotal] = useState({ usd: 0, rate: 124, n: 0 });
+  const [custName, setCustName] = useState("Rumana Akter");
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => { ref.current?.scrollTo({ top: ref.current.scrollHeight }); }, [msgs.length]);
 
@@ -848,14 +1093,14 @@ function TestChat({ training }: { training: Training }) {
       text: (m.text || (m.photo ? "📷 ছবি পাঠিয়েছেন" : "")) +
         (m.cards?.length ? "\n🛍️ পণ্যের ছবি ও দাম পাঠানো হয়েছে:\n" + m.cards.map((c) => `• ${c.name} — ${c.price}`).join("\n") : ""),
       images: i === lastPhoto && m.photo ? [m.photo] : undefined,
-    })), training);
+    })), training, custName);
     setBusy(false);
     if (!r.ok) { setMsgs([...next, { role: "shop", text: "⚠️ " + (r.error || "Failed"), meta: "error" }]); return; }
     const u = r.usage!;
     const cached = u.cacheRead > 0 ? ` · ${u.cacheRead} cached` : u.cacheWrite > 0 ? ` · ${u.cacheWrite} written to cache` : "";
     setTotal((t) => ({ usd: t.usd + (r.costUsd ?? 0), rate: r.usdToBdt, n: t.n + 1 }));
     setMsgs([...next, {
-      role: "shop", text: r.reply!, cards: r.cards,
+      role: "shop", text: r.reply!, note: (r as any).orderPreview || undefined, cards: r.cards, picture: r.priceImage || undefined, pictureAfter: !!(r as any).pictureAfter,
       meta: `${u.input + u.cacheWrite + u.cacheRead} in${cached} · ${u.output} out · ${taka(r.costUsd ?? 0, r.usdToBdt)}`,
     }]);
   }
@@ -864,6 +1109,10 @@ function TestChat({ training }: { training: Training }) {
     <div className="grid gap-3">
       <div className="dc-card p-3 text-sm flex flex-wrap items-center gap-3">
         <span className="dc-muted">Uses the training on the Train tab, even before you save it. Nothing goes to Facebook.</span>
+        <label className="flex items-center gap-2">
+          <span className="dc-muted">Customer name</span>
+          <input value={custName} onChange={(e) => setCustName(e.target.value)} className="dc-input w-44" placeholder="e.g. Rumana Akter" title="The bot says আপু or ভাইয়া from the name" />
+        </label>
         <span className="ml-auto">This test: <b>{total.n}</b> replies · <b>{taka(total.usd, total.rate)}</b></span>
         <button type="button" className="dc-btn" onClick={() => { setMsgs([]); setTotal({ usd: 0, rate: total.rate, n: 0 }); }}>Clear</button>
       </div>
@@ -872,6 +1121,10 @@ function TestChat({ training }: { training: Training }) {
           {msgs.length === 0 && <p className="text-sm dc-muted">Write like a customer would, tap a question below, or press 📷 Photo and send a product picture — the bot should say which product it is and its price. The last two questions try to trick the bot into a discount; it should politely refuse.</p>}
           {msgs.map((m, i) => (
             <div key={i} className={"flex flex-col " + (m.role === "shop" ? "items-start" : "items-end")}>
+              {m.picture && !m.pictureAfter && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={m.picture} alt="Price picture" className="mb-1 max-h-72 max-w-[260px] rounded-xl object-cover" />
+              )}
               {m.photo && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={`data:${m.photo.mediaType};base64,${m.photo.data}`} alt="Test photo" className="mb-1 max-h-48 max-w-[220px] rounded-xl object-cover" />
@@ -883,6 +1136,10 @@ function TestChat({ training }: { training: Training }) {
                     : { background: "var(--a-brand)", color: "#fff" }}>
                   {m.text}
                 </div>
+              )}
+              {m.picture && m.pictureAfter && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={m.picture} alt="Similar product" className="mt-1 max-h-72 max-w-[260px] rounded-xl object-cover" />
               )}
               {m.cards && m.cards.length > 0 && (
                 <div className="mt-1.5 flex max-w-full gap-2 overflow-x-auto pb-1">
@@ -899,6 +1156,9 @@ function TestChat({ training }: { training: Training }) {
                     </div>
                   ))}
                 </div>
+              )}
+              {m.note && (
+                <div className="mt-1 max-w-[85%] whitespace-pre-wrap rounded-xl px-3 py-2 text-xs" style={{ background: "var(--a-warn-soft)", color: "var(--a-warn)" }}>{m.note}</div>
               )}
               {m.meta && <span className="mt-0.5 text-[10.5px] dc-muted">🤖 {m.meta}</span>}
             </div>

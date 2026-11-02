@@ -180,3 +180,25 @@ export async function sendProductCards(
 export function cardsSummary(cards: { name: string; price: string }[]): string {
   return ["🛍️ পণ্যের ছবি ও দাম পাঠানো হয়েছে:", ...cards.map((c) => `• ${c.name}${c.price ? ` — ${c.price}` : ""}`)].join("\n");
 }
+
+/** One picture by link (e.g. the price picture with all products). */
+export async function sendImage(token: string, psid: string, url: string): Promise<SendResult> {
+  if (!token) return { ok: false, error: "Page access token is not set." };
+  try {
+    const r = await fetch(`${GRAPH}/me/messages?access_token=${encodeURIComponent(token)}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        recipient: { id: psid },
+        messaging_type: "RESPONSE",
+        message: { attachment: { type: "image", payload: { url, is_reusable: true } } },
+      }),
+      signal: AbortSignal.timeout(20_000),
+    });
+    const j: any = await r.json().catch(() => ({}));
+    if (!r.ok) return { ok: false, error: j?.error?.message || `Facebook error ${r.status}`, code: Number(j?.error?.code || 0) };
+    return { ok: true, mid: j?.message_id };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || "Could not reach Facebook." };
+  }
+}
