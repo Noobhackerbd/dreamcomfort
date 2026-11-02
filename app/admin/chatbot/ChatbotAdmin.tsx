@@ -5,17 +5,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   saveTraining, saveConnection, testConnection, importStoreProducts, testChat,
   listConversations, getThread, setConversationAi, sendManualReply, suggestReply,
-  listPendingPages, choosePage, disconnectFacebook,
+  listPendingPages, choosePage, disconnectFacebook, setBotEnabled,
 } from "./actions";
 import { splitPhotos } from "@/lib/chat-media";
 
-type Product = { name: string; price: string; details: string; image?: string };
+type Product = { name: string; price: string; details: string; image?: string; url?: string };
 type Example = { question: string; answer: string };
 type Training = { botName: string; storeInfo: string; products: Product[]; examples: Example[] };
 type Connection = {
   pageAccessToken: string; appSecret: string; anthropicKey: string; verifyToken: string;
   appId: string; fbConfigId: string; fbAppFromEnv: boolean; page: FbPageInfo | null;
-  model: string; autoReply: boolean; pauseAiOnManual: boolean; photoMatch: boolean; maxReplyTokens: number; usdToBdt: number;
+  model: string; autoReply: boolean; pauseAiOnManual: boolean; photoMatch: boolean; productCards: boolean; maxReplyTokens: number; usdToBdt: number;
 };
 type FbPageInfo = { id: string; name: string; by: string; at: string };
 type Initial = { connection: Connection; training: Training };
@@ -55,6 +55,7 @@ export function ChatbotAdmin({ initial, startTab, fb }: { initial: Initial; star
 
   return (
     <div>
+      <BotSwitch on={conn.autoReply} setOn={(v) => setConn({ ...conn, autoReply: v })} />
       <div className="mb-4 flex flex-wrap gap-2">
         {TABS.map((t) => (
           <button
@@ -71,6 +72,49 @@ export function ChatbotAdmin({ initial, startTab, fb }: { initial: Initial; star
       {tab === "train" && <Train training={training} setTraining={setTraining} />}
       {tab === "connect" && <Connect conn={conn} setConn={setConn} fb={fb ?? null} />}
       {tab === "test" && <TestChat training={training} />}
+    </div>
+  );
+}
+
+/** Big on/off switch for the whole bot. Saved at once. */
+function BotSwitch({ on, setOn }: { on: boolean; setOn: (v: boolean) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function flip() {
+    if (busy) return;
+    const next = !on;
+    setBusy(true); setErr(null);
+    setOn(next); // show it right away
+    const r = await setBotEnabled(next);
+    setBusy(false);
+    if (!r.ok) { setOn(!next); setErr(r.error || "Save failed."); }
+  }
+
+  return (
+    <div className="dc-card mb-4 flex flex-wrap items-center gap-3 p-4"
+      style={{ borderColor: on ? "var(--a-ok)" : "var(--a-border)" }}>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={on}
+        aria-label="চ্যাট বট চালু বা বন্ধ"
+        onClick={flip}
+        disabled={busy}
+        className="relative h-8 w-14 shrink-0 rounded-full transition-colors disabled:opacity-60"
+        style={{ background: on ? "var(--a-ok)" : "var(--a-faint)" }}
+      >
+        <span className="absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-[left]" style={{ left: on ? 28 : 4 }} />
+      </button>
+      <div className="min-w-0 flex-1">
+        <p className="font-bold">{on ? "চ্যাট বট চালু ✅" : "চ্যাট বট বন্ধ ⏸"}</p>
+        <p className="text-xs dc-muted">
+          {on
+            ? "নতুন মেসেজে AI নিজে থেকে উত্তর দিচ্ছে।"
+            : "AI উত্তর দিচ্ছে না। মেসেজ Inbox-এ আসবে, আপনি নিজে উত্তর দিতে পারবেন।"}
+        </p>
+        {err && <p className="text-xs" style={{ color: "rgb(185,28,28)" }}>{err}</p>}
+      </div>
     </div>
   );
 }
@@ -335,7 +379,10 @@ function Train({ training, setTraining }: { training: Training; setTraining: (t:
     let photos = 0;
     const kept = t.products.map((p) => {
       const store = byName.get(p.name.trim());
-      if (!p.image && store?.image) { photos++; return { ...p, image: store.image }; }
+      if (store && ((!p.image && store.image) || (!p.url && store.url))) {
+        if (!p.image && store.image) photos++;
+        return { ...p, image: p.image || store.image, url: p.url || store.url };
+      }
       return p;
     });
     const have = new Set(t.products.map((p) => p.name.trim()));
@@ -620,7 +667,7 @@ function Connect({ conn, setConn, fb }: { conn: Connection; setConn: (c: Connect
       pageAccessToken: token, appSecret: secret, anthropicKey: aiKey,
       verifyToken: conn.verifyToken, appId: conn.appId, fbConfigId: conn.fbConfigId,
       model: conn.model, autoReply: conn.autoReply,
-      pauseAiOnManual: conn.pauseAiOnManual, photoMatch: conn.photoMatch, maxReplyTokens: conn.maxReplyTokens, usdToBdt: conn.usdToBdt,
+      pauseAiOnManual: conn.pauseAiOnManual, photoMatch: conn.photoMatch, productCards: conn.productCards, maxReplyTokens: conn.maxReplyTokens, usdToBdt: conn.usdToBdt,
     });
     setBusy(null);
     if (!r.ok) { setMsg(r.error || "Save failed."); return false; }
@@ -685,6 +732,10 @@ function Connect({ conn, setConn, fb }: { conn: Connection; setConn: (c: Connect
             <input type="checkbox" checked={conn.photoMatch} onChange={(e) => set({ photoMatch: e.target.checked })} />
             Recognise products in photos customers send, and tell the price
           </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={conn.productCards} onChange={(e) => set({ productCards: e.target.checked })} />
+            When asked the price, send product photos with prices (and an Order button)
+          </label>
         </div>
       </div>
 
@@ -742,7 +793,8 @@ function Connect({ conn, setConn, fb }: { conn: Connection; setConn: (c: Connect
 
 /* ================================================================= TEST ==== */
 
-type TestMsg = { role: "customer" | "shop"; text: string; meta?: string; photo?: { mediaType: string; data: string } };
+type TestCard = { name: string; price: string; details: string; image: string; url: string };
+type TestMsg = { role: "customer" | "shop"; text: string; meta?: string; photo?: { mediaType: string; data: string }; cards?: TestCard[] };
 
 /** Shrink a photo in the browser (long edge 1024 px, JPEG) — small enough to send, plenty for the AI. */
 async function shrinkPhoto(file: File): Promise<{ mediaType: string; data: string }> {
@@ -792,7 +844,9 @@ function TestChat({ training }: { training: Training }) {
     // Like the live bot: only the newest photo is sent as an image.
     const lastPhoto = next.map((m) => !!m.photo).lastIndexOf(true);
     const r = await testChat(next.map((m, i) => ({
-      role: m.role, text: m.text || (m.photo ? "📷 ছবি পাঠিয়েছেন" : ""),
+      role: m.role,
+      text: (m.text || (m.photo ? "📷 ছবি পাঠিয়েছেন" : "")) +
+        (m.cards?.length ? "\n🛍️ পণ্যের ছবি ও দাম পাঠানো হয়েছে:\n" + m.cards.map((c) => `• ${c.name} — ${c.price}`).join("\n") : ""),
       images: i === lastPhoto && m.photo ? [m.photo] : undefined,
     })), training);
     setBusy(false);
@@ -801,7 +855,7 @@ function TestChat({ training }: { training: Training }) {
     const cached = u.cacheRead > 0 ? ` · ${u.cacheRead} cached` : u.cacheWrite > 0 ? ` · ${u.cacheWrite} written to cache` : "";
     setTotal((t) => ({ usd: t.usd + (r.costUsd ?? 0), rate: r.usdToBdt, n: t.n + 1 }));
     setMsgs([...next, {
-      role: "shop", text: r.reply!,
+      role: "shop", text: r.reply!, cards: r.cards,
       meta: `${u.input + u.cacheWrite + u.cacheRead} in${cached} · ${u.output} out · ${taka(r.costUsd ?? 0, r.usdToBdt)}`,
     }]);
   }
@@ -828,6 +882,22 @@ function TestChat({ training }: { training: Training }) {
                     ? { background: "var(--a-surface)", border: "1px solid var(--a-border)" }
                     : { background: "var(--a-brand)", color: "#fff" }}>
                   {m.text}
+                </div>
+              )}
+              {m.cards && m.cards.length > 0 && (
+                <div className="mt-1.5 flex max-w-full gap-2 overflow-x-auto pb-1">
+                  {m.cards.map((c) => (
+                    <div key={c.name} className="w-[170px] shrink-0 overflow-hidden rounded-xl" style={{ background: "var(--a-surface)", border: "1px solid var(--a-border)" }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={c.image} alt="" className="aspect-square w-full object-cover" />
+                      <div className="p-2">
+                        <p className="line-clamp-2 text-xs font-semibold">{c.name}</p>
+                        {c.price && <p className="mt-0.5 text-xs">💰 দাম: {c.price}</p>}
+                        {c.details && <p className="mt-0.5 line-clamp-2 text-[11px] dc-muted">✨ {c.details}</p>}
+                        {c.url && <p className="mt-1.5 rounded-md py-1 text-center text-[11px] font-semibold" style={{ background: "var(--a-surface-2)" }}>🛒 অর্ডার করুন</p>}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
               {m.meta && <span className="mt-0.5 text-[10.5px] dc-muted">🤖 {m.meta}</span>}

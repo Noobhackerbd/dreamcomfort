@@ -10,8 +10,8 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { getServerSupabase } from "@/lib/supabase/server";
-import { getChatbotSettings, fbApp, aiReply, type ChatTurn, type ChatImage } from "@/lib/chatbot";
-import { verifySignature, sendText, sendTyping, getProfile, fetchPhoto } from "@/lib/messenger";
+import { getChatbotSettings, fbApp, aiReply, extractProductCards, type ChatTurn, type ChatImage } from "@/lib/chatbot";
+import { verifySignature, sendText, sendTyping, getProfile, fetchPhoto, sendProductCards, cardsSummary } from "@/lib/messenger";
 import { PHOTO_LABEL, withPhotos, splitPhotos } from "@/lib/chat-media";
 
 export const dynamic = "force-dynamic";
@@ -65,6 +65,10 @@ async function handleEvent(ev: any, s: Awaited<ReturnType<typeof getChatbotSetti
   const psid: string | undefined = isEcho ? ev.recipient?.id : ev.sender?.id;
   if (!psid) return;
 
+  // Our own sends (AI replies, product photos, replies from the admin inbox) come back as
+  // echoes carrying our app id. They are stored by the code that sent them — ignore.
+  if (isEcho && msg?.app_id && String(msg.app_id) === fbApp(s).appId) return;
+
   // Photos (not stickers — the 👍 button is a sticker too) can be read by the AI.
   const attachments: any[] = Array.isArray(msg?.attachments) ? msg.attachments : [];
   const photoUrls: string[] = attachments
@@ -83,17 +87,20 @@ async function handleEvent(ev: any, s: Awaited<ReturnType<typeof getChatbotSetti
   if (!conv) return;
 
   if (isEcho) {
-    // Sent from the Page. If we sent it (AI or the admin inbox) it is already stored under
-    // the same mid and this insert is a no-op; if a person replied from Facebook's own
-    // inbox it is new — store it, and pause the AI so it doesn't talk over them.
+    // Sent from the Page by someone else: a person in Facebook's own inbox, or the Page's
+    // automatic greeting. Store it. Pause the AI only for a person — an echo within 20 s of
+    // the customer's message (or before we've even seen one) is the automatic greeting.
     const { error } = await db.from("chat_messages").insert({
       conversation_id: conv.id, direction: "out", sender: "admin", text, mid,
     });
     if (!error) {
+      const echoAt = Number(ev.timestamp) || Date.now();
+      const lastCustomer = conv.last_customer_at ? new Date(conv.last_customer_at).getTime() : 0;
+      const automatic = !lastCustomer || Math.abs(echoAt - lastCustomer) < 20_000;
       await db.from("chat_conversations").update({
         last_message: text.slice(0, 200),
         last_message_at: new Date().toISOString(),
-        ...(s.pauseAiOnManual ? { ai_enabled: false } : {}),
+        ...(s.pauseAiOnManual && !automatic ? { ai_enabled: false } : {}),
       }).eq("id", conv.id);
     }
     return;
@@ -148,19 +155,38 @@ async function handleEvent(ev: any, s: Awaited<ReturnType<typeof getChatbotSetti
     return; // leave it unanswered in the inbox for you, rather than send something wrong
   }
 
-  const sent = await sendText(s.pageAccessToken, psid, ai.reply);
+  // [[SHOW:…]] in the reply → product photos with prices after the text.
+  const { text: replyText, cards } = extractProductCards(ai.reply, s);
+  const say = replyText || (cards.length ? "আমাদের পণ্যগুলোর ছবি আর দাম নিচে দিলাম 👇" : "");
+  if (!say) return;
+
+  const sent = await sendText(s.pageAccessToken, psid, say);
   if (!sent.ok) {
     console.error("[messenger] send failed:", sent.error);
     return;
   }
   await db.from("chat_messages").insert({
-    conversation_id: conv.id, direction: "out", sender: "ai", text: ai.reply, mid: sent.mid ?? null,
+    conversation_id: conv.id, direction: "out", sender: "ai", text: say, mid: sent.mid ?? null,
     input_tokens: (ai.usage?.input ?? 0) + (ai.usage?.cacheWrite ?? 0) + (ai.usage?.cacheRead ?? 0),
     output_tokens: ai.usage?.output ?? 0,
     cost_usd: ai.costUsd ?? 0,
   });
+  let last = say;
+
+  if (cards.length) {
+    const shown = await sendProductCards(s.pageAccessToken, psid, cards);
+    if (shown.ok) {
+      last = cardsSummary(cards);
+      await db.from("chat_messages").insert({
+        conversation_id: conv.id, direction: "out", sender: "ai",
+        text: withPhotos(last, cards.map((c) => c.image)), mid: shown.mid ?? null,
+      });
+    } else {
+      console.error("[messenger] product photos failed:", shown.error);
+    }
+  }
   await db.from("chat_conversations").update({
-    last_message: ai.reply.slice(0, 200),
+    last_message: last.split("\n")[0].slice(0, 200),
     last_message_at: new Date().toISOString(),
   }).eq("id", conv.id);
 }

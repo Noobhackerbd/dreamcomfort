@@ -131,3 +131,52 @@ export async function fetchPhoto(url: string): Promise<{ mediaType: string; data
     return null;
   }
 }
+
+/**
+ * Product photos as a swipeable carousel: photo, name, price under it, and an
+ * "অর্ডার করুন" button to the product page. Max 10 cards (Messenger's limit).
+ */
+export async function sendProductCards(
+  token: string,
+  psid: string,
+  cards: { name: string; price: string; details: string; image: string; url: string }[],
+): Promise<SendResult> {
+  if (!token) return { ok: false, error: "Page access token is not set." };
+  if (!cards.length) return { ok: false, error: "No products to show." };
+  const cut = (v: string, n: number) => (v.length > n ? v.slice(0, n - 1) + "…" : v);
+  const elements = cards.slice(0, 10).map((c) => {
+    const subtitle = [c.price ? `💰 দাম: ${c.price}` : "", c.details ? `✨ ${c.details}` : ""].filter(Boolean).join("\n");
+    const el: Record<string, unknown> = {
+      title: cut(c.name, 80),
+      subtitle: cut(subtitle || "🛍️ ড্রিম কমফোর্ট", 80),
+      image_url: c.image,
+    };
+    if (c.url) {
+      el.default_action = { type: "web_url", url: c.url };
+      el.buttons = [{ type: "web_url", url: c.url, title: "🛒 অর্ডার করুন" }];
+    }
+    return el;
+  });
+  try {
+    const r = await fetch(`${GRAPH}/me/messages?access_token=${encodeURIComponent(token)}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        recipient: { id: psid },
+        messaging_type: "RESPONSE",
+        message: { attachment: { type: "template", payload: { template_type: "generic", image_aspect_ratio: "square", elements } } },
+      }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    const j: any = await r.json().catch(() => ({}));
+    if (!r.ok) return { ok: false, error: j?.error?.message || `Facebook error ${r.status}`, code: Number(j?.error?.code || 0) };
+    return { ok: true, mid: j?.message_id };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || "Could not reach Facebook." };
+  }
+}
+
+/** What the inbox stores for a carousel we sent: a short list + the photos. */
+export function cardsSummary(cards: { name: string; price: string }[]): string {
+  return ["🛍️ পণ্যের ছবি ও দাম পাঠানো হয়েছে:", ...cards.map((c) => `• ${c.name}${c.price ? ` — ${c.price}` : ""}`)].join("\n");
+}

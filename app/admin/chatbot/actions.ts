@@ -3,7 +3,7 @@
 import { requireAdmin } from "@/lib/admin-auth";
 import { getServerSupabase } from "@/lib/supabase/server";
 import {
-  getChatbotSettings, saveChatbotSettings, fbApp, aiReply, getStoreProductsForTraining,
+  getChatbotSettings, saveChatbotSettings, fbApp, aiReply, extractProductCards, getStoreProductsForTraining,
   CHATBOT_MODEL_DEFAULT, type ChatbotProduct, type ChatbotReplyExample, type ChatTurn, type ChatImage,
 } from "@/lib/chatbot";
 import { sendText, checkPageToken, fetchPhoto } from "@/lib/messenger";
@@ -31,6 +31,7 @@ export async function loadChatbotAdmin() {
       autoReply: s.autoReply,
       pauseAiOnManual: s.pauseAiOnManual,
       photoMatch: s.photoMatch !== false,
+      productCards: s.productCards !== false,
       maxReplyTokens: s.maxReplyTokens,
       usdToBdt: s.usdToBdt,
     },
@@ -53,6 +54,7 @@ export async function saveTraining(input: {
         .map((p) => ({
           name: clean(p.name, 200), price: clean(p.price, 120), details: clean(p.details, 1200),
           image: /^https:\/\//.test(String(p.image || "")) ? clean(p.image, 600) : "",
+          url: /^https:\/\//.test(String(p.url || "")) ? clean(p.url, 600) : "",
         }))
         .filter((p) => p.name.trim())
         .slice(0, 150),
@@ -73,7 +75,7 @@ export async function saveTraining(input: {
  */
 export async function saveConnection(input: {
   pageAccessToken?: string; appSecret?: string; anthropicKey?: string; verifyToken: string;
-  appId?: string; fbConfigId?: string; model: string; autoReply: boolean; pauseAiOnManual: boolean; photoMatch?: boolean; maxReplyTokens: number; usdToBdt: number;
+  appId?: string; fbConfigId?: string; model: string; autoReply: boolean; pauseAiOnManual: boolean; photoMatch?: boolean; productCards?: boolean; maxReplyTokens: number; usdToBdt: number;
   clear?: ("pageAccessToken" | "appSecret" | "anthropicKey")[];
 }) {
   await requireAdmin();
@@ -94,11 +96,24 @@ export async function saveConnection(input: {
   next.autoReply = !!input.autoReply;
   next.pauseAiOnManual = !!input.pauseAiOnManual;
   if (input.photoMatch !== undefined) next.photoMatch = !!input.photoMatch;
+  if (input.productCards !== undefined) next.productCards = !!input.productCards;
   next.maxReplyTokens = Math.min(Math.max(Math.round(Number(input.maxReplyTokens) || 350), 80), 1000);
   next.usdToBdt = Math.max(1, Number(input.usdToBdt) || 124);
   try {
     await saveChatbotSettings(next);
     return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || "Save failed." };
+  }
+}
+
+/** The big on/off switch: when off, messages still arrive in the inbox but the AI stays quiet. */
+export async function setBotEnabled(on: boolean) {
+  await requireAdmin();
+  try {
+    const s = await getChatbotSettings();
+    await saveChatbotSettings({ ...s, autoReply: !!on });
+    return { ok: true, on: !!on };
   } catch (e: any) {
     return { ok: false, error: e?.message || "Save failed." };
   }
@@ -196,7 +211,9 @@ export async function testChat(history: ChatTurn[], training?: {
       .slice(0, 3),
   }));
   const r = await aiReply(clean, merged);
-  return { ...r, usdToBdt: s.usdToBdt };
+  if (!r.ok || !r.reply) return { ...r, cards: [] as ReturnType<typeof extractProductCards>["cards"], usdToBdt: s.usdToBdt };
+  const { text, cards } = extractProductCards(r.reply, merged);
+  return { ...r, reply: text || (cards.length ? "আমাদের পণ্যগুলোর ছবি আর দাম নিচে দিলাম 👇" : r.reply), cards, usdToBdt: s.usdToBdt };
 }
 
 // ------------------------------------------------------------------ inbox --
@@ -294,6 +311,8 @@ export async function suggestReply(id: string) {
   if (!history.length || history[history.length - 1].role !== "customer") {
     history.push({ role: "customer", text: "(follow up with the customer politely)" });
   }
-  const r = await aiReply(history);
-  return r.ok ? { ok: true, draft: r.reply!, costUsd: r.costUsd } : { ok: false, error: r.error };
+  const s = await getChatbotSettings();
+  const r = await aiReply(history, s);
+  // A draft is plain text you edit and send yourself — no product-photo tag in it.
+  return r.ok ? { ok: true, draft: extractProductCards(r.reply!, s).text, costUsd: r.costUsd } : { ok: false, error: r.error };
 }
