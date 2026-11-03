@@ -26,7 +26,7 @@ type Training = {
 type Connection = {
   pageAccessToken: string; appSecret: string; anthropicKey: string; verifyToken: string;
   appId: string; fbConfigId: string; fbAppFromEnv: boolean; page: FbPageInfo | null;
-  model: string; autoReply: boolean; pauseAiOnManual: boolean; photoMatch: boolean; productCards: boolean; maxReplyTokens: number; usdToBdt: number;
+  model: string; autoReply: boolean; pauseAiOnManual: boolean; photoMatch: boolean; productCards: boolean; handoffUnknown: boolean; maxReplyTokens: number; usdToBdt: number;
   wa: { enabled: boolean; phoneNumberId: string; businessId: string; token: string; display: string };
 };
 type FbPageInfo = { id: string; name: string; by: string; at: string };
@@ -1042,7 +1042,7 @@ function Connect({ conn, setConn, fb }: { conn: Connection; setConn: (c: Connect
       pageAccessToken: token, appSecret: secret, anthropicKey: aiKey,
       verifyToken: conn.verifyToken, appId: conn.appId, fbConfigId: conn.fbConfigId,
       model: conn.model, autoReply: conn.autoReply,
-      pauseAiOnManual: conn.pauseAiOnManual, photoMatch: conn.photoMatch, productCards: conn.productCards, maxReplyTokens: conn.maxReplyTokens, usdToBdt: conn.usdToBdt,
+      pauseAiOnManual: conn.pauseAiOnManual, photoMatch: conn.photoMatch, productCards: conn.productCards, handoffUnknown: conn.handoffUnknown, maxReplyTokens: conn.maxReplyTokens, usdToBdt: conn.usdToBdt,
     });
     setBusy(null);
     if (!r.ok) { setMsg(r.error || "Save failed."); return false; }
@@ -1112,6 +1112,10 @@ function Connect({ conn, setConn, fb }: { conn: Connection; setConn: (c: Connect
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={conn.productCards} onChange={(e) => set({ productCards: e.target.checked })} />
             When asked the price, send product photos with prices (and an Order button)
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={conn.handoffUnknown} onChange={(e) => set({ handoffUnknown: e.target.checked })} />
+            When the AI doesn&apos;t know the answer, send nothing and pause the AI in that chat (you answer)
           </label>
         </div>
       </div>

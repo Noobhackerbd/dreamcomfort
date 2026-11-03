@@ -3,7 +3,7 @@
 import { requireAdmin } from "@/lib/admin-auth";
 import { getServerSupabase } from "@/lib/supabase/server";
 import {
-  getChatbotSettings, saveChatbotSettings, fbApp, aiReply, extractProductCards, extractPriceTag, extractOrderTag, extractNoMatchTag, extractGreetTag, extractMatchTag, extractConfirmTag, extractItemsTag, pricePhotos, messengerText, personalize,
+  getChatbotSettings, saveChatbotSettings, fbApp, aiReply, extractProductCards, extractPriceTag, extractOrderTag, extractNoMatchTag, extractGreetTag, extractMatchTag, extractConfirmTag, extractItemsTag, extractHumanTag, pricePhotos, usePriceReply, messengerText, personalize,
   type PriceReply, type OrderReply, type NoMatchReply, type GreetReply, type MatchReply, type ConfirmReply, type ItemsReply, getStoreProductsForTraining,
   CHATBOT_MODEL_DEFAULT, type ChatbotProduct, type ChatbotReplyExample, type ChatTurn, type ChatImage,
 } from "@/lib/chatbot";
@@ -11,6 +11,7 @@ import { sendText, checkPageToken, fetchPhoto } from "@/lib/messenger";
 import { waSendText, waCheck, waConnect } from "@/lib/whatsapp";
 import { splitPhotos } from "@/lib/chat-media";
 import { parseConfirmDetails, priceChatOrder } from "@/lib/chat-orders";
+import { isAdOpener } from "@/lib/chat-engine";
 import { headers } from "next/headers";
 import { readPending, clearPending, connectPage, disconnectPage } from "@/lib/facebook-connect";
 
@@ -34,6 +35,7 @@ export async function loadChatbotAdmin() {
       autoReply: s.autoReply,
       pauseAiOnManual: s.pauseAiOnManual,
       photoMatch: s.photoMatch !== false,
+      handoffUnknown: s.handoffUnknown !== false,
       productCards: s.productCards !== false,
       maxReplyTokens: s.maxReplyTokens,
       usdToBdt: s.usdToBdt,
@@ -119,7 +121,7 @@ export async function saveTraining(input: {
  */
 export async function saveConnection(input: {
   pageAccessToken?: string; appSecret?: string; anthropicKey?: string; verifyToken: string;
-  appId?: string; fbConfigId?: string; model: string; autoReply: boolean; pauseAiOnManual: boolean; photoMatch?: boolean; productCards?: boolean; maxReplyTokens: number; usdToBdt: number;
+  appId?: string; fbConfigId?: string; model: string; autoReply: boolean; pauseAiOnManual: boolean; photoMatch?: boolean; productCards?: boolean; handoffUnknown?: boolean; maxReplyTokens: number; usdToBdt: number;
   clear?: ("pageAccessToken" | "appSecret" | "anthropicKey")[];
 }) {
   await requireAdmin();
@@ -141,6 +143,7 @@ export async function saveConnection(input: {
   next.pauseAiOnManual = !!input.pauseAiOnManual;
   if (input.photoMatch !== undefined) next.photoMatch = !!input.photoMatch;
   if (input.productCards !== undefined) next.productCards = !!input.productCards;
+  if (input.handoffUnknown !== undefined) next.handoffUnknown = !!input.handoffUnknown;
   next.maxReplyTokens = Math.min(Math.max(Math.round(Number(input.maxReplyTokens) || 350), 80), 1000);
   next.usdToBdt = Math.max(1, Number(input.usdToBdt) || 124);
   try {
@@ -288,9 +291,21 @@ export async function testChat(history: ChatTurn[], training?: {
       .filter((i) => OK_TYPES.includes(i?.mediaType) && typeof i?.data === "string" && i.data.length < 1_500_000)
       .slice(0, 3),
   }));
-  const r = await aiReply(clean, merged, String(customerName || "").slice(0, 80));
+  let r = await aiReply(clean, merged, String(customerName || "").slice(0, 80));
+  // Same as the live bot: the ad's ready-made first message gets the saved price reply.
+  const customerTurns = clean.filter((t) => t.role === "customer");
+  if (customerTurns.length === 1 && usePriceReply(merged) && isAdOpener(customerTurns[0].text)) {
+    r = { ...r, ok: true, reply: "[[PRICE]]" };
+  }
   if (!r.ok || !r.reply) return { ...r, cards: [] as ReturnType<typeof extractProductCards>["cards"], priceImage: "", usdToBdt: s.usdToBdt };
-  const gr = extractGreetTag(r.reply, merged);
+  const hu = extractHumanTag(r.reply, merged);
+  if (hu.human) {
+    return {
+      ...r, reply: "", orderPreview: "🙋 AI doesn't know this — on Facebook/WhatsApp it would send NOTHING, pause the AI in that chat and leave it for you in the Inbox.",
+      cards: [] as ReturnType<typeof extractProductCards>["cards"], priceImage: "", usdToBdt: s.usdToBdt,
+    };
+  }
+  const gr = extractGreetTag(hu.text, merged);
   const mt = extractMatchTag(gr.text, merged);
   const cf = extractConfirmTag(mt.text, merged);
   const it = extractItemsTag(cf.text, merged);
@@ -434,7 +449,7 @@ export async function suggestReply(id: string) {
   const r = await aiReply(history, s, conv?.name);
   // A draft is plain text you edit and send yourself — no product-photo tag in it.
   if (!r.ok) return { ok: false, error: r.error };
-  const gr = extractGreetTag(r.reply!, s);
+  const gr = extractGreetTag(extractHumanTag(r.reply!, s).text, s);
   const mt = extractMatchTag(gr.text, s);
   const cf = extractConfirmTag(mt.text, s);
   const it = extractItemsTag(cf.text, s);

@@ -5,7 +5,7 @@ import "server-only";
 import { getServerSupabase } from "@/lib/supabase/server";
 import {
   aiReply, extractProductCards, extractPriceTag, extractOrderTag, extractNoMatchTag, extractGreetTag,
-  extractMatchTag, extractConfirmTag, extractItemsTag, pricePhotos, messengerText, personalize, usePriceReply,
+  extractMatchTag, extractConfirmTag, extractItemsTag, extractHumanTag, pricePhotos, messengerText, personalize, usePriceReply,
   type ChatTurn, type ChatImage, type ChatbotSettings, type ProductCard,
 } from "@/lib/chatbot";
 import { withPhotos, splitPhotos } from "@/lib/chat-media";
@@ -58,7 +58,8 @@ function photoCaption(pics: { name: string }[]): string {
 /** The ready-made first message of click-to-chat ads, in the ways customers' phones send it. */
 export function isAdOpener(text: string): boolean {
   const t = String(text || "").toLowerCase().replace(/\s+/g, " ").trim();
-  return /can i get (more )?(info|information|details)( (on|or|about|of) (this|it))?/.test(t) ||
+  return /\bi get (more )?(info|information|details)\b/.test(t) ||
+    /^(more )?(info|information|details)( please| plz| pls)?[?.!]*$/.test(t) ||
     /^(hello|hi)?[!,. ]*i('m| am) interested in (this|your)/.test(t) ||
     /আরও তথ্য পেতে পারি|আরো তথ্য পেতে পারি/.test(t);
 }
@@ -107,7 +108,7 @@ export async function handleCustomerMessage(s: ChatbotSettings, ch: ChatChannel,
     .order("created_at", { ascending: false })
     .limit(12);
   // Notes left for you in the inbox (order created / failed) are not part of the chat.
-  const history: ChatTurn[] = (rows ?? []).reverse().filter((r: any) => !/^(🧾|⚠️ অর্ডার)/.test(r.text || "")).map((r: any) => ({
+  const history: ChatTurn[] = (rows ?? []).reverse().filter((r: any) => !/^(🧾|⚠️ অর্ডার|🙋)/.test(r.text || "")).map((r: any) => ({
     role: r.direction === "in" ? "customer" : "shop",
     text: splitPhotos(r.text).text,
   }));
@@ -145,7 +146,19 @@ export async function handleCustomerMessage(s: ChatbotSettings, ch: ChatChannel,
   };
 
   // [[GREET]] → saved greeting; [[MATCH]] → saved "yes, we have it" for a matching photo.
-  const gr = extractGreetTag(ai.reply, s);
+  // [[HUMAN]] → the AI doesn't know. Say nothing, pause the AI in this chat and leave a
+  // note so you answer it yourself (turn AI back on from the inbox when done).
+  const hu = extractHumanTag(ai.reply, s);
+  if (hu.human) {
+    await db.from("chat_messages").insert({
+      conversation_id: conv.id, direction: "out", sender: "admin", mid: null, ...usage,
+      text: "🙋 AI এই প্রশ্নের উত্তর জানে না — কিছু পাঠায়নি। আপনি উত্তর দিন। এই চ্যাটে AI বন্ধ করা হলো। (কাস্টমারকে পাঠানো হয়নি)",
+    });
+    await db.from("chat_conversations").update({ ai_enabled: false }).eq("id", conv.id);
+    return;
+  }
+
+  const gr = extractGreetTag(hu.text, s);
   const mt = extractMatchTag(gr.text, s);
   const cf = extractConfirmTag(mt.text, s);
   const it = extractItemsTag(cf.text, s);

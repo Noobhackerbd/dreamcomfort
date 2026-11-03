@@ -1,7 +1,19 @@
 {
-  "regions": ["icn1"],
+  "regions": [
+    "icn1"
+  ],
   "crons": [
-    { "path": "/api/cron/courier-ratio", "schedule": "0 */6 * * *" },
-    { "path": "/api/cron/courier-status", "schedule": "30 */6 * * *" }
+    {
+      "path": "/api/cron/courier-ratio",
+      "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/cron/courier-status",
+      "schedule": "30 */6 * * *"
+    },
+    {
+      "path": "/api/cron/chatbot-health",
+      "schedule": "17 * * * *"
+    }
   ]
 }
