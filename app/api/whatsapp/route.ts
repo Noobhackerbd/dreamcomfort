@@ -6,6 +6,7 @@
 // Signed with the same App Secret as Messenger; retries are deduped by message id.
 
 import { NextResponse, type NextRequest } from "next/server";
+import { getServerSupabase } from "@/lib/supabase/server";
 import { getChatbotSettings, fbApp, type ChatImage, type ChatbotSettings } from "@/lib/chatbot";
 import { verifySignature } from "@/lib/messenger";
 import { waSendText, waSendImages, waSendCards, waTyping, waFetchPhoto } from "@/lib/whatsapp";
@@ -38,8 +39,16 @@ export async function POST(req: NextRequest) {
   for (const entry of body.entry ?? []) {
     for (const change of entry.changes ?? []) {
       const v = change?.value;
+      if (s.waPhoneNumberId && v?.metadata?.phone_number_id && String(v.metadata.phone_number_id) !== s.waPhoneNumberId) continue;
+      // The number also runs in the WhatsApp Business app on your phone ("coexistence"):
+      // what you send from the phone arrives here as an echo — store it and pause the AI.
+      if (change?.field === "smb_message_echoes") {
+        for (const e of v?.message_echoes ?? []) {
+          try { await handleWaEcho(s, e); } catch (err) { console.error("[whatsapp] echo failed", err); }
+        }
+        continue;
+      }
       if (change?.field !== "messages" || !v?.messages?.length) continue; // delivery/read statuses
-      if (s.waPhoneNumberId && v.metadata?.phone_number_id && String(v.metadata.phone_number_id) !== s.waPhoneNumberId) continue;
       const names = new Map<string, string>((v.contacts ?? []).map((c: any) => [String(c.wa_id), String(c.profile?.name || "")]));
       for (const m of v.messages) {
         try {
@@ -91,6 +100,27 @@ async function handleWaMessage(s: ChatbotSettings, m: any, profileName: string |
     isPlainText: !!typed || (type === "image" && !!caption),
     loadPhotos: async () => (photo ? [{ mediaType: photo.mediaType, data: photo.data } as ChatImage] : []),
   });
+}
+
+/** A message you sent from the WhatsApp Business app on your phone. */
+async function handleWaEcho(s: ChatbotSettings, e: any) {
+  const to = String(e?.to || "");
+  if (!to) return;
+  const text: string = e?.text?.body || (e?.type === "image" ? "🖼️ ছবি পাঠিয়েছেন (ফোন থেকে)" : e?.type ? `📎 ${e.type} (ফোন থেকে)` : "");
+  if (!text) return;
+  const db = getServerSupabase();
+  const conv = await getOrCreateConversation(`wa:${to}`, async () => ({ name: null, avatar: null }));
+  if (!conv) return;
+  // Ours (sent by the bot or the admin inbox) are already stored under this id → no-op.
+  const { error } = await db.from("chat_messages").insert({
+    conversation_id: conv.id, direction: "out", sender: "admin", text, mid: e?.id ? String(e.id) : null,
+  });
+  if (error) return;
+  await db.from("chat_conversations").update({
+    last_message: text.slice(0, 200),
+    last_message_at: new Date().toISOString(),
+    ...(s.pauseAiOnManual ? { ai_enabled: false } : {}),
+  }).eq("id", conv.id);
 }
 
 /** How the engine sends on WhatsApp. */

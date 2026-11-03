@@ -147,7 +147,7 @@ export async function waConnect(s: ChatbotSettings, origin: string): Promise<str
     try {
       const u = new URL(`${GRAPH}/${encodeURIComponent(app.appId)}/subscriptions`);
       for (const [k, v] of Object.entries({
-        object: "whatsapp_business_account", callback_url: callback, fields: "messages",
+        object: "whatsapp_business_account", callback_url: callback, fields: "messages,smb_message_echoes",
         verify_token: s.verifyToken, access_token: `${app.appId}|${app.appSecret}`,
       })) u.searchParams.set(k, v);
       const r = await fetch(u, { method: "POST", cache: "no-store", signal: AbortSignal.timeout(15_000) });
