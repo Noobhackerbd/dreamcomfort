@@ -111,6 +111,7 @@ async function handleEvent(ev: any, s: Awaited<ReturnType<typeof getChatbotSetti
   const isPlainText = !!msg?.text || !!ev.postback;
   await handleCustomerMessage(s, messengerChannel(s), {
     conv, to: psid, text, baseText, mid, photoUrls, isPlainText,
+    fromAd: !!(msg?.referral || ev.referral || ev.postback?.referral), // click-to-Messenger ads
     loadPhotos: async () => (await Promise.all(photoUrls.map(fetchPhoto))).filter(Boolean) as ChatImage[],
   });
 }

@@ -98,6 +98,7 @@ async function handleWaMessage(s: ChatbotSettings, m: any, profileName: string |
     mid: m?.id ? String(m.id) : null,
     photoUrls: photo ? (photoUrls.length ? photoUrls : ["(photo)"]) : [],
     isPlainText: !!typed || (type === "image" && !!caption),
+    fromAd: !!m?.referral, // click-to-WhatsApp ads attach the ad as "referral"
     loadPhotos: async () => (photo ? [{ mediaType: photo.mediaType, data: photo.data } as ChatImage] : []),
   });
 }

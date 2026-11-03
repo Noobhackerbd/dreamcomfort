@@ -5,7 +5,7 @@ import "server-only";
 import { getServerSupabase } from "@/lib/supabase/server";
 import {
   aiReply, extractProductCards, extractPriceTag, extractOrderTag, extractNoMatchTag, extractGreetTag,
-  extractMatchTag, extractConfirmTag, extractItemsTag, pricePhotos, messengerText, personalize,
+  extractMatchTag, extractConfirmTag, extractItemsTag, pricePhotos, messengerText, personalize, usePriceReply,
   type ChatTurn, type ChatImage, type ChatbotSettings, type ProductCard,
 } from "@/lib/chatbot";
 import { withPhotos, splitPhotos } from "@/lib/chat-media";
@@ -55,6 +55,14 @@ function photoCaption(pics: { name: string }[]): string {
     : "🖼️ পণ্যের ছবি";
 }
 
+/** The ready-made first message of click-to-chat ads, in the ways customers' phones send it. */
+export function isAdOpener(text: string): boolean {
+  const t = String(text || "").toLowerCase().replace(/\s+/g, " ").trim();
+  return /can i get (more )?(info|information|details)( (on|or|about|of) (this|it))?/.test(t) ||
+    /^(hello|hi)?[!,. ]*i('m| am) interested in (this|your)/.test(t) ||
+    /আরও তথ্য পেতে পারি|আরো তথ্য পেতে পারি/.test(t);
+}
+
 export interface IncomingMessage {
   conv: any;                 // the chat_conversations row
   to: string;                // the id to send replies to (Messenger PSID / WhatsApp number)
@@ -64,12 +72,13 @@ export interface IncomingMessage {
   photoUrls: string[];       // photos in this message (for the inbox)
   loadPhotos: () => Promise<ChatImage[]>; // the photos as data, for the AI
   isPlainText: boolean;      // text or button (not a sticker / file / voice)
+  fromAd?: boolean;          // came from a click-to-WhatsApp / click-to-Messenger ad
 }
 
 /** Store a customer's message and, if the AI is on for this chat, answer it. */
 export async function handleCustomerMessage(s: ChatbotSettings, ch: ChatChannel, m: IncomingMessage) {
   const db = getServerSupabase();
-  const { conv, to, text, baseText, mid, photoUrls, loadPhotos, isPlainText } = m;
+  const { conv, to, text, baseText, mid, photoUrls, loadPhotos, isPlainText, fromAd } = m;
 
   // Customer message. A duplicate mid means Facebook is retrying — already handled.
   const { error: insErr } = await db.from("chat_messages").insert({
@@ -114,8 +123,16 @@ export async function handleCustomerMessage(s: ChatbotSettings, ch: ChatChannel,
     }
   }
 
-  const ai = await aiReply(history, s, conv.name);
+  let ai = await aiReply(history, s, conv.name);
   if (ai.seen) console.log(`[${ch.name}] photo check:`, ai.seen);
+
+  // A customer who tapped one of your ads opens the chat with the ad's ready-made message
+  // ("Can I get more info on this?"). As the FIRST message of a chat, that is a price
+  // question: send the saved price reply. (The AI call above only decides আপু / ভাইয়া.)
+  const firstMessage = history.filter((t) => t.role === "customer").length <= 1;
+  if (firstMessage && usePriceReply(s) && (fromAd || isAdOpener(baseText))) {
+    ai = { ...ai, ok: true, reply: "[[PRICE]]" };
+  }
   if (!ai.ok || !ai.reply) {
     console.error(`[${ch.name}] AI reply failed:`, ai.error);
     return; // leave it unanswered in the inbox for you, rather than send something wrong
