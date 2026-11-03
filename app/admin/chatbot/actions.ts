@@ -8,6 +8,7 @@ import {
   CHATBOT_MODEL_DEFAULT, type ChatbotProduct, type ChatbotReplyExample, type ChatTurn, type ChatImage,
 } from "@/lib/chatbot";
 import { sendText, checkPageToken, fetchPhoto } from "@/lib/messenger";
+import { waSendText, waCheck, waConnect } from "@/lib/whatsapp";
 import { splitPhotos } from "@/lib/chat-media";
 import { parseConfirmDetails, priceChatOrder } from "@/lib/chat-orders";
 import { headers } from "next/headers";
@@ -36,6 +37,13 @@ export async function loadChatbotAdmin() {
       productCards: s.productCards !== false,
       maxReplyTokens: s.maxReplyTokens,
       usdToBdt: s.usdToBdt,
+      wa: {
+        enabled: s.waEnabled,
+        phoneNumberId: s.waPhoneNumberId,
+        businessId: s.waBusinessId,
+        token: mask(s.waToken),
+        display: s.waDisplay,
+      },
     },
     training: { botName: s.botName, storeInfo: s.storeInfo, products: s.products, examples: s.examples, priceReply: s.priceReply, orderReply: s.orderReply, noMatchReply: s.noMatchReply, greetReply: s.greetReply, matchReply: s.matchReply, confirmReply: s.confirmReply, itemsReply: s.itemsReply },
   };
@@ -207,6 +215,37 @@ export async function disconnectFacebook() {
   }
 }
 
+/**
+ * WhatsApp: save the number's details (an empty token keeps the saved one), check the
+ * number, subscribe the account to the app and register /api/whatsapp.
+ */
+export async function connectWhatsApp(input: { enabled: boolean; phoneNumberId: string; businessId: string; token?: string }) {
+  await requireAdmin();
+  const s = await getChatbotSettings();
+  const next = { ...s };
+  next.waPhoneNumberId = String(input.phoneNumberId || "").replace(/\D/g, "").slice(0, 30);
+  next.waBusinessId = String(input.businessId || "").replace(/\D/g, "").slice(0, 30);
+  if ((input.token || "").trim()) next.waToken = input.token!.trim();
+  next.waEnabled = !!input.enabled;
+  if (!next.verifyToken) {
+    const a = new Uint8Array(12); crypto.getRandomValues(a);
+    next.verifyToken = "dc-" + Array.from(a, (b) => b.toString(16).padStart(2, "0")).join("");
+  }
+  if (!next.waEnabled) {
+    await saveChatbotSettings(next);
+    return { ok: true, display: next.waDisplay, warnings: [] as string[], token: mask(next.waToken) };
+  }
+  const check = await waCheck(next);
+  if (!check.ok) {
+    await saveChatbotSettings({ ...next, waEnabled: false });
+    return { ok: false, error: `WhatsApp didn't accept these details: ${check.error}`, token: mask(next.waToken) };
+  }
+  next.waDisplay = [check.display, check.name].filter(Boolean).join(" · ");
+  await saveChatbotSettings(next); // saved before the webhook check — Facebook verifies it right away
+  const warnings = await waConnect(next, siteOrigin());
+  return { ok: true, display: next.waDisplay, warnings, token: mask(next.waToken), verifyToken: next.verifyToken };
+}
+
 export async function testConnection() {
   await requireAdmin();
   const s = await getChatbotSettings();
@@ -219,6 +258,9 @@ export async function testConnection() {
       : { ok: false, detail: ai.error || "Failed" },
     appSecret: !!fbApp(s).appSecret,
     verifyToken: !!s.verifyToken,
+    whatsapp: !s.waEnabled
+      ? null
+      : await waCheck(s).then((w) => (w.ok ? { ok: true, detail: `Connected: ${[w.display, w.name].filter(Boolean).join(" · ")}` } : { ok: false, detail: w.error || "Failed" })),
   };
 }
 
@@ -345,7 +387,10 @@ export async function sendManualReply(id: string, text: string) {
 
   const last = conv.last_customer_at ? new Date(conv.last_customer_at).getTime() : 0;
   const outside24h = !last || Date.now() - last > 24 * 3600 * 1000;
-  const sent = await sendText(s.pageAccessToken, conv.psid, body, outside24h);
+  const isWa = String(conv.psid).startsWith("wa:");
+  const sent = isWa
+    ? await waSendText(s, String(conv.psid).slice(3), messengerText(body))
+    : await sendText(s.pageAccessToken, conv.psid, body, outside24h);
   if (!sent.ok) return { ok: false, error: sent.error };
 
   await db.from("chat_messages").insert({

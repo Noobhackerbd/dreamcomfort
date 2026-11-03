@@ -101,6 +101,12 @@ export interface ChatbotSettings {
   pageName: string;
   connectedBy: string;     // the Facebook account that connected the Page
   connectedAt: string;
+  // ---- WhatsApp (Cloud API, same Facebook app) ----
+  waEnabled: boolean;
+  waPhoneNumberId: string;
+  waBusinessId: string;
+  waToken: string;         // permanent System User token with whatsapp_business_messaging
+  waDisplay: string;       // the connected number, for the admin screen
   verifyToken: string;     // any phrase; must match what you type in the Facebook app
   anthropicKey: string;    // optional: a key just for the bot; empty = Admin → Settings → AI
   model: string;
@@ -134,6 +140,11 @@ export const DEFAULT_CHATBOT: ChatbotSettings = {
   pageName: "",
   connectedBy: "",
   connectedAt: "",
+  waEnabled: false,
+  waPhoneNumberId: "",
+  waBusinessId: "",
+  waToken: "",
+  waDisplay: "",
   verifyToken: "",
   anthropicKey: "",
   model: CHATBOT_MODEL_DEFAULT,

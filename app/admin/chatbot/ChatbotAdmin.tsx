@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   saveTraining, saveConnection, testConnection, importStoreProducts, testChat,
   listConversations, getThread, setConversationAi, sendManualReply, suggestReply,
-  listPendingPages, choosePage, disconnectFacebook, setBotEnabled,
+  listPendingPages, choosePage, disconnectFacebook, setBotEnabled, connectWhatsApp,
 } from "./actions";
 import { splitPhotos } from "@/lib/chat-media";
 import { getSupabaseBrowserClient } from "@/lib/supabase/ssr-browser";
@@ -27,6 +27,7 @@ type Connection = {
   pageAccessToken: string; appSecret: string; anthropicKey: string; verifyToken: string;
   appId: string; fbConfigId: string; fbAppFromEnv: boolean; page: FbPageInfo | null;
   model: string; autoReply: boolean; pauseAiOnManual: boolean; photoMatch: boolean; productCards: boolean; maxReplyTokens: number; usdToBdt: number;
+  wa: { enabled: boolean; phoneNumberId: string; businessId: string; token: string; display: string };
 };
 type FbPageInfo = { id: string; name: string; by: string; at: string };
 type Initial = { connection: Connection; training: Training };
@@ -129,6 +130,17 @@ function BotSwitch({ on, setOn }: { on: boolean; setOn: (v: boolean) => void }) 
         {err && <p className="text-xs" style={{ color: "rgb(185,28,28)" }}>{err}</p>}
       </div>
     </div>
+  );
+}
+
+/** Which app the chat is on: blue = Messenger, green = WhatsApp. */
+function ChannelDot({ psid }: { psid: string }) {
+  const wa = psid.startsWith("wa:");
+  return (
+    <span title={wa ? "WhatsApp" : "Messenger"} className="grid h-4 w-4 shrink-0 place-items-center rounded-full text-[9px] font-bold text-white"
+      style={{ background: wa ? "#25D366" : "#0084FF" }}>
+      {wa ? "W" : "M"}
+    </span>
   );
 }
 
@@ -270,7 +282,10 @@ function Inbox({ rate }: { rate: number }) {
                     )}
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center justify-between gap-2">
-                        <span className={"truncate text-sm " + (c.unread ? "font-bold" : "font-medium")}>{c.name || "Customer"}</span>
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <ChannelDot psid={c.psid} />
+                          <span className={"truncate text-sm " + (c.unread ? "font-bold" : "font-medium")}>{c.name || (c.psid.startsWith("wa:") ? "+" + c.psid.slice(3) : "Customer")}</span>
+                        </span>
                         <span className="shrink-0 text-[11px] dc-muted">{ago(c.last_message_at)}</span>
                       </span>
                       <span className="mt-0.5 flex items-center gap-1.5">
@@ -297,7 +312,9 @@ function Inbox({ rate }: { rate: number }) {
               <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3" style={{ borderBottom: "1px solid var(--a-border)" }}>
                 <div className="min-w-0">
                   <p className="truncate font-semibold">{open.name || "Customer"}</p>
-                  <p className="text-[11px] dc-muted">Messenger · last message {ago(open.last_customer_at)} ago</p>
+                  <p className="text-[11px] dc-muted">
+                    {open.psid.startsWith("wa:") ? `WhatsApp · +${open.psid.slice(3)}` : "Messenger"} · last message {ago(open.last_customer_at)} ago
+                  </p>
                 </div>
                 <label className="flex cursor-pointer items-center gap-2 text-sm">
                   <input type="checkbox" checked={open.ai_enabled} disabled={busy === "ai"} onChange={(e) => toggleAi(e.target.checked)} />
@@ -338,7 +355,9 @@ function Inbox({ rate }: { rate: number }) {
               <div className="p-3" style={{ borderTop: "1px solid var(--a-border)" }}>
                 {outside24h && (
                   <p className="mb-2 rounded-lg px-3 py-2 text-xs" style={{ background: "var(--a-warn-soft)", color: "var(--a-warn)" }}>
-                    The customer's last message is over 24 hours old. Facebook only lets pages reply after 24 hours with special Human Agent approval, so this send may fail.
+                    {open.psid.startsWith("wa:")
+                      ? "The customer's last message is over 24 hours old. WhatsApp only allows approved template messages after 24 hours, so this send will fail."
+                      : "The customer's last message is over 24 hours old. Facebook only lets pages reply after 24 hours with special Human Agent approval, so this send may fail."}
                   </p>
                 )}
                 <textarea
@@ -930,6 +949,83 @@ function FacebookLogin({ conn, set, fb, secret, setSecret, saveFirst }: {
   );
 }
 
+/** WhatsApp number: details from Meta's WhatsApp → API Setup page, then Connect. */
+function WhatsAppCard({ conn, set }: { conn: Connection; set: (p: Partial<Connection>) => void }) {
+  const wa = conn.wa;
+  const [token, setToken] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
+  const setWa = (p: Partial<Connection["wa"]>) => set({ wa: { ...wa, ...p } });
+  const webhookUrl = useMemo(() => (typeof window !== "undefined" ? `${window.location.origin}/api/whatsapp` : "/api/whatsapp"), []);
+
+  async function connect(enabled: boolean) {
+    setBusy(true); setNote(null);
+    const r = await connectWhatsApp({ enabled, phoneNumberId: wa.phoneNumberId, businessId: wa.businessId, token });
+    setBusy(false);
+    if (!r.ok) { setWa({ enabled: false, token: r.token || wa.token }); setNote({ ok: false, text: (r as any).error || "Failed." }); return; }
+    setToken("");
+    setWa({ enabled, display: r.display || "", token: r.token || wa.token });
+    if ((r as any).verifyToken) set({ wa: { ...wa, enabled, display: r.display || "", token: r.token || wa.token }, verifyToken: (r as any).verifyToken });
+    setNote(!enabled
+      ? { ok: true, text: "WhatsApp turned off. Messages on WhatsApp are no longer answered." }
+      : r.warnings?.length
+        ? { ok: false, text: "Connected, but Facebook refused a step: " + r.warnings.join(" ") }
+        : { ok: true, text: "WhatsApp connected ✓ Message the number from your phone to try it." });
+  }
+
+  return (
+    <div className="dc-card p-4">
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="font-bold flex items-center gap-2">
+          <span className="grid h-6 w-6 place-items-center rounded-full text-xs font-bold text-white" style={{ background: "#25D366" }}>W</span>
+          WhatsApp
+        </h2>
+        {wa.enabled && wa.display && <span className="text-sm" style={{ color: "var(--a-ok)" }}>✅ {wa.display}</span>}
+      </div>
+      <p className="text-xs dc-muted mb-3">
+        Same bot, same training and saved replies, same inbox — on your WhatsApp number. Details are on developers.facebook.com → your app → <b>WhatsApp → API Setup</b>.
+      </p>
+      {note && (
+        <p className="mb-3 rounded-lg px-3 py-2 text-sm whitespace-pre-wrap"
+          style={{ background: note.ok ? "rgba(22,163,74,.1)" : "rgba(220,38,38,.08)", color: note.ok ? "var(--a-ok)" : "rgb(185,28,28)" }}>
+          {note.text}
+        </p>
+      )}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label htmlFor="wa-phone" className="block text-xs font-medium dc-muted mb-1">Phone number ID</label>
+          <input id="wa-phone" inputMode="numeric" value={wa.phoneNumberId} onChange={(e) => setWa({ phoneNumberId: e.target.value })} className="dc-input font-mono" placeholder="e.g. 123456789012345" />
+        </div>
+        <div>
+          <label htmlFor="wa-waba" className="block text-xs font-medium dc-muted mb-1">WhatsApp Business Account ID</label>
+          <input id="wa-waba" inputMode="numeric" value={wa.businessId} onChange={(e) => setWa({ businessId: e.target.value })} className="dc-input font-mono" placeholder="e.g. 109876543210987" />
+        </div>
+      </div>
+      <div className="mt-3">
+        <Secret id="wa-token" label="Access token" saved={wa.token} value={token} onChange={setToken}
+          hint="Use a permanent token: Business settings → System users → Generate token with whatsapp_business_messaging + whatsapp_business_management. The temporary token on API Setup stops working after 24 hours." />
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <button type="button" onClick={() => connect(true)} disabled={busy}
+          className="inline-flex items-center gap-2 rounded-lg px-4 py-2.5 font-semibold text-white disabled:opacity-60" style={{ background: "#25D366" }}>
+          {busy ? "Connecting…" : wa.enabled ? "Save & reconnect WhatsApp" : "Connect WhatsApp"}
+        </button>
+        {wa.enabled && <button type="button" onClick={() => connect(false)} disabled={busy} className="dc-btn disabled:opacity-50">Turn off</button>}
+      </div>
+      <details className="mt-3 text-xs dc-muted">
+        <summary className="cursor-pointer">Setting it up / webhook details</summary>
+        <ol className="mt-2 list-decimal space-y-1 pl-5">
+          <li>developers.facebook.com → your app (DreamComfort Chat) → <b>Add use case</b> → "Connect with customers through WhatsApp".</li>
+          <li>WhatsApp → API Setup: add your business phone number (or use the free test number first) and copy the Phone number ID and WhatsApp Business Account ID.</li>
+          <li>Create a permanent System User token (see above), paste it, press <b>Connect WhatsApp</b> — the webhook is registered by itself.</li>
+          <li>Add a payment method in Meta Business settings. Replies to customers are free up to 1,000 a month per number; after that Meta charges per message.</li>
+        </ol>
+        <p className="mt-2">If the webhook has to be added by hand: WhatsApp → Configuration → callback URL <code>{webhookUrl}</code>, verify token <code>{conn.verifyToken || "(press Connect first)"}</code>, subscribe to <b>messages</b>.</p>
+      </details>
+    </div>
+  );
+}
+
 function Connect({ conn, setConn, fb }: { conn: Connection; setConn: (c: Connection) => void; fb: FbReturn }) {
   const [token, setToken] = useState("");
   const [secret, setSecret] = useState("");
@@ -976,6 +1072,8 @@ function Connect({ conn, setConn, fb }: { conn: Connection; setConn: (c: Connect
   return (
     <div className="grid gap-4">
       <FacebookLogin conn={conn} set={set} fb={fb} secret={secret} setSecret={setSecret} saveFirst={save} />
+
+      <WhatsAppCard conn={conn} set={set} />
 
       <div className="dc-card p-4">
         <h2 className="font-bold mb-3">AI</h2>
@@ -1031,6 +1129,7 @@ function Connect({ conn, setConn, fb }: { conn: Connection; setConn: (c: Connect
           {test.ai.ok && "reply" in test.ai && <p className="dc-muted whitespace-pre-wrap">“{(test.ai as any).reply}”</p>}
           <p>{test.appSecret ? "✅" : "❌"} App secret {test.appSecret ? "saved" : "missing — Facebook messages will be rejected"}</p>
           <p>{test.verifyToken ? "✅" : "❌"} Verify token {test.verifyToken ? "saved" : "missing — Facebook can't verify the webhook"}</p>
+          {test.whatsapp && <p>{test.whatsapp.ok ? "✅" : "❌"} WhatsApp: {test.whatsapp.detail}</p>}
         </div>
       )}
 
