@@ -75,9 +75,9 @@ type OurOrder = {
 };
 
 function buildLabel(business: any, pod: any, ours: OurOrder): string {
-  // Prefer CarryBee POD values, but fall back to our own order record (which always has them).
-  const name = pod.recipient_name || ours.customer_name || "";
-  const phone = prettyPhone(pod.recipient_phone || ours.customer_phone || "");
+  // Our order record first — it has any edits made after the parcel was booked.
+  const name = ours.customer_name || pod.recipient_name || "";
+  const phone = prettyPhone(ours.customer_phone || pod.recipient_phone || "");
   const items = (ours.order_items ?? []).filter((it) => it?.product_name);
   const pieces = items.reduce((n, it) => n + (Number(it.quantity) || 0), 0);
   const itemsText = items.length

@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { getPrintQueue, markLabelPrinted, getPrintedProductCounts } from "../orders/actions";
+import { getPrintQueue, markLabelPrinted, getPrintedProductCounts, getPrintHistory, type PrintKind } from "../orders/actions";
 
-type Kind = "ok" | "new" | "err" | "sys" | "busy";
-interface LogRow { t: string; msg: string; kind: Kind; ref?: string }
+type History = Awaited<ReturnType<typeof getPrintHistory>>["rows"];
 interface ProdCount { name: string; image: string | null; count: number }
-interface QueueOrder { id: string; order_number: string; tracking_id: string; customer_name: string | null }
+interface QueueOrder { id: string; order_number: string; tracking_id: string | null; customer_name: string | null }
+
+const printKey = (o: QueueOrder) => o.id;
+const KIND_LABEL: Record<PrintKind, string> = { auto: "প্রিন্ট", manual: "হাতে প্রিন্ট", reprint: "আবার প্রিন্ট" };
 
 const timeNow = () => new Date().toLocaleTimeString("en-GB");
 const hm = (iso: string | null) =>
@@ -17,7 +19,8 @@ export function PrintStation() {
   const [soundOn, setSoundOn] = useState(true);
   const [queue, setQueue] = useState<QueueOrder[]>([]);
   const [bulkBusy, setBulkBusy] = useState(false);
-  const [log, setLog] = useState<LogRow[]>([]);
+  const [history, setHistory] = useState<History>([]);
+  const [historySaved, setHistorySaved] = useState(true);
   const [lastCheck, setLastCheck] = useState<string>("—");
   const [products, setProducts] = useState<ProdCount[]>([]);
   const [totalLabels, setTotalLabels] = useState(0);
@@ -25,7 +28,6 @@ export function PrintStation() {
   const [firstPrintAt, setFirstPrintAt] = useState<string | null>(null);
   const [current, setCurrent] = useState<QueueOrder | null>(null);
   const [lastPrinted, setLastPrinted] = useState<QueueOrder | null>(null);
-  const [failed, setFailed] = useState(0);
   const printing = useRef(false);
   const processed = useRef<Set<string>>(new Set());
   const seenQueue = useRef<Set<string>>(new Set());
@@ -35,8 +37,11 @@ export function PrintStation() {
   const soundRef = useRef(soundOn);
   soundRef.current = soundOn;
 
-  function addLog(kind: Kind, msg: string, ref?: string) {
-    setLog((l) => [{ t: timeNow(), msg, kind, ref }, ...l].slice(0, 60));
+  async function loadHistory() {
+    try {
+      const r = await getPrintHistory();
+      if (r.ok) { setHistory(r.rows); setHistorySaved(r.persisted); }
+    } catch {}
   }
 
   /** Short WebAudio beep — no asset needed. */
@@ -89,28 +94,33 @@ export function PrintStation() {
     });
   }
 
-  /** Print one order's label and mark it printed. */
-  async function printOne(o: QueueOrder) {
+  /** Print one order's label, mark it printed and add it to today's history. */
+  async function printOne(o: QueueOrder, how: "auto" | "manual" | "reprint" = "auto") {
+    const kind: PrintKind = how;
     printing.current = true;
-    processed.current.add(o.id);
+    processed.current.add(printKey(o));
     setCurrent(o);
-    addLog("busy", "প্রিন্ট হচ্ছে", o.order_number);
     try {
       await printLabel(o.id);
-      const r = await markLabelPrinted(o.id);
+      const r = await markLabelPrinted(o.id, kind);
       if (!r.ok) throw new Error(r.error);
-      addLog("ok", `প্রিন্ট হয়েছে${o.customer_name ? " · " + o.customer_name : ""}`, o.order_number);
       setLastPrinted(o);
       setQueue((q) => q.filter((x) => x.id !== o.id));
       loadCounts();
     } catch {
-      addLog("err", "প্রিন্ট হয়নি — পরের বার আবার চেষ্টা হবে", o.order_number);
-      setFailed((n) => n + 1);
-      processed.current.delete(o.id);
+      processed.current.delete(printKey(o));
+      try { await markLabelPrinted(o.id, kind, false); } catch {}
     } finally {
       setCurrent(null);
       printing.current = false;
+      loadHistory();
     }
+  }
+
+  /** Reprint a label from today's history. */
+  async function reprint(h: History[number]) {
+    if (bulkBusy || printing.current) return;
+    await printOne({ id: h.orderId, order_number: h.orderNumber, tracking_id: h.trackingId, customer_name: h.customerName }, "reprint");
   }
 
   /** Print every pending label right now (manual bulk). */
@@ -120,8 +130,8 @@ export function PrintStation() {
     try {
       const res = await getPrintQueue();
       if (!res.ok) return;
-      const pending = (res.orders as QueueOrder[]).filter((o) => !processed.current.has(o.id));
-      for (const o of pending) await printOne(o);
+      const pending = (res.orders as QueueOrder[]).filter((o) => !processed.current.has(printKey(o)));
+      for (const o of pending) await printOne(o, "manual");
     } finally {
       setBulkBusy(false);
     }
@@ -130,7 +140,7 @@ export function PrintStation() {
   /** "Print now" on one row of the queue. */
   async function printNow(o: QueueOrder) {
     if (bulkBusy || printing.current) return;
-    await printOne(o);
+    await printOne(o, "manual");
   }
 
   async function tick() {
@@ -142,31 +152,26 @@ export function PrintStation() {
     setQueue(orders);
 
     // Sound alert on any newly-arrived order (skip the very first load).
-    const fresh = orders.filter((o) => !seenQueue.current.has(o.id));
-    orders.forEach((o) => seenQueue.current.add(o.id));
-    if (fresh.length && !firstLoad.current) {
-      beep();
-      fresh.forEach((o) => addLog("new", "নতুন অর্ডার এসেছে", o.order_number));
-    }
+    const fresh = orders.filter((o) => !seenQueue.current.has(printKey(o)));
+    orders.forEach((o) => seenQueue.current.add(printKey(o)));
+    if (fresh.length && !firstLoad.current) beep();
     firstLoad.current = false;
 
     if (!autoRef.current) return;
-    const next = orders.find((o) => !processed.current.has(o.id));
+    const next = orders.find((o) => !processed.current.has(printKey(o)));
     if (next) await printOne(next);
   }
 
   function toggleAuto() {
-    const next = !autoRef.current;
-    setAuto(next);
-    addLog("sys", next ? "প্রিন্ট স্টেশন চালু করা হয়েছে" : "প্রিন্ট স্টেশন বন্ধ করা হয়েছে");
+    setAuto(!autoRef.current);
   }
 
   useEffect(() => {
-    addLog("sys", "প্রিন্ট স্টেশন চালু হয়েছে");
     const t = setInterval(tick, 6000);
     tick();
     loadCounts();
-    const c = setInterval(loadCounts, 30000);
+    loadHistory();
+    const c = setInterval(() => { loadCounts(); loadHistory(); }, 30000);
     return () => { clearInterval(t); clearInterval(c); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -175,6 +180,8 @@ export function PrintStation() {
   const shown = current ?? lastPrinted;
   const max = Math.max(1, ...products.map((p) => p.count));
   const busy = bulkBusy || !!current;
+  const failed = history.filter((h) => !h.ok).length;
+  const reprints = history.filter((h) => h.ok && h.kind === "reprint").length;
 
   return (
     <div className={`ps ${auto ? "" : "ps-off"}`}>
@@ -234,7 +241,7 @@ export function PrintStation() {
       <section className="ps-stats">
         <div className="ps-stat"><div className="k">{scopedToday ? "আজ প্রিন্ট হয়েছে" : "মোট প্রিন্ট"}</div><div className="v ps-num" style={{ color: "var(--a-violet)" }}>{totalLabels}</div><div className="s">লেবেল</div></div>
         <div className="ps-stat"><div className="k">প্রিন্টের অপেক্ষায়</div><div className="v ps-num" style={{ color: pending ? "var(--a-coral)" : "var(--a-text)" }}>{pending}</div><div className="s">অর্ডার</div></div>
-        <div className="ps-stat"><div className="k">প্রিন্ট হয়নি</div><div className="v ps-num" style={{ color: failed ? "#dc2626" : "var(--a-ok)" }}>{failed}</div><div className="s">এই পেজ খোলার পর</div></div>
+        <div className="ps-stat"><div className="k">প্রিন্ট হয়নি</div><div className="v ps-num" style={{ color: failed ? "#dc2626" : "var(--a-ok)" }}>{failed}</div><div className="s">আজ{reprints ? ` · আবার প্রিন্ট ${reprints}` : ""}</div></div>
         <div className="ps-stat"><div className="k">আজ প্রথম প্রিন্ট</div><div className="v ps-num">{hm(firstPrintAt)}</div><div className="s">বাংলাদেশ সময়</div></div>
       </section>
 
@@ -301,17 +308,22 @@ export function PrintStation() {
         <section className="ps-receipt">
           <h2>প্রিন্ট খাতা</h2>
           <div className="ps-sub ps-num">
-            {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Dhaka" })} · এই পেজের কাজ
+            {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Dhaka" })} · আজ <span className="ps-num">{history.filter((h) => h.ok).length}</span> বার প্রিন্ট
           </div>
-          {log.length === 0 ? (
-            <p className="ps-empty" style={{ textAlign: "center" }}>এখনো কিছু প্রিন্ট হয়নি।</p>
+          {!historySaved && <p className="ps-note">ডাটাবেস আপডেট বাকি — শুধু প্রিন্টগুলো দেখাচ্ছে, “আবার প্রিন্ট” ইতিহাস রাখা যাচ্ছে না।</p>}
+          {history.length === 0 ? (
+            <p className="ps-empty" style={{ textAlign: "center" }}>আজ এখনো কিছু প্রিন্ট হয়নি।</p>
           ) : (
             <ul className="ps-log">
-              {log.map((r, i) => (
-                <li key={i}>
-                  <time className="ps-num">{r.t.slice(0, 5)}</time>
-                  <span className={`ic ${r.kind}`}>{ICON[r.kind]}</span>
-                  <span>{r.msg}{r.ref && <> — <b className="ps-num">{r.ref}</b></>}</span>
+              {history.map((h) => (
+                <li key={h.id}>
+                  <time className="ps-num">{hm(h.at)}</time>
+                  <span className={`ic ${!h.ok ? "err" : h.kind === "reprint" ? "busy" : "ok"}`}>{!h.ok ? "!" : h.kind === "reprint" ? "↻" : "✓"}</span>
+                  <span className="ps-log-main">
+                    <b className="ps-num">{h.orderNumber}</b>
+                    <span className="ps-log-sub">{h.ok ? KIND_LABEL[h.kind] : "প্রিন্ট হয়নি"}{h.customerName ? " · " + h.customerName : ""}</span>
+                  </span>
+                  <button type="button" className="ps-reprint" onClick={() => reprint(h)} disabled={busy} title="এই লেবেল আবার প্রিন্ট করুন">↻ আবার</button>
                 </li>
               ))}
             </ul>
@@ -321,8 +333,6 @@ export function PrintStation() {
     </div>
   );
 }
-
-const ICON: Record<Kind, string> = { ok: "✓", new: "●", err: "!", sys: "○", busy: "↻" };
 
 const CSS = `
 .ps{--ps-ink:#1d1c22;--ps-ink-2:#2a2930;--ps-line:#3a3942;--ps-led:#3ddc84;--ps-paper:#fffdf7;display:grid;gap:18px;max-width:1120px}
@@ -417,7 +427,13 @@ const CSS = `
 .ps-receipt h2{margin:0 0 4px;font-size:17px;text-align:center;font-weight:700}
 .ps-sub{text-align:center;font-size:12px;color:var(--a-muted);border-bottom:1px dashed #d8d6cf;padding-bottom:10px;margin-bottom:6px}
 .ps-log{list-style:none;margin:0;padding:0;font-size:13px;max-height:560px;overflow-y:auto}
-.ps-log li{display:grid;grid-template-columns:44px 18px 1fr;gap:6px;padding:7px 0;border-bottom:1px dotted #e6e3da;align-items:baseline}
+.ps-log li{display:grid;grid-template-columns:44px 18px 1fr auto;gap:6px;padding:7px 0;border-bottom:1px dotted #e6e3da;align-items:center}
+.ps-log-main{min-width:0;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 6px}
+.ps-log-sub{font-size:12px;color:var(--a-muted);width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ps-reprint{border:1px solid var(--a-border);background:#fff;border-radius:8px;padding:3px 8px;font-size:12px;white-space:nowrap}
+.ps-reprint:hover:not(:disabled){border-color:var(--a-text)}
+.ps-reprint:disabled{opacity:.4}
+.ps-note{font-size:12px;color:#a16207;background:#fff7e6;border-radius:8px;padding:6px 8px;margin:6px 0}
 .ps-log li:last-child{border-bottom:0}
 .ps-log time{color:var(--a-muted);font-size:12px}
 .ps-log .ic{font-weight:700}

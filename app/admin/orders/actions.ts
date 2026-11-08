@@ -78,34 +78,90 @@ export async function resetCallAttempts(orderId: string) {
 export async function getPrintQueue() {
   await requireAdmin();
   const supabase = getServerSupabase();
-  const { data, error } = await supabase
-    .from("orders")
-    .select("id, order_number, tracking_id, customer_name")
-    .eq("courier", "CarryBee")
-    .eq("label_printed", false)
-    .not("tracking_id", "is", null)
-    .in("status", ["confirmed", "processing", "shipped"])
-    .order("created_at", { ascending: true })
-    .limit(20);
+  const q = (cols: string) =>
+    supabase
+      .from("orders")
+      .select(cols)
+      .eq("courier", "CarryBee")
+      .eq("label_printed", false)
+      .not("tracking_id", "is", null)
+      .in("status", ["confirmed", "processing", "shipped"])
+      .order("created_at", { ascending: true })
+      .limit(20);
+  const { data, error } = await q("id, order_number, tracking_id, customer_name");
   if (error) return { ok: false, error: error.message, orders: [] as any[] };
-  return { ok: true, orders: data ?? [] };
+  return { ok: true, orders: (data ?? []) as any[] };
 }
 
-/** Mark an order's label as printed so the Print Station doesn't re-print it. */
-export async function markLabelPrinted(orderId: string) {
+export type PrintKind = "auto" | "manual" | "reprint";
+
+/** Mark an order's label as printed so the Print Station doesn't re-print it, and add a
+ *  row to today's print history. */
+export async function markLabelPrinted(orderId: string, kind: PrintKind = "auto", ok = true) {
   await requireAdmin();
   const supabase = getServerSupabase();
-  // Try to set both the flag and the timestamp (migration 8). If the timestamp
-  // column doesn't exist yet, fall back to just the flag so printing still works.
-  const stamped = await supabase
-    .from("orders")
-    .update({ label_printed: true, label_printed_at: new Date().toISOString() })
-    .eq("id", orderId);
-  if (stamped.error) {
-    const { error } = await supabase.from("orders").update({ label_printed: true }).eq("id", orderId);
-    if (error) return { ok: false, error: error.message };
+  if (ok) {
+    // Try to set both the flag and the timestamp (migration 8). If the timestamp
+    // column doesn't exist yet, fall back to just the flag so printing still works.
+    const stamped = await supabase
+      .from("orders")
+      .update({ label_printed: true, label_printed_at: new Date().toISOString() })
+      .eq("id", orderId);
+    if (stamped.error) {
+      const { error } = await supabase.from("orders").update({ label_printed: true }).eq("id", orderId);
+      if (error) return { ok: false, error: error.message };
+    }
   }
+  try {
+    const { data: o } = await supabase.from("orders").select("order_number, customer_name").eq("id", orderId).maybeSingle();
+    await supabase.from("print_log").insert({
+      order_id: orderId, order_number: o?.order_number ?? null, customer_name: o?.customer_name ?? null, kind, ok,
+    });
+  } catch { /* history is best-effort (table may not exist yet) */ }
   return { ok: true };
+}
+
+/** Today's (Bangladesh) print history for the Print Station — survives a reload. */
+export async function getPrintHistory() {
+  await requireAdmin();
+  const supabase = getServerSupabase();
+  const nowBd = new Date(Date.now() + 6 * 3600 * 1000);
+  const cutoff = new Date(
+    Date.UTC(nowBd.getUTCFullYear(), nowBd.getUTCMonth(), nowBd.getUTCDate()) - 6 * 3600 * 1000
+  ).toISOString();
+
+  const { data, error } = await supabase
+    .from("print_log")
+    .select("id, order_id, order_number, customer_name, kind, ok, created_at, orders(tracking_id)")
+    .gte("created_at", cutoff)
+    .order("created_at", { ascending: false })
+    .limit(300);
+  if (!error) {
+    return {
+      ok: true, persisted: true,
+      rows: ((data ?? []) as any[]).map((r) => ({
+        id: r.id as string, orderId: r.order_id as string, orderNumber: r.order_number as string,
+        customerName: (r.customer_name ?? "") as string, kind: r.kind as PrintKind, ok: !!r.ok, at: r.created_at as string,
+        trackingId: (r.orders?.tracking_id ?? null) as string | null,
+      })),
+    };
+  }
+  // No print_log table yet: rebuild today's list from the orders themselves (no reprints).
+  const res = await supabase
+    .from("orders")
+    .select("id, order_number, customer_name, tracking_id, label_printed_at")
+    .eq("label_printed", true)
+    .gte("label_printed_at", cutoff)
+    .order("label_printed_at", { ascending: false })
+    .limit(300);
+  return {
+    ok: !res.error, persisted: false,
+    rows: ((res.data ?? []) as any[]).map((o) => ({
+      id: o.id as string, orderId: o.id as string, orderNumber: o.order_number as string,
+      customerName: (o.customer_name ?? "") as string, kind: "auto" as PrintKind, ok: true, at: o.label_printed_at as string,
+      trackingId: (o.tracking_id ?? null) as string | null,
+    })),
+  };
 }
 
 /**
