@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { ScanBox, play, type Sound } from "@/components/admin/ScanBox";
 import { getReturns, scanReturn, forceReceive, markReceived, type ReturnRow, type ScanResult } from "./actions";
 
 type Tab = "waiting" | "received" | "late";
@@ -15,47 +16,6 @@ const tel = (p: string) => `tel:+${(p || "").replace(/\D/g, "")}`;
 const bdToday = () => new Date(Date.now() + 6 * 3600000).toISOString().slice(0, 10);
 const isToday = (iso: string | null) => !!iso && new Date(new Date(iso).getTime() + 6 * 3600000).toISOString().slice(0, 10) === bdToday();
 
-// ── Scan sounds ────────────────────────────────────────────────────────────
-// One shared AudioContext, unlocked by the first tap/key on the page (browsers keep audio
-// muted until then). A camera scan has no tap of its own, so without this it stays silent.
-type Sound = "beep" | "ok" | "again" | "warn" | "bad";
-let audio: AudioContext | null = null;
-function audioCtx(): AudioContext | null {
-  try {
-    if (!audio) {
-      const AC = (window.AudioContext || (window as any).webkitAudioContext);
-      if (!AC) return null;
-      audio = new AC();
-    }
-    if (audio.state === "suspended") audio.resume().catch(() => {});
-    return audio;
-  } catch { return null; }
-}
-const NOTES: Record<Sound, [number, number, number][]> = {
-  // [frequency Hz, start s, length s]
-  beep: [[2600, 0, 0.07]],                                  // scanner "read" chirp
-  ok: [[880, 0, 0.12], [1320, 0.13, 0.22]],                 // received — rising ding-ding
-  again: [[988, 0, 0.1], [988, 0.16, 0.1]],                 // already received — double beep
-  warn: [[660, 0, 0.16], [440, 0.2, 0.26]],                 // not a return — falling
-  bad: [[180, 0, 0.18], [180, 0.24, 0.32]],                 // not found / error — low buzz
-};
-function play(kind: Sound) {
-  const ctx = audioCtx();
-  try { if (navigator.vibrate) navigator.vibrate(kind === "ok" ? 80 : kind === "beep" ? 0 : [120, 80, 120]); } catch {}
-  if (!ctx) return;
-  const t0 = ctx.currentTime + 0.01;
-  for (const [f, at, len] of NOTES[kind]) {
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.type = kind === "bad" ? "square" : "sine";
-    o.frequency.value = f;
-    g.gain.setValueAtTime(0.0001, t0 + at);
-    g.gain.exponentialRampToValueAtTime(kind === "bad" ? 0.12 : 0.25, t0 + at + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + at + len);
-    o.connect(g); g.connect(ctx.destination);
-    o.start(t0 + at); o.stop(t0 + at + len + 0.02);
-  }
-}
 const SOUND_OF: Record<ScanResult["result"], Sound> = {
   received: "ok", already: "again", not_returned: "warn", not_found: "bad", error: "bad",
 };
@@ -63,15 +23,8 @@ const SOUND_OF: Record<ScanResult["result"], Sound> = {
 export function ReturnsDesk() {
   const [data, setData] = useState<Data | null>(null);
   const [tab, setTab] = useState<Tab>("waiting");
-  const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [last, setLast] = useState<ScanResult | null>(null);
-  const [camOn, setCamOn] = useState(false);
-  const [camErr, setCamErr] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const recent = useRef<Map<string, number>>(new Map());
-  const busyRef = useRef(false);
 
   async function load() {
     try { setData(await getReturns()); } catch {}
@@ -79,40 +32,18 @@ export function ReturnsDesk() {
   useEffect(() => {
     load();
     const t = setInterval(load, 60000);
-    // Unlock sound on the first tap / key press (USB scanners type keys, so they unlock it too).
-    const unlock = () => { audioCtx(); };
-    document.addEventListener("pointerdown", unlock);
-    document.addEventListener("keydown", unlock);
-    return () => {
-      clearInterval(t);
-      document.removeEventListener("pointerdown", unlock);
-      document.removeEventListener("keydown", unlock);
-    };
+    return () => clearInterval(t);
   }, []);
 
-  async function submit(raw: string) {
-    const c = raw.trim();
-    if (!c || busyRef.current) return;
-    // Ignore the same code read twice within 4 seconds (camera keeps seeing it).
-    const seenAt = recent.current.get(c.toUpperCase());
-    if (seenAt && Date.now() - seenAt < 4000) return;
-    recent.current.set(c.toUpperCase(), Date.now());
-    busyRef.current = true;
-    setBusy(true);
-    play("beep"); // instant feedback that the code was read
+  async function onScan(code: string): Promise<Sound> {
     try {
-      const r = await scanReturn(c);
+      const r = await scanReturn(code);
       setLast(r);
-      play(SOUND_OF[r.result]);
       if (r.result === "received") load();
+      return SOUND_OF[r.result];
     } catch (e: any) {
       setLast({ result: "error", error: e?.message || "সমস্যা হয়েছে" });
-      play("bad");
-    } finally {
-      busyRef.current = false;
-      setBusy(false);
-      setCode("");
-      inputRef.current?.focus();
+      return "bad";
     }
   }
 
@@ -131,58 +62,6 @@ export function ReturnsDesk() {
     const r = await markReceived(o.id, received);
     if (r.ok) load();
   }
-
-  // ── Camera scanning: BarcodeDetector where the browser has it, else jsQR. ──
-  useEffect(() => {
-    if (!camOn) return;
-    let stream: MediaStream | null = null;
-    let stop = false;
-    let timer: any;
-    (async () => {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
-        const v = videoRef.current!;
-        v.srcObject = stream;
-        await v.play();
-        let detect: (v: HTMLVideoElement) => Promise<string | null>;
-        const BD = (window as any).BarcodeDetector;
-        if (BD) {
-          const d = new BD({ formats: ["qr_code", "code_128"] });
-          detect = async (el) => ((await d.detect(el))[0]?.rawValue as string) || null;
-        } else {
-          await loadJsQr();
-          const canvas = document.createElement("canvas");
-          const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
-          detect = async (el) => {
-            const w = el.videoWidth, h = el.videoHeight;
-            if (!w || !h) return null;
-            canvas.width = w; canvas.height = h;
-            ctx.drawImage(el, 0, 0, w, h);
-            const img = ctx.getImageData(0, 0, w, h);
-            return (window as any).jsQR(img.data, w, h)?.data || null;
-          };
-        }
-        const loop = async () => {
-          if (stop) return;
-          try {
-            const val = await detect(v);
-            if (val) await submit(val);
-          } catch {}
-          timer = setTimeout(loop, 250);
-        };
-        loop();
-      } catch (e: any) {
-        setCamErr(e?.name === "NotAllowedError" ? "ক্যামেরার অনুমতি দেওয়া হয়নি।" : "ক্যামেরা চালু করা যায়নি।");
-        setCamOn(false);
-      }
-    })();
-    return () => {
-      stop = true;
-      clearTimeout(timer);
-      stream?.getTracks().forEach((t) => t.stop());
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [camOn]);
 
   if (data && !data.ok && !data.migrated) {
     return (
@@ -205,22 +84,12 @@ export function ReturnsDesk() {
 
       {/* Scanner */}
       <section className="rt-scan">
-        <div className="rt-scan-main">
-          <label htmlFor="rt-code" className="rt-scan-label">লেবেলের QR স্ক্যান করুন</label>
-          <form onSubmit={(e) => { e.preventDefault(); submit(code); }} className="rt-scan-row">
-            <input
-              id="rt-code" ref={inputRef} autoFocus value={code} onChange={(e) => setCode(e.target.value)}
-              placeholder="DC-12785" autoComplete="off" className="rt-input" inputMode="text"
-            />
-            <button type="submit" className="rt-btn-dark" disabled={busy || !code.trim()}>রিসিভ</button>
-            <button type="button" className="rt-btn-cam" onClick={() => { audioCtx(); setCamErr(""); setCamOn((v) => !v); }} aria-pressed={camOn}>
-              {camOn ? "ক্যামেরা বন্ধ" : "📷 ক্যামেরা"}
-            </button>
-          </form>
-          <p className="rt-help">স্ক্যানার মেশিন বা মোবাইল ক্যামেরা দুটোই চলবে। নম্বর হাতে লিখেও Enter চাপতে পারেন। রিসিভ হলে “টিং-টিং”, আগেই রিসিভ করা হলে দুটো বিপ, ভুল হলে মোটা “বাজ” শব্দ হবে।</p>
-          {camErr && <p className="rt-err">{camErr}</p>}
-          {camOn && <video ref={videoRef} className="rt-video" muted playsInline />}
-        </div>
+        <ScanBox
+          label="লেবেলের QR স্ক্যান করুন"
+          buttonText="রিসিভ"
+          help="স্ক্যানার মেশিন বা মোবাইল ক্যামেরা দুটোই চলবে। নম্বর হাতে লিখেও Enter চাপতে পারেন। রিসিভ হলে “টিং-টিং”, আগেই রিসিভ করা হলে দুটো বিপ, ভুল হলে মোটা “বাজ” শব্দ হবে।"
+          onScan={onScan}
+        />
         <ResultCard r={last} onForce={force} busy={busy} />
       </section>
 
@@ -340,21 +209,6 @@ function ResultCard({ r, onForce, busy }: { r: ScanResult | null; onForce: (o: R
       <p className="s">{r.error}</p>
     </div>
   );
-}
-
-let jsQrLoading: Promise<void> | null = null;
-function loadJsQr(): Promise<void> {
-  if ((window as any).jsQR) return Promise.resolve();
-  if (!jsQrLoading) {
-    jsQrLoading = new Promise((res, rej) => {
-      const s = document.createElement("script");
-      s.src = "https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js";
-      s.onload = () => res();
-      s.onerror = () => { jsQrLoading = null; rej(new Error("jsQR")); };
-      document.head.appendChild(s);
-    });
-  }
-  return jsQrLoading;
 }
 
 const CSS = `

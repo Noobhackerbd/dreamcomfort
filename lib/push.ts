@@ -30,24 +30,26 @@ export interface OrderPushInput {
 
 /** Send a "new order" push to all subscribed admins. Never throws. */
 export async function sendOrderPush(o: OrderPushInput): Promise<void> {
+  await sendAdminPush({
+    title: `🛒 নতুন অর্ডার · ${o.orderNumber}`,
+    body: `${o.customerName || "গ্রাহক"} · ৳${Math.round(Number(o.total) || 0)}${o.area ? " · " + o.area : ""}`,
+    url: `/admin/orders/${o.id}`,
+    tag: `order-${o.id}`,
+  });
+}
+
+/** Send any push to all subscribed admins. Returns how many devices got it. Never throws. */
+export async function sendAdminPush(p: { title: string; body: string; url: string; tag: string }): Promise<number> {
   try {
-    if (!ensureConfigured()) return;
+    if (!ensureConfigured()) return 0;
     const supabase = getServerSupabase();
     const { data: subs } = await supabase
       .from("push_subscriptions")
       .select("endpoint, p256dh, auth");
-    if (!subs || subs.length === 0) return;
+    if (!subs || subs.length === 0) return 0;
 
-    const payload = JSON.stringify({
-      title: `🛒 নতুন অর্ডার · ${o.orderNumber}`,
-      body: `${o.customerName || "গ্রাহক"} · ৳${Math.round(Number(o.total) || 0)}${
-        o.area ? " · " + o.area : ""
-      }`,
-      url: `/admin/orders/${o.id}`,
-      tag: `order-${o.id}`,
-      icon: "/icon.png",
-    });
-
+    const payload = JSON.stringify({ ...p, icon: "/icon.png" });
+    let sent = 0;
     await Promise.all(
       subs.map(async (s: any) => {
         try {
@@ -55,6 +57,7 @@ export async function sendOrderPush(o: OrderPushInput): Promise<void> {
             { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
             payload
           );
+          sent++;
         } catch (err: any) {
           const code = err?.statusCode;
           // 404/410 = subscription expired/gone → clean it up.
@@ -64,7 +67,8 @@ export async function sendOrderPush(o: OrderPushInput): Promise<void> {
         }
       })
     );
+    return sent;
   } catch {
-    // push must never break order creation
+    return 0; // a push must never break the caller
   }
 }

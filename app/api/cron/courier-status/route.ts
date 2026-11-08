@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { carrybeeConfigured } from "@/lib/carrybee";
 import { refreshOneOrderStatus, type RefreshOutcome } from "@/lib/courier-status";
+import { sendAdminPush } from "@/lib/push";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -26,6 +27,7 @@ const LOOKBACK_DAYS = 45;      // active parcels older than this are ignored
 const FINAL_RECHECK_DAYS = 12; // keep watching delivered/returned this long
 const ACTIVE_STALE_MIN = 50;
 const FINAL_STALE_H = 6;
+const NO_ENTRY_AFTER_H = 2;    // handed to the courier but still "pickup requested" this long → alert
 
 function authorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
@@ -104,6 +106,8 @@ export async function GET(req: NextRequest) {
     outcomes.push(...res);
   }
 
+  const noEntry = await alertNoEntry(supabase);
+
   const statusCounts: Record<string, number> = {};
   for (const o of outcomes) if (o.courierStatus) statusCounts[o.courierStatus] = (statusCounts[o.courierStatus] || 0) + 1;
   const pick = (f: (o: RefreshOutcome) => boolean | undefined) => outcomes.filter(f).map((o) => o.order_number);
@@ -118,10 +122,40 @@ export async function GET(req: NextRequest) {
     lateReturn: pick((o) => o.flag === "late_return"),
     lateDelivered: pick((o) => o.flag === "late_delivered"),
     reverted: pick((o) => o.reverted),
+    noEntry,
     failed: outcomes.filter((o) => !o.ok).length,
     errors: Array.from(new Set(outcomes.filter((o) => !o.ok).map((o) => o.error || o.skipped))).slice(0, 5),
     statusCounts,
     ms: Date.now() - started,
     note: hasCol ? undefined : "run supabase-migration-courier-status.sql to persist courier statuses",
   });
+}
+
+/** Parcels scanned at Dispatch that the courier still hasn't entered after a while: one
+ *  push per batch, each parcel alerted once (no_entry_alerted_at). Quiet if the dispatch
+ *  migration hasn't run. */
+async function alertNoEntry(supabase: any): Promise<{ alerted: string[]; pushed: number } | { skipped: string }> {
+  const { data, error } = await supabase
+    .from("orders")
+    .select("id, order_number, customer_name")
+    .gte("handed_at", ago(3 * 86400000))
+    .lte("handed_at", ago(NO_ENTRY_AFTER_H * 3600000))
+    .is("no_entry_alerted_at", null)
+    .or("courier_status.is.null,courier_status.in.(pickup_requested,pending,unknown)")
+    .not("status", "in", "(delivered,returned,cancelled)")
+    .is("deleted_at", null)
+    .limit(100);
+  if (error) return { skipped: error.message };
+  const rows = (data ?? []) as any[];
+  if (!rows.length) return { alerted: [], pushed: 0 };
+
+  const nums = rows.map((r) => r.order_number);
+  const pushed = await sendAdminPush({
+    title: `⚠️ কুরিয়ার এন্ট্রি দেয়নি · ${rows.length} টা পার্সেল`,
+    body: `হ্যান্ডওভারের ${NO_ENTRY_AFTER_H} ঘণ্টা পরও Pickup requested: ${nums.slice(0, 6).join(", ")}${nums.length > 6 ? " …" : ""}`,
+    url: "/admin/dispatch",
+    tag: "no-entry",
+  });
+  await supabase.from("orders").update({ no_entry_alerted_at: new Date().toISOString() }).in("id", rows.map((r) => r.id));
+  return { alerted: nums, pushed };
 }

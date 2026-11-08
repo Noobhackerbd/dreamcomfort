@@ -40,15 +40,14 @@ html, body { width: 48mm; background: #fff; }
 body { font-family: "Noto Sans Bengali", Arial, Helvetica, sans-serif; color: #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 .lb { width: 48mm; height: 74.5mm; padding: 2mm 2mm 1.6mm; display: flex; flex-direction: column; line-height: 1.1; page-break-after: always; overflow: hidden; }
 .lb:last-child { page-break-after: auto; }
-.lb-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1mm; padding-bottom: 1.2mm; border-bottom: 0.8pt solid #000; }
-.lb-brand { font-family: Arial, Helvetica, sans-serif; font-size: 10pt; font-weight: 800; letter-spacing: -0.2pt; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.lb-courier { font-family: Arial, Helvetica, sans-serif; font-size: 6.5pt; font-weight: 700; letter-spacing: 0.8pt; text-transform: uppercase; }
+.lb-head { text-align: center; padding-bottom: 1.2mm; border-bottom: 0.8pt solid #000; overflow: hidden; }
+.lb-brand { display: inline-block; font-family: Arial, Helvetica, sans-serif; font-size: 11pt; font-weight: 700; letter-spacing: 0.2pt; white-space: nowrap; }
 .lb-code { text-align: center; padding: 2mm 0 1.8mm; }
 svg.pod-barcode { display: block; width: 100%; height: 11mm; margin: 0 auto; }
 .lb-cid { font-family: "Courier New", monospace; font-size: 8pt; font-weight: 700; letter-spacing: 0.8pt; margin-top: 0.4mm; }
 .lb-to { border-top: 0.8pt solid #000; padding-top: 1.6mm; }
 .lb-name { font-size: 13pt; font-weight: 700; line-height: 1.15; overflow-wrap: anywhere; max-height: 2.32em; overflow: hidden; }
-.lb-phone { font-family: Arial, Helvetica, sans-serif; font-size: 16pt; font-weight: 800; letter-spacing: 0.4pt; margin-top: 0.6mm; }
+.lb-phone { font-family: Arial, Helvetica, sans-serif; font-size: 15pt; font-weight: 700; letter-spacing: 1.3pt; margin-top: 0.8mm; white-space: nowrap; }
 .lb-order { margin-top: auto; display: flex; gap: 2mm; align-items: center; border-top: 0.8pt solid #000; padding-top: 1.8mm; }
 .lb-qr { width: 21mm; height: 21mm; flex: 0 0 21mm; margin-left: -1mm; }
 .lb-qr svg { display: block; width: 100%; height: 100%; }
@@ -89,7 +88,7 @@ function buildLabel(business: any, pod: any, ours: OurOrder): string {
 
   return (
     '<div class="lb">' +
-      '<div class="lb-head"><span class="lb-brand">' + esc(brand) + '</span><span class="lb-courier">CarryBee</span></div>' +
+      '<div class="lb-head"><span class="lb-brand">' + esc(brand) + "</span></div>" +
       '<div class="lb-code">' +
         '<svg class="pod-barcode" data-code="' + esc(pod.consignment_id || "") + '"></svg>' +
         '<div class="lb-cid">' + esc(pod.consignment_id || "") + "</div>" +
@@ -118,6 +117,8 @@ const RENDER_SCRIPT =
   'try{if(typeof qrcode!=="undefined"){document.querySelectorAll("[data-qr]").forEach(function(el){var t=el.getAttribute("data-qr");if(!t)return;var q=qrcode(0,"M");q.addData(t);q.make();var n=q.getModuleCount(),d="";for(var r=0;r<n;r++)for(var c=0;c<n;c++)if(q.isDark(r,c))d+="M"+c+" "+r+"h1v1h-1z";el.innerHTML=\'<svg xmlns="http://www.w3.org/2000/svg" viewBox="-2 -2 \'+(n+4)+" "+(n+4)+\'" shape-rendering="crispEdges"><path d="\'+d+\'" fill="#000"/></svg>\';});}}catch(e){}' +
   // Long names shrink (13pt → 7pt) until they fit in two lines.
   'document.querySelectorAll(".lb-name").forEach(function(el){var pt=13;while(el.scrollHeight>el.clientHeight+1&&pt>7){pt-=0.5;el.style.fontSize=pt+"pt";}});' +
+  // The shop name and phone stay on one line: shrink them only if they would not fit.
+  'document.querySelectorAll(".lb-brand,.lb-phone").forEach(function(el){var w=el.parentNode.clientWidth,pt=parseFloat(getComputedStyle(el).fontSize)*0.75;el.style.display="inline-block";while(el.scrollWidth>w&&pt>7){pt-=0.5;el.style.fontSize=pt+"pt";}});' +
   "}function go(){if(printed)return;printed=true;var f=document.fonts&&document.fonts.ready?document.fonts.ready:Promise.resolve();f.then(function(){draw();setTimeout(function(){window.focus();window.print();},500);});}" +
   'if(document.readyState==="complete"){go();}else{window.addEventListener("load",go);setTimeout(go,2500);}' +
   "})();</script>";

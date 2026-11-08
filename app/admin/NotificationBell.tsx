@@ -11,8 +11,8 @@ import type { BookedItem } from "./BookedReminders";
 const KEY = "dc:dismissedBooked";
 const keyOf = (b: BookedItem) => `${b.id}:${b.date}`;
 
-export function NotificationBell({ booked, pending, abandoned, lowStock }: {
-  booked: BookedItem[]; pending: number; abandoned: number; lowStock: number;
+export function NotificationBell({ booked, pending, abandoned, lowStock, noEntry = 0, returnsWaiting = 0 }: {
+  booked: BookedItem[]; pending: number; abandoned: number; lowStock: number; noEntry?: number; returnsWaiting?: number;
 }) {
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [mounted, setMounted] = useState(false);
@@ -41,6 +41,8 @@ export function NotificationBell({ booked, pending, abandoned, lowStock }: {
 
   const visibleBooked = mounted ? booked.filter((b) => !dismissed.has(keyOf(b))) : booked;
   const summaries = [
+    noEntry > 0 && { icon: "truck", bg: "#fdeaea", fg: "#dc2626", title: "কুরিয়ার এন্ট্রি দেয়নি", sub: `${noEntry} টা পার্সেল দেওয়ার পরও Pickup requested`, href: "/admin/dispatch" },
+    returnsWaiting > 0 && { icon: "refresh", bg: "#fdeede", fg: "#e08a2b", title: "রিটার্ন রিসিভ বাকি", sub: `${returnsWaiting} টা রিটার্ন পার্সেল স্ক্যান হয়নি`, href: "/admin/returns" },
     pending > 0 && { icon: "clock", bg: "#fdeede", fg: "#e08a2b", title: "Pending orders", sub: `${pending} awaiting confirmation`, href: "/admin/orders?status=pending" },
     abandoned > 0 && { icon: "abandoned", bg: "#fdeef4", fg: "#d6558a", title: "Abandoned carts", sub: `${abandoned} to follow up`, href: "/admin/abandoned" },
     lowStock > 0 && { icon: "box", bg: "#fdeaea", fg: "#dc2626", title: "Low stock", sub: `${lowStock} products running low`, href: "/admin/products" },

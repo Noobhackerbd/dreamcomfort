@@ -16,7 +16,7 @@ export function AdminMobileBar({
 }: {
   storeName: string;
   items: NavItem[];
-  notif: { booked: BookedItem[]; pending: number; abandoned: number; lowStock: number };
+  notif: { booked: BookedItem[]; pending: number; abandoned: number; lowStock: number; noEntry?: number; returnsWaiting?: number };
 }) {
   const pathname = usePathname();
   const active = items.find((i) => (i.href === "/admin" ? pathname === "/admin" : pathname.startsWith(i.href)));
@@ -32,7 +32,7 @@ export function AdminMobileBar({
         <p className="font-display font-bold leading-tight truncate">{sectionTitle}</p>
         <p className="text-[11px] dc-muted leading-tight truncate">{storeName}</p>
       </div>
-      <NotificationBell booked={notif.booked} pending={notif.pending} abandoned={notif.abandoned} lowStock={notif.lowStock} />
+      <NotificationBell booked={notif.booked} pending={notif.pending} abandoned={notif.abandoned} lowStock={notif.lowStock} noEntry={notif.noEntry} returnsWaiting={notif.returnsWaiting} />
     </div>
   );
 }
