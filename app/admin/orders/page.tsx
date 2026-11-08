@@ -76,23 +76,28 @@ export default async function AdminOrders({
     ", order_items(product_name, quantity, products(images))";
 
   const CALL_LIMIT = 3;
+  const TODAY_BD = new Date(Date.now() + 6 * 3600 * 1000).toISOString().slice(0, 10);
   const MISSED_CUTOFF = new Date(Date.now() - MISSED_PICKUP_HOURS * 3600000).toISOString();
 
   function build(withDeleted: boolean) {
-    let q = supabase.from("orders").select(SELECT_COLS, { count: "exact" }).order("created_at", { ascending: false }).range(from, to);
+    let q = supabase.from("orders").select(SELECT_COLS, { count: "exact" });
+    // Booked orders that fall due today join the Pending (call) list — show them first.
+    if (statusFilter === "pending" || isCallAttempt) q = q.order("is_booked", { ascending: false });
+    q = q.order("created_at", { ascending: false }).range(from, to);
     if (isTrash) {
       if (withDeleted) q = q.not("deleted_at", "is", null);
     } else {
       // Exclude trashed orders from every normal view.
       if (withDeleted) q = q.is("deleted_at", null);
-      if (statusFilter === "booked") q = q.eq("is_booked", true).eq("status", "pending");
+      if (statusFilter === "booked") q = q.eq("is_booked", true).eq("status", "pending").or(`booked_date.is.null,booked_date.gt.${TODAY_BD}`);
       else if (isCallAttempt) {
         // Orders that hit the attempt limit — pending, still unreached.
-        q = q.eq("status", "pending").eq("is_booked", false);
+        q = q.eq("status", "pending").or(`is_booked.eq.false,booked_date.lte.${TODAY_BD}`);
         q = hasCallAttempts ? q.gte("call_attempts", CALL_LIMIT) : q.eq("id", "00000000-0000-0000-0000-000000000000");
       } else if (statusFilter === "pending") {
-        // Pending list hides orders that already reached the attempt limit.
-        q = q.eq("status", "pending").eq("is_booked", false);
+        // Pending list hides orders that already reached the attempt limit. Booked orders
+        // whose booked date is today (or earlier) come back here to be called.
+        q = q.eq("status", "pending").or(`is_booked.eq.false,booked_date.lte.${TODAY_BD}`);
         if (hasCallAttempts) q = q.lt("call_attempts", CALL_LIMIT);
       } else if (statusFilter === "missed_entry") {
         // Parcel stuck at "pickup requested" for 20h+ — the courier never collected it.

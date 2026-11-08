@@ -6,13 +6,13 @@ export const dynamic = "force-dynamic";
 export default function PrintStationPage() {
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-1">🖨️ Print Station</h1>
-      <p className="text-sm dc-muted mb-5">Keep this page open on the laptop that has the label printer connected.</p>
+      <h1 className="text-2xl font-bold mb-1">প্রিন্ট স্টেশন</h1>
+      <p className="text-sm dc-muted mb-5">লেবেল প্রিন্টার লাগানো ল্যাপটপে এই পেজটা খোলা রাখুন — CarryBee-তে যাওয়া অর্ডারের লেবেল নিজে থেকেই প্রিন্ট হবে।</p>
 
       <PrintStationGate>
         <PrintStation />
 
-        <div className="mt-6 max-w-2xl dc-card p-5 text-sm">
+        <div className="mt-6 max-w-[1120px] dc-card p-5 text-sm">
           <h2 className="font-bold mb-2">⚙️ Silent auto-print setup (one-time)</h2>
           <ol className="list-decimal pl-5 space-y-1.5" style={{ color: "var(--a-muted)" }}>
             <li>Set the label printer as the <b>default printer</b> in Windows (Settings → Printers).</li>

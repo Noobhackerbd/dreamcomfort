@@ -9,7 +9,7 @@
     },
     {
       "path": "/api/cron/courier-status",
-      "schedule": "30 */6 * * *"
+      "schedule": "43 * * * *"
     },
     {
       "path": "/api/cron/chatbot-health",

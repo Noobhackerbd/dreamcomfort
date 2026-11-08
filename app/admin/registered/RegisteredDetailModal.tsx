@@ -68,8 +68,14 @@ export function RegisteredDetailModal({
     setSavedMsg(res.ok ? "Saved ✓" : res.error);
   }
   function changeStatus(orderId: string, next: string) {
+    const before = orders?.find((o) => o.id === orderId)?.status;
     setOrders((prev) => prev ? prev.map((o) => (o.id === orderId ? { ...o, status: next } : o)) : prev);
-    updateOrderStatus(orderId, next).catch(() => {});
+    updateOrderStatus(orderId, next).then((r) => {
+      if (r.ok || !before) return;
+      // Not confirmed (e.g. CarryBee refused) → put the old status back and say why.
+      setOrders((prev) => prev ? prev.map((o) => (o.id === orderId ? { ...o, status: before } : o)) : prev);
+      setSavedMsg(r.error);
+    }).catch(() => {});
   }
 
   const resolved = customer.delivered + customer.cancelled;

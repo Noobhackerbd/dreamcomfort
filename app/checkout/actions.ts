@@ -15,6 +15,7 @@ import { getLandingVariant } from "@/lib/landing";
 import { pickShippingFee, toAreaFees, type Area } from "@/lib/shipping-rules";
 import { sendSmsAsync } from "@/lib/sms";
 import { fillTemplate } from "@/lib/sms/templates";
+import { trackUrl } from "@/lib/track-link";
 import { markLeadConverted } from "./lead-actions";
 import { refreshAndCacheCourierRatio, getCachedRatios, getRatioForDecision } from "@/lib/bdcourier";
 import { sendOrderPush } from "@/lib/push";
@@ -379,7 +380,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
     void (async () => {
       try {
         const templates = await getSmsTemplates();
-        const msg = fillTemplate(templates.order_placed, { name, order: orderNumber, total: orderTotal });
+        const msg = fillTemplate(templates.order_placed, { name, order: orderNumber, total: orderTotal, link: trackUrl(orderNumber) });
         await sendSmsAsync({ phone, message: msg, orderId });
       } catch {
         /* ignore */

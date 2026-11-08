@@ -3,9 +3,7 @@
 import { NextRequest } from "next/server";
 import { verifyMobileToken, unauthorized } from "@/lib/mobile-auth";
 import { getServerSupabase } from "@/lib/supabase/server";
-import { getSmsTemplates } from "@/lib/settings";
-import { sendSmsAsync } from "@/lib/sms";
-import { fillTemplate, STATUS_SMS_MAP } from "@/lib/sms/templates";
+import { setOrderStatus } from "@/lib/order-courier";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -60,29 +58,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (action === "status") {
     const status = String(body?.status || "");
     if (!STATUSES.includes(status)) return Response.json({ ok: false, error: "invalid status" }, { status: 400 });
-    const { error } = await supabase.from("orders").update({ status }).eq("id", params.id);
-    if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
-    // Status SMS (best-effort).
-    const key = STATUS_SMS_MAP[status];
-    if (key) {
-      try {
-        const { data: order } = await supabase
-          .from("orders")
-          .select("customer_name, customer_phone, order_number, tracking_id")
-          .eq("id", params.id)
-          .single();
-        if (order) {
-          const templates = await getSmsTemplates();
-          const msg = fillTemplate((templates as any)[key], {
-            name: order.customer_name,
-            order: order.order_number,
-            tracking: order.tracking_id ?? "",
-          });
-          void sendSmsAsync({ phone: order.customer_phone, message: msg, orderId: params.id });
-        }
-      } catch { /* ignore */ }
-    }
-    return Response.json({ ok: true, status });
+    // Same rule as the admin panel: with CarryBee auto-send on, "confirmed" only after
+    // CarryBee returns a consignment id; otherwise the order keeps its status.
+    const r = await setOrderStatus(params.id, status);
+    if (!r.ok) return Response.json({ ok: false, error: r.error, courierFailed: !!(r as any).courierFailed }, { status: (r as any).courierFailed ? 422 : 500 });
+    return Response.json({ ok: true, status, trackingId: r.trackingId ?? null });
   }
 
   if (action === "call" || action === "resetCall") {

@@ -4,13 +4,15 @@ import { getServerSupabase } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { getSmsTemplates, getCarryBeeSettings } from "@/lib/settings";
 import { sendSmsAsync } from "@/lib/sms";
-import { fillTemplate, STATUS_SMS_MAP } from "@/lib/sms/templates";
+import { fillTemplate, withTrackLink, STATUS_SMS_MAP } from "@/lib/sms/templates";
+import { trackUrl } from "@/lib/track-link";
 import { createParcel, getParcelStatus, carrybeeConfigured, listCities, listZones, listAreas } from "@/lib/carrybee";
 import { extractOrderFromImage } from "@/lib/ai";
 import { fetchCourierRatio, refreshAndCacheCourierRatio, type CourierRatio } from "@/lib/bdcourier";
 import { toLocalBdPhone } from "@/lib/carrybee";
 import { markLeadConverted } from "@/app/checkout/lead-actions";
 import { revalidatePath } from "next/cache";
+import { setOrderStatus, pushOrderToCarryBee } from "@/lib/order-courier";
 
 const STATUSES = [
   "pending",
@@ -24,50 +26,13 @@ const STATUSES = [
 
 export async function updateOrderStatus(orderId: string, status: string) {
   await requireAdmin();
-  if (!STATUSES.includes(status)) return { ok: false, error: "invalid status" };
-  const supabase = getServerSupabase();
-  const { error } = await supabase.from("orders").update({ status }).eq("id", orderId);
-  if (error) return { ok: false, error: error.message };
-
-  // Send a status SMS if this status maps to a template (confirmed/shipped/delivered).
-  const templateKey = STATUS_SMS_MAP[status];
-  if (templateKey) {
-    try {
-      const { data: order } = await supabase
-        .from("orders")
-        .select("customer_name, customer_phone, order_number, tracking_id")
-        .eq("id", orderId)
-        .single();
-      if (order) {
-        const templates = await getSmsTemplates();
-        const msg = fillTemplate(templates[templateKey], {
-          name: order.customer_name,
-          order: order.order_number,
-          tracking: order.tracking_id ?? "",
-        });
-        void sendSmsAsync({ phone: order.customer_phone, message: msg, orderId });
-      }
-    } catch {
-      /* never block a status change on SMS */
-    }
-  }
-
-  // Auto-send to CarryBee when an order is confirmed (from any device).
-  if (status === "confirmed") {
-    try {
-      const cb = await getCarryBeeSettings();
-      if (cb.autoOnConfirm && cb.clientId && cb.clientSecret && cb.clientContext) {
-        await sendToCarryBee(orderId); // best-effort; guards against double-send
-      }
-    } catch {
-      /* never block a status change on courier errors */
-    }
-  }
-
+  // Confirming with CarryBee auto-send on: the order is confirmed only after CarryBee
+  // returns a consignment id (see lib/order-courier.ts).
+  const r = await setOrderStatus(orderId, status);
   revalidatePath("/admin/orders");
   revalidatePath(`/admin/orders/${orderId}`);
   revalidatePath("/admin/print-station");
-  return { ok: true };
+  return r;
 }
 
 /**
@@ -159,9 +124,9 @@ export async function getPrintedProductCounts() {
   ).toISOString();
 
   const cols = "id, order_items(product_name, quantity, products(images))";
-  let res = await supabase
+  let res: { data: any[] | null; error: any } = await supabase
     .from("orders")
-    .select(cols)
+    .select(cols + ", label_printed_at")
     .eq("courier", "CarryBee")
     .eq("label_printed", true)
     .gte("label_printed_at", cutoff);
@@ -176,12 +141,14 @@ export async function getPrintedProductCounts() {
       .eq("courier", "CarryBee")
       .eq("label_printed", true);
   }
-  if (res.error) return { ok: false, error: res.error.message, products: [] as any[], totalLabels: 0, scopedToday };
+  if (res.error) return { ok: false, error: res.error.message, products: [] as any[], totalLabels: 0, scopedToday, firstPrintAt: null as string | null };
 
   const map = new Map<string, { name: string; image: string | null; count: number }>();
   let totalLabels = 0;
+  let firstPrintAt: string | null = null;
   for (const o of (res.data ?? []) as any[]) {
     totalLabels++;
+    if (o.label_printed_at && (!firstPrintAt || o.label_printed_at < firstPrintAt)) firstPrintAt = o.label_printed_at;
     for (const it of o.order_items ?? []) {
       const name = (it.product_name || "পণ্য").trim();
       const qty = Number(it.quantity || 0) || 0;
@@ -193,7 +160,7 @@ export async function getPrintedProductCounts() {
     }
   }
   const products = Array.from(map.values()).sort((a, b) => b.count - a.count);
-  return { ok: true, products, totalLabels, scopedToday };
+  return { ok: true, products, totalLabels, scopedToday, firstPrintAt: scopedToday ? firstPrintAt : null };
 }
 
 export async function updateOrderCourier(
@@ -215,57 +182,12 @@ export async function updateOrderCourier(
 /** Send an order to CarryBee courier — creates a consignment and stores it on the order. */
 export async function sendToCarryBee(orderId: string) {
   await requireAdmin();
-  if (!(await carrybeeConfigured())) {
-    return { ok: false, error: "CarryBee কনফিগার করা হয়নি (Settings পেজে CarryBee তথ্য দিন)।" };
-  }
-  const supabase = getServerSupabase();
-  const { data: order } = await supabase
-    .from("orders")
-    .select("*, order_items(product_name, quantity)")
-    .eq("id", orderId)
-    .single();
-  if (!order) return { ok: false, error: "অর্ডার পাওয়া যায়নি।" };
-
-  if (order.tracking_id && order.courier === "CarryBee") {
-    return { ok: false, error: `এই অর্ডার ইতিমধ্যে CarryBee-তে পাঠানো হয়েছে (${order.tracking_id})।` };
-  }
-
-  const items = order.order_items ?? [];
-  const qty = items.reduce((n: number, it: any) => n + Number(it.quantity || 0), 0) || 1;
-  const address = [order.address_line, order.area, order.city, order.district]
-    .filter(Boolean)
-    .join(", ");
-  const productDesc = items.map((it: any) => `${it.product_name} x${it.quantity}`).join(", ").slice(0, 250);
-
-  // Default parcel weight from Settings (kg → grams); falls back to 1.5kg.
-  const cb = await getCarryBeeSettings();
-  const weightGrams = Math.max(1, Math.round((Number(cb.defaultWeight) || 1.5) * 1000));
-
-  const res = await createParcel({
-    recipientName: order.customer_name,
-    recipientPhone: order.customer_phone,
-    recipientAddress: address,
-    collectableAmount: Number(order.total), // COD
-    itemQuantity: qty,
-    itemWeightGrams: weightGrams,
-    merchantOrderId: order.order_number,
-    specialInstruction: order.notes || "",
-    productDescription: productDesc,
-  });
-
-  if (!res.ok) return { ok: false, error: res.error ?? "CarryBee অর্ডার ব্যর্থ।" };
-
-  await supabase
-    .from("orders")
-    .update({ courier: "CarryBee", tracking_id: res.consignmentId })
-    .eq("id", orderId);
-
+  const res = await pushOrderToCarryBee(orderId);
   revalidatePath(`/admin/orders/${orderId}`);
   revalidatePath("/admin/orders");
-  return { ok: true, consignmentId: res.consignmentId, deliveryFee: res.deliveryFee, status: res.status };
+  return res;
 }
 
-/** Send with edited fields from the "Send Order to Courier" modal. */
 interface CarryBeeForm {
   recipientName: string;
   recipientPhone: string;
@@ -685,8 +607,8 @@ export async function createManualOrder(input: ManualOrderInput) {
     try {
       const templates = await getSmsTemplates();
       const key = status === "confirmed" ? "confirmed" : "order_placed";
-      const tpl = (templates as any)[key] || templates.order_placed;
-      const msg = fillTemplate(tpl, { name, order: order.order_number, total: Number(order.total) });
+      const tpl = withTrackLink((templates as any)[key] || templates.order_placed, key);
+      const msg = fillTemplate(tpl, { name, order: order.order_number, total: Number(order.total), link: trackUrl(order.order_number) });
       void sendSmsAsync({ phone, message: msg, orderId: order.id });
     } catch {
       /* never block */

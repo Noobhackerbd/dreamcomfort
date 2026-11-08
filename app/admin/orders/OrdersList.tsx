@@ -28,12 +28,20 @@ function StatusPill({ id, value, compact }: { id: string; value: string; compact
   const [open, setOpen] = useState(false);
   const [current, setCurrent] = useState(value);
   const [pending, start] = useTransition();
+  const [err, setErr] = useState<string | null>(null);
   const meta = STATUS_META[current] ?? { label: current, icon: "clock", bg: "var(--a-surface-2)", fg: "var(--a-text)" };
 
   function pick(next: string) {
+    const prev = current;
     setCurrent(next);
     setOpen(false);
-    start(async () => { await updateOrderStatus(id, next); router.refresh(); });
+    setErr(null);
+    start(async () => {
+      const r = await updateOrderStatus(id, next);
+      // Not confirmed (e.g. CarryBee refused the order) → show why and put the old status back.
+      if (!r.ok) { setCurrent(prev); setErr(r.error || "Status change failed."); }
+      router.refresh();
+    });
   }
 
   return (
@@ -68,6 +76,14 @@ function StatusPill({ id, value, compact }: { id: string; value: string; compact
             })}
           </div>
         </>
+      )}
+      {err && (
+        <div className="absolute left-0 top-9 z-30 w-72 rounded-lg p-2.5 text-xs" style={{ background: "#fdeaea", color: "#b91c1c", boxShadow: "var(--a-shadow-lg)" }}>
+          <div className="flex items-start gap-2">
+            <span className="flex-1">{err}</span>
+            <button onClick={() => setErr(null)} aria-label="Close" className="shrink-0 font-bold">×</button>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -401,7 +417,9 @@ export function OrdersList({ orders, cbReady, bdcReady, isTrash }: { orders: Ord
                       {!isTrash && <StatusPill id={o.id} value={o.status} compact />}
                       <span className="text-[10px] font-medium whitespace-nowrap" style={{ color: "var(--a-faint)" }}>· {bdDateTime(o.created_at)}</span>
                       {lastCalled && <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: "#fbf1dd", color: "#a5710f" }}>Last call</span>}
-                      {o.is_booked && <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: "var(--a-warn-soft)", color: "var(--a-warn)" }}>Booked</span>}
+                      {o.is_booked && (o.booked_date && o.booked_date <= new Date(Date.now() + 6 * 3600 * 1000).toISOString().slice(0, 10)
+                        ? <span title={`Booked for ${o.booked_date}`} className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: "#fdeaea", color: "#dc2626" }}>Booked · আজ কল</span>
+                        : <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: "var(--a-warn-soft)", color: "var(--a-warn)" }}>Booked{o.booked_date ? ` · ${o.booked_date.slice(5)}` : ""}</span>)}
                       {(o.customerSeq ?? 0) >= 2 && (
                         <span
                           title={`Repeat customer — ${o.customerTotal ?? o.customerSeq} orders total`}

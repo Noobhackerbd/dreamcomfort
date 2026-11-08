@@ -1,9 +1,13 @@
 // app/api/cron/courier-status/route.ts
-// Scheduled re-check of each order's CarryBee courier status, every 6 hours.
-// - Skips orders already delivered / returned (final) — no wasted API calls.
-// - Delivered → main status "delivered"; Returned → main status "returned".
-// - A parcel stuck at "pickup requested" for 20h+ shows up in the Missed Entry tab
-//   (that tab is a query in the orders list, computed from courier_pickup_at).
+// Hourly re-check of each order's CarryBee courier status.
+//
+// Each run checks, in this order (several parcels at a time, within ~50s):
+//   1. Fix-ups — orders the old matcher marked delivered from "Assigned for delivery".
+//   2. Active parcels — sent to CarryBee, not yet delivered/returned/cancelled, not
+//      checked in the last 50 minutes (stalest first).
+//   3. Recent finals — delivered/returned in the last 12 days, re-checked every 6 hours,
+//      to catch a parcel that flips later (delivered → returned, returned → delivered).
+// See lib/courier-status.ts for what each courier status does to the order.
 //
 // Auth: `Authorization: Bearer <CRON_SECRET>` (Vercel Cron sends this automatically when
 // the CRON_SECRET env var is set) or `?secret=<CRON_SECRET>` for a manual trigger.
@@ -11,14 +15,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { carrybeeConfigured } from "@/lib/carrybee";
-import { refreshOneOrderStatus } from "@/lib/courier-status";
+import { refreshOneOrderStatus, type RefreshOutcome } from "@/lib/courier-status";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const DEFAULT_BATCH = 20;      // orders checked per run
-const TIME_BUDGET_MS = 45000;  // stop before any gateway timeout
-const LOOKBACK_DAYS = 45;      // only track recent orders
+const TIME_BUDGET_MS = 50000;  // stop before the 60s limit
+const PARALLEL = 6;            // CarryBee calls at once
+const LOOKBACK_DAYS = 45;      // active parcels older than this are ignored
+const FINAL_RECHECK_DAYS = 12; // keep watching delivered/returned this long
+const ACTIVE_STALE_MIN = 50;
+const FINAL_STALE_H = 6;
 
 function authorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
@@ -27,6 +34,9 @@ function authorized(req: NextRequest): boolean {
   if (bearer && bearer === `Bearer ${secret}`) return true;
   return req.nextUrl.searchParams.get("secret") === secret;
 }
+
+const COLS = "id, order_number, tracking_id, courier, status, courier_status, courier_pickup_at, courier_last_raw";
+const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
 
 export async function GET(req: NextRequest) {
   if (!authorized(req)) {
@@ -38,50 +48,78 @@ export async function GET(req: NextRequest) {
 
   const started = Date.now();
   const supabase = getServerSupabase();
-  const batch = Math.max(1, Math.min(50, Number(req.nextUrl.searchParams.get("batch")) || DEFAULT_BATCH));
-  const sinceIso = new Date(Date.now() - LOOKBACK_DAYS * 86400000).toISOString();
+  const limit = Math.max(1, Math.min(200, Number(req.nextUrl.searchParams.get("batch")) || 120));
 
-  // Does the courier-status column exist? (Stalest-first ordering needs it.)
-  const probe = await supabase.from("orders").select("courier_status_at").limit(1);
-  const hasCol = !(probe.error && ((probe.error as any).code === "42703" || /courier_status_at/i.test(probe.error.message || "")));
+  // Courier-status columns are needed for staleness; without them fall back to the old way.
+  const probe = await supabase.from("orders").select("courier_status_at, courier_last_raw").limit(1);
+  const hasCol = !probe.error;
 
-  // Active shipments only: sent to CarryBee, has a consignment, not yet finalized.
-  let q: any = supabase
-    .from("orders")
-    .select("id, tracking_id, courier, status, courier_status, courier_pickup_at")
-    .eq("courier", "CarryBee")
-    .not("tracking_id", "is", null)
-    .not("status", "in", "(delivered,returned,cancelled)")
-    .gte("created_at", sinceIso)
-    .limit(batch);
-  q = hasCol
-    ? q.order("courier_status_at", { ascending: true, nullsFirst: true })
-    : q.order("created_at", { ascending: false });
+  const base = () =>
+    supabase.from("orders").select(COLS).eq("courier", "CarryBee").not("tracking_id", "is", null).is("deleted_at", null);
 
-  const { data: orders, error } = await q;
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-
-  const rows = (orders ?? []) as any[];
-  let checked = 0, delivered = 0, returned = 0, failed = 0;
-  const statusCounts: Record<string, number> = {};
-
-  for (const o of rows) {
-    if (Date.now() - started > TIME_BUDGET_MS) break;
-    const out = await refreshOneOrderStatus(supabase, o);
-    checked++;
-    if (!out.ok) { failed++; continue; }
-    if (out.courierStatus) statusCounts[out.courierStatus] = (statusCounts[out.courierStatus] || 0) + 1;
-    if (out.mainStatusChanged && out.courierStatus === "delivered") delivered++;
-    if (out.mainStatusChanged && out.courierStatus === "returned") returned++;
+  const groups: { name: string; q: any }[] = [];
+  if (hasCol) {
+    groups.push({
+      name: "fixups",
+      q: base().eq("status", "delivered").ilike("courier_last_raw", "%assigned for delivery%")
+        .order("created_at", { ascending: false }).limit(40),
+    });
+    groups.push({
+      name: "active",
+      q: base().not("status", "in", "(delivered,returned,cancelled)").gte("created_at", ago(LOOKBACK_DAYS * 86400000))
+        .or(`courier_status_at.is.null,courier_status_at.lt.${ago(ACTIVE_STALE_MIN * 60000)}`)
+        .order("courier_status_at", { ascending: true, nullsFirst: true }).limit(limit),
+    });
+    groups.push({
+      name: "recentFinal",
+      q: base().in("status", ["delivered", "returned"]).gte("created_at", ago(FINAL_RECHECK_DAYS * 86400000))
+        .or(`courier_status_at.is.null,courier_status_at.lt.${ago(FINAL_STALE_H * 3600000)}`)
+        .order("courier_status_at", { ascending: true, nullsFirst: true }).limit(60),
+    });
+  } else {
+    groups.push({
+      name: "active",
+      q: base().not("status", "in", "(delivered,returned,cancelled)").gte("created_at", ago(LOOKBACK_DAYS * 86400000))
+        .order("created_at", { ascending: false }).limit(40),
+    });
   }
+
+  // Collect the work list (no duplicates across groups).
+  const seen = new Set<string>();
+  const work: any[] = [];
+  const queued: Record<string, number> = {};
+  for (const g of groups) {
+    const { data, error } = await g.q;
+    if (error) { queued[g.name] = -1; continue; }
+    let n = 0;
+    for (const o of (data ?? []) as any[]) if (!seen.has(o.id)) { seen.add(o.id); work.push(o); n++; }
+    queued[g.name] = n;
+  }
+
+  const outcomes: (RefreshOutcome & { order_number?: string })[] = [];
+  for (let i = 0; i < work.length; i += PARALLEL) {
+    if (Date.now() - started > TIME_BUDGET_MS) break;
+    const chunk = work.slice(i, i + PARALLEL);
+    const res = await Promise.all(chunk.map((o) => refreshOneOrderStatus(supabase, o).then((r) => ({ ...r, order_number: o.order_number }))));
+    outcomes.push(...res);
+  }
+
+  const statusCounts: Record<string, number> = {};
+  for (const o of outcomes) if (o.courierStatus) statusCounts[o.courierStatus] = (statusCounts[o.courierStatus] || 0) + 1;
+  const pick = (f: (o: RefreshOutcome) => boolean | undefined) => outcomes.filter(f).map((o) => o.order_number);
 
   return NextResponse.json({
     ok: true,
-    scanned: rows.length,
-    checked,
-    delivered,
-    returned,
-    failed,
+    queued,
+    checked: outcomes.length,
+    left: work.length - outcomes.length,
+    delivered: pick((o) => o.mainStatusChanged && o.newStatus === "delivered"),
+    returned: pick((o) => o.mainStatusChanged && o.newStatus === "returned"),
+    lateReturn: pick((o) => o.flag === "late_return"),
+    lateDelivered: pick((o) => o.flag === "late_delivered"),
+    reverted: pick((o) => o.reverted),
+    failed: outcomes.filter((o) => !o.ok).length,
+    errors: Array.from(new Set(outcomes.filter((o) => !o.ok).map((o) => o.error || o.skipped))).slice(0, 5),
     statusCounts,
     ms: Date.now() - started,
     note: hasCol ? undefined : "run supabase-migration-courier-status.sql to persist courier statuses",
