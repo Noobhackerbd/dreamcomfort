@@ -8,7 +8,7 @@
 import "server-only";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { getSmsTemplates, getCarryBeeSettings } from "@/lib/settings";
-import { sendSmsAsync } from "@/lib/sms";
+import { queueSms } from "@/lib/sms";
 import { fillTemplate, withTrackLink, STATUS_SMS_MAP } from "@/lib/sms/templates";
 import { trackUrl } from "@/lib/track-link";
 import { createParcel, carrybeeConfigured } from "@/lib/carrybee";
@@ -112,7 +112,7 @@ export async function setOrderStatus(orderId: string, status: string): Promise<{
           tracking: order.tracking_id ?? "",
           link: trackUrl(order.order_number),
         });
-        void sendSmsAsync({ phone: order.customer_phone, message: msg, orderId });
+        queueSms({ phone: order.customer_phone, message: msg, orderId, event: templateKey });
       }
     } catch { /* never block a status change on SMS */ }
   }

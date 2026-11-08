@@ -3,7 +3,7 @@
 import { getServerSupabase } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { getSmsTemplates, getCarryBeeSettings } from "@/lib/settings";
-import { sendSmsAsync } from "@/lib/sms";
+import { sendSmsAsync, queueSms } from "@/lib/sms";
 import { fillTemplate, withTrackLink, STATUS_SMS_MAP } from "@/lib/sms/templates";
 import { trackUrl } from "@/lib/track-link";
 import { createParcel, getParcelStatus, carrybeeConfigured, listCities, listZones, listAreas } from "@/lib/carrybee";
@@ -609,7 +609,7 @@ export async function createManualOrder(input: ManualOrderInput) {
       const key = status === "confirmed" ? "confirmed" : "order_placed";
       const tpl = withTrackLink((templates as any)[key] || templates.order_placed, key);
       const msg = fillTemplate(tpl, { name, order: order.order_number, total: Number(order.total), link: trackUrl(order.order_number) });
-      void sendSmsAsync({ phone, message: msg, orderId: order.id });
+      queueSms({ phone, message: msg, orderId: order.id, event: key as any });
     } catch {
       /* never block */
     }

@@ -114,6 +114,7 @@ const NAV = [
   { href: "/admin/print-station", label: "Print Station", icon: "print" },
   { href: "/admin/dispatch", label: "Dispatch", icon: "truck", badgeKey: "noEntry" },
   { href: "/admin/returns", label: "Returns", icon: "refresh", badgeKey: "returnsWaiting" },
+  { href: "/admin/sms", label: "SMS", icon: "sms" },
   { href: "/admin/abandoned", label: "Abandoned Carts", icon: "abandoned", badgeKey: "abandoned" },
   { href: "/admin/customers", label: "Customers", icon: "customers" },
   { href: "/admin/registered", label: "Registered", icon: "workers" },

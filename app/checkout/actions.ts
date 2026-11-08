@@ -377,15 +377,15 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
     // Order-placed SMS — backgrounded (template fetch + send off the critical path).
     const orderNumber = order.order_number;
     const orderId = order.id;
-    void (async () => {
+    keepAlive((async () => {
       try {
         const templates = await getSmsTemplates();
         const msg = fillTemplate(templates.order_placed, { name, order: orderNumber, total: orderTotal, link: trackUrl(orderNumber) });
-        await sendSmsAsync({ phone, message: msg, orderId });
+        await sendSmsAsync({ phone, message: msg, orderId, event: "order_placed" });
       } catch {
         /* ignore */
       }
-    })();
+    })());
 
     // Tracking (Meta CAPI) + admin push — BOTH fully backgrounded, nothing awaited.
     // The customer's "Order confirmed" response returns the instant the order rows are
