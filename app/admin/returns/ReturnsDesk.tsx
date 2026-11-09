@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ScanBox, play, type Sound } from "@/components/admin/ScanBox";
+import { ScanBox, play, type Sound, type ScanOutcome } from "@/components/admin/ScanBox";
 import { getReturns, scanReturn, forceReceive, markReceived, type ReturnRow, type ScanResult } from "./actions";
 
 type Tab = "waiting" | "received" | "late";
@@ -20,6 +20,17 @@ const SOUND_OF: Record<ScanResult["result"], Sound> = {
   received: "ok", already: "again", not_returned: "warn", not_found: "bad", error: "bad",
 };
 
+/** Short text for the full-screen camera view. */
+function describe(r: ScanResult): { title: string; detail?: string } {
+  switch (r.result) {
+    case "received": return { title: `${r.order.order_number} · রিসিভ হয়েছে`, detail: [r.order.customer_name, r.order.items].filter(Boolean).join(" · ") };
+    case "already": return { title: `${r.order.order_number} আগেই রিসিভ করা`, detail: `${day(r.order.return_received_at)} ${time(r.order.return_received_at)}` };
+    case "not_returned": return { title: `${r.order.order_number} রিটার্ন হিসেবে নেই`, detail: `এখন: ${r.order.status}${r.order.courier_last_raw ? " · " + r.order.courier_last_raw : ""} — তবুও রিসিভ করতে পেজের বাটন ব্যবহার করুন` };
+    case "not_found": return { title: "অর্ডার পাওয়া যায়নি", detail: r.code };
+    default: return { title: "সমস্যা হয়েছে", detail: r.error };
+  }
+}
+
 export function ReturnsDesk() {
   const [data, setData] = useState<Data | null>(null);
   const [tab, setTab] = useState<Tab>("waiting");
@@ -35,15 +46,15 @@ export function ReturnsDesk() {
     return () => clearInterval(t);
   }, []);
 
-  async function onScan(code: string): Promise<Sound> {
+  async function onScan(code: string): Promise<ScanOutcome> {
     try {
       const r = await scanReturn(code);
       setLast(r);
       if (r.result === "received") load();
-      return SOUND_OF[r.result];
+      return { sound: SOUND_OF[r.result], ...describe(r) };
     } catch (e: any) {
       setLast({ result: "error", error: e?.message || "সমস্যা হয়েছে" });
-      return "bad";
+      return { sound: "bad", title: "সমস্যা হয়েছে", detail: e?.message };
     }
   }
 
@@ -88,6 +99,11 @@ export function ReturnsDesk() {
           label="লেবেলের QR স্ক্যান করুন"
           buttonText="রিসিভ"
           help="স্ক্যানার মেশিন বা মোবাইল ক্যামেরা দুটোই চলবে। নম্বর হাতে লিখেও Enter চাপতে পারেন। রিসিভ হলে “টিং-টিং”, আগেই রিসিভ করা হলে দুটো বিপ, ভুল হলে মোটা “বাজ” শব্দ হবে।"
+          camTitle="রিটার্ন রিসিভ"
+          camSubtitle="রিটার্ন পার্সেলের QR ফ্রেমের ভেতরে ধরুন"
+          successWord="রিসিভ"
+          todayLabel="আজ রিসিভ"
+          todayCount={receivedToday}
           onScan={onScan}
         />
         <ResultCard r={last} onForce={force} busy={busy} />

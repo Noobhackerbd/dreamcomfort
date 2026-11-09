@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ScanBox, type Sound } from "@/components/admin/ScanBox";
+import { ScanBox, type Sound, type ScanOutcome } from "@/components/admin/ScanBox";
 import { getDispatch, dispatchScan, undoDispatch, recheckDispatch, type DispatchRow, type DispatchResult } from "./actions";
 
 type Data = Awaited<ReturnType<typeof getDispatch>>;
@@ -17,6 +17,23 @@ const notEntered = (r: DispatchRow) => !r.courier_status || ["pickup_requested",
 const SOUND_OF: Record<DispatchResult["result"], Sound> = {
   shipped: "ok", already: "again", blocked: "warn", not_found: "bad", error: "bad",
 };
+
+/** Short text for the full-screen camera view. */
+function describe(r: DispatchResult): { title: string; detail?: string } {
+  switch (r.result) {
+    case "shipped": {
+      const wait = notEntered(r.order);
+      return {
+        title: `${r.order.order_number} · Shipped`,
+        detail: `${r.order.customer_name}${r.order.pieces ? ` · ${r.order.pieces} পিস` : ""}${wait ? " · কুরিয়ার এখনো এন্ট্রি দেয়নি" : ""}`,
+      };
+    }
+    case "already": return { title: `${r.order.order_number} আগেই স্ক্যান করা`, detail: `দেওয়া হয়েছে ${time(r.order.handed_at)}` };
+    case "blocked": return { title: `${r.order.order_number} Shipped হয়নি`, detail: r.reason };
+    case "not_found": return { title: "অর্ডার পাওয়া যায়নি", detail: r.code };
+    default: return { title: "সমস্যা হয়েছে", detail: r.error };
+  }
+}
 
 function CourierChip({ r }: { r: DispatchRow }) {
   if (notEntered(r)) {
@@ -44,7 +61,7 @@ export function DispatchDesk() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date]);
 
-  async function onScan(code: string): Promise<Sound> {
+  async function onScan(code: string): Promise<ScanOutcome> {
     try {
       const r = await dispatchScan(code);
       setLast(r);
@@ -52,10 +69,10 @@ export function DispatchDesk() {
         if (date !== bdDate()) setDate(bdDate());
         else load(date);
       }
-      return SOUND_OF[r.result];
+      return { sound: SOUND_OF[r.result], ...describe(r) };
     } catch (e: any) {
       setLast({ result: "error", error: e?.message || "সমস্যা হয়েছে" });
-      return "bad";
+      return { sound: "bad", title: "সমস্যা হয়েছে", detail: e?.message };
     }
   }
 
@@ -94,6 +111,11 @@ export function DispatchDesk() {
           label="পার্সেলের QR স্ক্যান করুন — কুরিয়ারকে দেওয়ার সময়"
           buttonText="Shipped"
           help="স্ক্যান করলেই অর্ডার Shipped হয়ে যাবে আর আজকের হিসাবে যোগ হবে। স্ক্যানার মেশিন, মোবাইল ক্যামেরা বা হাতে নম্বর লিখে Enter — সবই চলবে।"
+          camTitle="কুরিয়ার হ্যান্ডওভার"
+          camSubtitle="QR ফ্রেমের ভেতরে ধরুন — স্ক্যান হলেই Shipped"
+          successWord="Shipped"
+          todayLabel="আজ Shipped"
+          todayCount={isToday ? rows.length : 0}
           onScan={onScan}
         />
         <Result r={last} />

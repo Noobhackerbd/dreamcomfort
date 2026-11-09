@@ -5,6 +5,8 @@
 // browser has it, else jsQR). Plays a sound for every read and for the result.
 
 import { useEffect, useRef, useState } from "react";
+import { ScanCamera, type ScanOutcome } from "./ScanCamera";
+export type { ScanOutcome } from "./ScanCamera";
 
 // ── Sounds ────────────────────────────────────────────────────────────────
 // One shared AudioContext, unlocked by the first tap/key on the page (browsers keep audio
@@ -48,34 +50,22 @@ export function play(kind: Sound) {
   }
 }
 
-let jsQrLoading: Promise<void> | null = null;
-function loadJsQr(): Promise<void> {
-  if ((window as any).jsQR) return Promise.resolve();
-  if (!jsQrLoading) {
-    jsQrLoading = new Promise((res, rej) => {
-      const s = document.createElement("script");
-      s.src = "https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js";
-      s.onload = () => res();
-      s.onerror = () => { jsQrLoading = null; rej(new Error("jsQR")); };
-      document.head.appendChild(s);
-    });
-  }
-  return jsQrLoading;
-}
-
-export function ScanBox({ label, help, buttonText, onScan }: {
+export function ScanBox({ label, help, buttonText, camTitle, camSubtitle, successWord, todayLabel, todayCount, onScan }: {
   label: string;
   help: string;
   buttonText: string;
-  /** Handle one scanned/typed code; return the sound for the result. */
-  onScan: (code: string) => Promise<Sound>;
+  camTitle: string;
+  camSubtitle: string;
+  successWord: string;
+  todayLabel: string;
+  todayCount: number;
+  /** Handle one scanned/typed code; say how it went (sound + text for the camera view). */
+  onScan: (code: string) => Promise<ScanOutcome>;
 }) {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [camOn, setCamOn] = useState(false);
-  const [camErr, setCamErr] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
   const recent = useRef<Map<string, number>>(new Map());
   const busyRef = useRef(false);
   const onScanRef = useRef(onScan);
@@ -92,98 +82,57 @@ export function ScanBox({ label, help, buttonText, onScan }: {
     };
   }, []);
 
-  async function submit(raw: string) {
+  /** One code → outcome. null when ignored (same code within 4s, or still busy). */
+  async function submit(raw: string): Promise<ScanOutcome | null> {
     const c = raw.trim();
-    if (!c || busyRef.current) return;
+    if (!c || busyRef.current) return null;
     // Ignore the same code read twice within 4 seconds (the camera keeps seeing it).
     const key = c.toUpperCase();
     const seenAt = recent.current.get(key);
-    if (seenAt && Date.now() - seenAt < 4000) return;
+    if (seenAt && Date.now() - seenAt < 4000) return null;
     recent.current.set(key, Date.now());
     busyRef.current = true;
     setBusy(true);
     play("beep"); // instant feedback that the code was read
+    let out: ScanOutcome;
     try {
-      play(await onScanRef.current(c));
+      out = await onScanRef.current(c);
     } catch {
-      play("bad");
-    } finally {
-      busyRef.current = false;
-      setBusy(false);
-      setCode("");
-      if (!camOn) inputRef.current?.focus();
+      out = { sound: "bad", title: "সমস্যা হয়েছে", detail: c };
     }
+    play(out.sound);
+    busyRef.current = false;
+    setBusy(false);
+    setCode("");
+    return out;
   }
-  const submitRef = useRef(submit);
-  submitRef.current = submit;
-
-  useEffect(() => {
-    if (!camOn) return;
-    let stream: MediaStream | null = null;
-    let stop = false;
-    let timer: any;
-    (async () => {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
-        const v = videoRef.current!;
-        v.srcObject = stream;
-        await v.play();
-        let detect: (v: HTMLVideoElement) => Promise<string | null>;
-        const BD = (window as any).BarcodeDetector;
-        if (BD) {
-          const d = new BD({ formats: ["qr_code", "code_128"] });
-          detect = async (el) => ((await d.detect(el))[0]?.rawValue as string) || null;
-        } else {
-          await loadJsQr();
-          const canvas = document.createElement("canvas");
-          const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
-          detect = async (el) => {
-            const w = el.videoWidth, h = el.videoHeight;
-            if (!w || !h) return null;
-            canvas.width = w; canvas.height = h;
-            ctx.drawImage(el, 0, 0, w, h);
-            const img = ctx.getImageData(0, 0, w, h);
-            return (window as any).jsQR(img.data, w, h)?.data || null;
-          };
-        }
-        const loop = async () => {
-          if (stop) return;
-          try {
-            const val = await detect(v);
-            if (val) await submitRef.current(val);
-          } catch {}
-          timer = setTimeout(loop, 250);
-        };
-        loop();
-      } catch (e: any) {
-        setCamErr(e?.name === "NotAllowedError" ? "ক্যামেরার অনুমতি দেওয়া হয়নি।" : "ক্যামেরা চালু করা যায়নি।");
-        setCamOn(false);
-      }
-    })();
-    return () => {
-      stop = true;
-      clearTimeout(timer);
-      stream?.getTracks().forEach((t) => t.stop());
-    };
-  }, [camOn]);
 
   return (
     <div className="sb">
       <style>{CSS}</style>
       <label htmlFor="sb-code" className="sb-label">{label}</label>
-      <form onSubmit={(e) => { e.preventDefault(); submit(code); }} className="sb-row">
+      <form onSubmit={(e) => { e.preventDefault(); submit(code).finally(() => inputRef.current?.focus()); }} className="sb-row">
         <input
           id="sb-code" ref={inputRef} autoFocus value={code} onChange={(e) => setCode(e.target.value)}
           placeholder="DC-12785" autoComplete="off" className="sb-input"
         />
         <button type="submit" className="sb-go" disabled={busy || !code.trim()}>{buttonText}</button>
-        <button type="button" className="sb-cam" onClick={() => { audioCtx(); setCamErr(""); setCamOn((v) => !v); }} aria-pressed={camOn}>
-          {camOn ? "ক্যামেরা বন্ধ" : "📷 ক্যামেরা"}
+        <button type="button" className="sb-cam" onClick={() => { audioCtx(); setCamOn(true); }}>
+          📷 ক্যামেরা
         </button>
       </form>
       <p className="sb-help">{help}</p>
-      {camErr && <p className="sb-err">{camErr}</p>}
-      {camOn && <video ref={videoRef} className="sb-video" muted playsInline />}
+      {camOn && (
+        <ScanCamera
+          title={camTitle}
+          subtitle={camSubtitle}
+          successWord={successWord}
+          todayLabel={todayLabel}
+          todayCount={todayCount}
+          submit={submit}
+          onClose={() => { setCamOn(false); setTimeout(() => inputRef.current?.focus(), 50); }}
+        />
+      )}
     </div>
   );
 }
@@ -198,9 +147,6 @@ const CSS = `
 .sb-go{background:var(--a-text);color:#fff;border-radius:12px;padding:0 18px;font-weight:700;font-size:15px;min-height:48px}
 .sb-go:disabled{opacity:.4}
 .sb-cam{border:1.5px solid var(--a-border);border-radius:12px;padding:0 14px;font-weight:600;font-size:14px;min-height:48px;background:#fff}
-.sb-cam[aria-pressed="true"]{border-color:var(--a-text)}
 .sb button:focus-visible,.sb input:focus-visible{outline:2px solid var(--a-violet);outline-offset:2px}
 .sb-help{font-size:12.5px;color:var(--a-muted);margin-top:10px}
-.sb-err{font-size:13px;color:#dc2626;margin-top:6px}
-.sb-video{margin-top:12px;width:100%;max-height:300px;object-fit:cover;border-radius:12px;background:#000}
 `;
