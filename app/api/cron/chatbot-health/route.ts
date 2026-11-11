@@ -54,13 +54,16 @@ export async function GET(req: NextRequest) {
 
   if (s.pageId && s.pageAccessToken) {
     const subs = await graph("GET", `/${s.pageId}/subscribed_apps`, { query: { access_token: s.pageAccessToken } });
-    const ok = (subs?.data ?? []).some((a: any) => String(a?.id) === appId);
+    const mine = (subs?.data ?? []).find((a: any) => String(a?.id) === appId);
+    const need = WEBHOOK_FIELDS.split(",");
+    const have: string[] = mine?.subscribed_fields ?? [];
+    const ok = !!mine && need.every((f) => have.includes(f));
     if (ok) out.messenger = "subscribed";
     else {
       const r = await graph("POST", `/${s.pageId}/subscribed_apps`, {
         query: { subscribed_fields: WEBHOOK_FIELDS, access_token: s.pageAccessToken },
       });
-      out.messenger = r?.success ? "was missing — re-subscribed" : `re-subscribe failed: ${r?.error?.message || "unknown"}`;
+      out.messenger = r?.success ? (mine ? `fields were missing (${need.filter((f) => !have.includes(f)).join(", ")}) — re-subscribed` : "was missing — re-subscribed") : `re-subscribe failed: ${r?.error?.message || "unknown"}`;
       console.warn("[chatbot-health] Messenger:", out.messenger);
     }
   }

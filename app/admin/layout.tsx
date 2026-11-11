@@ -1,4 +1,3 @@
-import { Plus_Jakarta_Sans, Hind_Siliguri } from "next/font/google";
 import { getSupabaseServerClient } from "@/lib/supabase/ssr-server";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { SignOutButton } from "./SignOutButton";
@@ -15,18 +14,7 @@ export const dynamic = "force-dynamic";
 
 // Premium, refined typography — scoped to the admin only (storefront keeps its
 // playful Fredoka). Jakarta for Latin/numbers, Hind Siliguri for Bangla.
-const adminLatin = Plus_Jakarta_Sans({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-admin-latin",
-  display: "swap",
-});
-const adminBangla = Hind_Siliguri({
-  subsets: ["bengali"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-admin-bn",
-  display: "swap",
-});
+// Fonts (--font-admin-latin / --font-admin-bn) are self-hosted — see app/fonts.css.
 
 // Design system — a single premium, minimal light theme. Tokens + shared component
 // classes, scoped to .admin-shell so the storefront is untouched.
@@ -120,6 +108,7 @@ const NAV = [
   { href: "/admin/registered", label: "Registered", icon: "workers" },
   { href: "/admin/support", label: "Support", icon: "chat", badgeKey: "support" },
   { href: "/admin/chatbot", label: "AI Chat Bot", icon: "chat" },
+  { href: "/admin/reminders", label: "Reminder", icon: "bell" },
   { href: "/admin/reviews", label: "Reviews", icon: "target" },
   { href: "/admin/subscribers", label: "Subscribers", icon: "bell" },
   { href: "/admin/workers", label: "Workers", icon: "workers" },
@@ -191,7 +180,7 @@ export default async function AdminLayout({
   }));
 
   return (
-    <div className={`${adminLatin.variable} ${adminBangla.variable} admin-shell md:grid md:grid-cols-[236px_1fr] md:gap-5 p-3 md:p-5`}>
+    <div className={`admin-shell md:grid md:grid-cols-[236px_1fr] md:gap-5 p-3 md:p-5`}>
       <style dangerouslySetInnerHTML={{ __html: ADMIN_CSS }} />
 
       {/* Mobile top bar (sticky, hidden on desktop) with notification bell */}

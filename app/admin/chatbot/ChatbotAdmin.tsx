@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   saveTraining, saveConnection, testConnection, importStoreProducts, testChat,
   listConversations, getThread, setConversationAi, sendManualReply, suggestReply,
-  listPendingPages, choosePage, disconnectFacebook, setBotEnabled, connectWhatsApp,
+  listPendingPages, choosePage, disconnectFacebook, setBotEnabled, connectWhatsApp, getCommentStatus,
 } from "./actions";
 import { splitPhotos } from "@/lib/chat-media";
 import { getSupabaseBrowserClient } from "@/lib/supabase/ssr-browser";
@@ -22,7 +22,7 @@ type ItemsReply = { enabled: boolean; text: string };
 type MaterialReply = { enabled: boolean; text: string };
 type FabricReply = { enabled: boolean; text: string };
 type CommentReply = { enabled: boolean; text: string };
-type FollowUp = { enabled: boolean; steps: { enabled: boolean; afterHours: number; text: string }[] };
+type FollowUp = { enabled: boolean; steps: { enabled: boolean; afterHours: number; text: string }[]; quiet: { enabled: boolean; from: number; to: number } };
 type Training = {
   botName: string; storeInfo: string; products: Product[]; examples: Example[];
   priceReply: PriceReply; orderReply: OrderReply; noMatchReply: NoMatchReply; greetReply: GreetReply; matchReply: MatchReply; confirmReply: ConfirmReply; itemsReply: ItemsReply; materialReply: MaterialReply; fabricReply: FabricReply; commentReply: CommentReply; followUp: FollowUp;
@@ -401,7 +401,7 @@ function Train({ training, setTraining }: { training: Training; setTraining: (t:
 
   async function save() {
     setBusy("save"); setMsg(null);
-    const r = await saveTraining(t);
+    const r = await saveTraining({ ...t, followUp: undefined });
     setBusy(null);
     setMsg(r.ok ? "Saved ✓ — the bot uses this from the next message." : r.error || "Save failed.");
   }
@@ -536,60 +536,53 @@ function SavedReplyCard({ title, hint, value, onChange, rows = 7, children }: {
   );
 }
 
-/** "after N minutes / hours" — stored as hours, typed in either unit. */
-function AfterInput({ hours, onChange }: { hours: number; onChange: (h: number) => void }) {
-  const [unit, setUnit] = useState<"min" | "h">(hours < 1 ? "min" : "h");
-  const shown = unit === "min" ? Math.round(hours * 60) : Math.round(hours * 10) / 10;
-  return (
-    <label className="flex items-center gap-1.5">
-      শেষ মেসেজের
-      <input type="number" min={unit === "min" ? 3 : 1} max={unit === "min" ? 1380 : 23} step={unit === "min" ? 1 : 0.5} value={shown}
-        onChange={(e) => { const n = Number(e.target.value) || 0; onChange(unit === "min" ? n / 60 : n); }}
-        className="dc-input" style={{ width: 72, padding: "4px 8px" }} />
-      <select value={unit} onChange={(e) => setUnit(e.target.value as "min" | "h")} className="dc-input" style={{ width: "auto", padding: "4px 6px" }}>
-        <option value="min">মিনিট</option>
-        <option value="h">ঘণ্টা</option>
-      </select>
-      পর
-    </label>
-  );
-}
+type CommentStatusData = Awaited<ReturnType<typeof getCommentStatus>>;
 
-/** Saved follow-ups for customers who stop replying (sent by the 5-minute cron). */
-function FollowUpCard({ value, onChange }: { value: FollowUp; onChange: (v: FollowUp) => void }) {
-  const steps = value?.steps ?? [];
-  const setStep = (i: number, patch: Partial<FollowUp["steps"][number]>) =>
-    onChange({ ...value, steps: steps.map((st, j) => (j === i ? { ...st, ...patch } : st)) });
+const COMMENT_STEP_BN: Record<string, string> = {
+  "sent": "✅ ইনবক্সে আর কমেন্টে উত্তর গেছে",
+  "sent privately, public reply failed": "⚠️ ইনবক্সে গেছে, কমেন্টের নিচে উত্তর যায়নি",
+  "private reply failed": "❌ ইনবক্সে পাঠানো যায়নি",
+  "skipped: greeting or needs you": "— শুভেচ্ছা / AI জানে না, আপনি দেখবেন",
+  "skipped: no text (photo / sticker)": "— ছবি / স্টিকার, আপনি দেখবেন",
+  "skipped: bot is off": "— বট বন্ধ",
+  "skipped: comment replies are off": "— কমেন্ট উত্তর বন্ধ",
+  "skipped: Page not connected": "— পেজ কানেক্ট নেই",
+  "AI failed": "❌ AI উত্তর দিতে পারেনি",
+  "error": "❌ সমস্যা হয়েছে",
+};
+
+/** Live check: webhook + permissions, and the last few comments the bot saw. */
+function CommentStatus() {
+  const [d, setD] = useState<CommentStatusData | null>(null);
+  const [busy, setBusy] = useState(false);
+  const load = async () => { setBusy(true); try { setD(await getCommentStatus()); } finally { setBusy(false); } };
+  useEffect(() => { load(); }, []);
+  const Row = ({ ok, children }: { ok: boolean; children: React.ReactNode }) => (
+    <div className="flex items-start gap-2"><span>{ok ? "✅" : "⚠️"}</span><span>{children}</span></div>
+  );
   return (
-    <div className="dc-card p-4">
-      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-bold">ফলো-আপ (কাস্টমার উত্তর না দিলে)</h2>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={!!value?.enabled} onChange={(e) => onChange({ ...value, enabled: e.target.checked })} />
-          চালু
-        </label>
+    <div className="mt-3 grid gap-2 rounded-xl p-3 text-sm" style={{ background: "var(--a-surface-2)" }}>
+      <div className="flex items-center justify-between gap-2">
+        <b>অবস্থা</b>
+        <button type="button" onClick={load} disabled={busy} className="dc-btn text-xs disabled:opacity-50">{busy ? "দেখছি…" : "↻ আবার দেখুন"}</button>
       </div>
-      <p className="text-xs dc-muted mb-3">
-        কাস্টমারের শেষ মেসেজের পর নিচের সময়ে একটা একটা করে যায়। কাস্টমার উত্তর দিলে আবার প্রথম থেকে শুরু হয়। অর্ডার হয়ে গেলে, বা চ্যাটে AI বন্ধ থাকলে যায় না।
-        Facebook / WhatsApp-এর নিয়মে শেষ মেসেজের ২৪ ঘণ্টার পর পাঠানো যায় না, তাই সময় সর্বোচ্চ ২৩ ঘণ্টা। আপু/ভাইয়া নাম দেখে ঠিক হয়।
-      </p>
-      <div className="grid gap-3">
-        {steps.map((st, i) => (
-          <div key={i} className="rounded-xl p-3" style={{ background: "var(--a-surface-2)" }}>
-            <div className="mb-2 flex flex-wrap items-center gap-3 text-sm">
-              <b>{i + 1} নম্বর</b>
-              <AfterInput hours={st.afterHours} onChange={(afterHours) => setStep(i, { afterHours })} />
-              <label className="ml-auto flex items-center gap-1.5">
-                <input type="checkbox" checked={st.enabled} onChange={(e) => setStep(i, { enabled: e.target.checked })} /> চালু
-              </label>
+      {!d ? <div className="dc-muted text-xs">দেখছি…</div> : (
+        <>
+          <Row ok={d.connected && d.feed}>{d.feed ? "কমেন্টের খবর বটের কাছে আসছে" : "কমেন্টের খবর বটের কাছে আসছে না — ওপরে Connect → Continue with Facebook আবার করুন"}</Row>
+          <Row ok={d.canPublicReply}>{d.canPublicReply ? "কমেন্টের নিচে উত্তর দেওয়ার অনুমতি আছে" : "কমেন্টের নিচে উত্তর দেওয়ার অনুমতি নেই (ইনবক্সে ঠিকই যাবে) — Connect → Continue with Facebook আবার করে সব Allow দিন"}</Row>
+          <div className="mt-1 text-xs font-semibold">সর্বশেষ কমেন্ট</div>
+          {d.log.length === 0 ? <div className="dc-muted text-xs">এখনো কোনো কমেন্ট আসেনি।</div> : d.log.map((e, i) => (
+            <div key={i} className="text-xs" style={{ borderTop: i ? "1px solid var(--a-border)" : undefined, paddingTop: i ? 6 : 0 }}>
+              <div><b>{e.from || "কেউ"}</b>: “{e.text}” <span className="dc-muted">· {new Date(e.at).toLocaleString("bn-BD", { timeZone: "Asia/Dhaka", hour: "numeric", minute: "2-digit", day: "numeric", month: "short" })}</span></div>
+              <div>{COMMENT_STEP_BN[e.step] ?? e.step}{e.error || e.publicError ? <span className="dc-muted"> ({e.error || e.publicError})</span> : null}</div>
             </div>
-            <textarea value={st.text} onChange={(e) => setStep(i, { text: e.target.value })} rows={6} className="dc-input" />
-          </div>
-        ))}
-      </div>
+          ))}
+        </>
+      )}
     </div>
   );
 }
+
 
 /** Messages the bot sends word for word when the AI gives a signal. Edit any time. */
 function SavedReplies({ training, setTraining }: { training: Training; setTraining: (t: Training) => void }) {
@@ -600,7 +593,7 @@ function SavedReplies({ training, setTraining }: { training: Training; setTraini
 
   async function save() {
     setBusy(true); setMsg(null);
-    const r = await saveTraining(t);
+    const r = await saveTraining({ ...t, followUp: undefined });
     setBusy(false);
     setMsg(r.ok ? "Saved ✓ — the bot uses this from the next message." : r.error || "Save failed.");
   }
@@ -662,9 +655,17 @@ function SavedReplies({ training, setTraining }: { training: Training; setTraini
         value={t.commentReply}
         onChange={(commentReply) => set({ commentReply })}
         rows={2}
-      />
+      >
+        <CommentStatus />
+      </SavedReplyCard>
 
-      <FollowUpCard value={t.followUp} onChange={(followUp) => set({ followUp })} />
+      <a href="/admin/reminders" className="dc-card flex items-center justify-between gap-3 p-4 transition hover:shadow-sm">
+        <div>
+          <h2 className="font-bold">ফলো-আপ রিমাইন্ডার</h2>
+          <p className="text-xs dc-muted">কাস্টমার উত্তর না দিলে যে মেসেজগুলো যায় — সময়, লেখা, রাতে বন্ধ, আর কাকে গেল — এখন আলাদা পেজে: Admin → Reminder।</p>
+        </div>
+        <span className="dc-btn text-sm shrink-0">খুলুন →</span>
+      </a>
 
       <SavedReplyCard
         title="অর্ডার কনফার্মেশন (Order confirmed)"

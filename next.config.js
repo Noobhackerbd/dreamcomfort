@@ -9,6 +9,11 @@ const nextConfig = {
     // previously cached list until a hard reload. 0 = always refetch on nav.
     staleTimes: { dynamic: 0, static: 0 },
   },
+  // Self-hosted fonts (app/fonts.css). File names carry a content hash, so they never
+  // change in place — let browsers and the CDN keep them for a year.
+  async headers() {
+    return [{ source: "/fonts/:path*", headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }] }];
+  },
   images: {
     // Serve resized, modern-format (AVIF/WebP) images via Vercel's optimizer.
     formats: ["image/avif", "image/webp"],

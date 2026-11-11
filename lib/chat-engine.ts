@@ -5,7 +5,7 @@ import "server-only";
 import { getServerSupabase } from "@/lib/supabase/server";
 import {
   aiReply, extractProductCards, extractPriceTag, extractOrderTag, extractNoMatchTag, extractGreetTag,
-  extractMatchTag, extractConfirmTag, extractItemsTag, extractMaterialTag, extractFabricTag, extractHumanTag, pricePhotos, messengerText, personalize, usePriceReply,
+  extractMatchTag, extractConfirmTag, extractItemsTag, extractMaterialTag, extractFabricTag, extractHumanTag, pricePhotos, messengerText, personalize, usePriceReply, useGreetReply,
   type ChatTurn, type ChatImage, type ChatbotSettings, type ProductCard,
 } from "@/lib/chatbot";
 import { withPhotos, splitPhotos } from "@/lib/chat-media";
@@ -72,6 +72,17 @@ export function isAdOpener(text: string): boolean {
     /^(more )?(info|information|details)( please| plz| pls)?[?.!]*$/.test(t) ||
     /^(hello|hi)?[!,. ]*i('m| am) interested in (this|your)/.test(t) ||
     /আরও তথ্য পেতে পারি|আরো তথ্য পেতে পারি/.test(t);
+}
+
+/** Only emoji (and spaces / punctuation) — "😍", "👍👍", "❤️ 🥰", "🙂!" — no words or digits. */
+export function isEmojiOnly(text: string): boolean {
+  const t = String(text || "").trim();
+  if (!t || !/[\p{Extended_Pictographic}\p{Regional_Indicator}]/u.test(t)) return false;
+  // Remove emoji, their joiners / variation selectors / skin tones, then spaces and punctuation.
+  const rest = t
+    .replace(/[\p{Extended_Pictographic}\p{Emoji_Modifier}\p{Regional_Indicator}\u{E0020}-\u{E007F}\u200d\ufe0f\ufe0e\u20e3]/gu, "")
+    .replace(/[\s\p{P}\p{S}]/gu, "");
+  return rest.length === 0;
 }
 
 export interface IncomingMessage {
@@ -148,6 +159,12 @@ export async function handleCustomerMessage(s: ChatbotSettings, ch: ChatChannel,
   const firstMessage = history.filter((t) => t.role === "customer").length <= 1;
   if (firstMessage && usePriceReply(s) && (fromAd || isAdOpener(baseText))) {
     ai = { ...ai, ok: true, reply: "[[PRICE]]" };
+  } else if (!photoUrls.length && isEmojiOnly(baseText) && useGreetReply(s)) {
+    // A chat that opens with only an emoji ("😍", "👍", "❤️") is a hello: send the saved
+    // greeting. Checked against the whole chat, not just the last 12 messages.
+    const { count } = await db.from("chat_messages").select("id", { count: "exact", head: true })
+      .eq("conversation_id", conv.id).eq("direction", "in");
+    if ((count ?? 0) <= 1) ai = { ...ai, ok: true, reply: "[[GREET]]" };
   }
   if (!ai.ok || !ai.reply) {
     console.error(`[${ch.name}] AI reply failed:`, ai.error);

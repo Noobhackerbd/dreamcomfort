@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Plus_Jakarta_Sans, Anek_Bangla } from "next/font/google";
+import "./fonts.css";
 import "./globals.css";
 import { MetaPixel } from "@/components/MetaPixel";
 import { TikTokPixel } from "@/components/TikTokPixel";
@@ -7,28 +7,12 @@ import { VisitTracker } from "@/components/VisitTracker";
 import { ScrollTracker } from "@/components/ScrollTracker";
 import { getMetaSettings, getStoreSettings, getTikTokSettings, getNavIcons, getPromoPopup } from "@/lib/settings";
 
-// Self-hosted via next/font — no render-blocking Google Fonts request, auto-preloaded.
-// Premium, modern type: geometric Jakarta for Latin/numbers, and Anek Bangla for
-// Bangla — a contemporary, clean Bengali face with refined proportions that reads
-// warmer and more premium than the earlier Hind Siliguri.
-const display = Plus_Jakarta_Sans({
-  subsets: ["latin"],
-  weight: ["500", "600", "700", "800"],
-  variable: "--font-display",
-  display: "swap",
-});
-const notoBengali = Anek_Bangla({
-  subsets: ["bengali", "latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-bengali",
-  display: "swap",
-  // Bengali glyph sets are huge — this face is ~194 KB, by far the biggest asset on
-  // every page. Preloading it put that download at top priority, competing with the
-  // hero image during first paint. Without the preload the text paints immediately in
-  // the metric-matched fallback (so CLS stays 0) and swaps to Anek Bangla a moment
-  // later: same final typography, 194 KB off the critical path.
-  preload: false,
-});
+// Fonts are self-hosted from /public/fonts (app/fonts.css): Plus Jakarta Sans for
+// Latin/numbers, Anek Bangla for Bangla. Fixed files rather than next/font/google, which
+// re-downloads from Google on every build — a changed Google response once left the page's
+// font class and its CSS out of step and the whole site fell back to Times.
+// Only the small Latin Jakarta file is preloaded; Anek Bangla (~156 KB) swaps in after
+// first paint from its metric-matched fallback, as before.
 import { Header } from "@/components/Header";
 import { HideOnAdmin, HeaderGate, SiteMain } from "@/components/SiteChrome";
 import { STORE, STORE_NAME } from "@/lib/config";
@@ -84,8 +68,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     ],
   };
   return (
-    <html lang="bn" suppressHydrationWarning className={`${display.variable} ${notoBengali.variable}`}>
+    <html lang="bn" suppressHydrationWarning>
       <head>
+        <link rel="preload" href="/fonts/jakarta-latin-52d04440.woff2" as="font" type="font/woff2" crossOrigin="" />
         {/* Pick the language BEFORE first paint (no flash, no server cookie read → pages
             stay cacheable at the edge). Default = Bengali. */}
         <script dangerouslySetInnerHTML={{ __html: `(function(){try{var m=document.cookie.match(/(?:^|; )${LANG_COOKIE}=(en|bn)/);var l=m?m[1]:"bn";var d=document.documentElement;d.setAttribute("data-lang",l);d.lang=l;}catch(e){}})();` }} />

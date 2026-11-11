@@ -57,35 +57,54 @@ async function graphPost(path: string, token: string, body: Record<string, unkno
   return { ok: r.ok && !j?.error, j, error: j?.error?.message as string | undefined };
 }
 
+/** The last 30 comment events, kept in settings ("chatbot_comment_log") so problems can be
+ *  seen without the hosting logs. Best-effort, never throws. */
+async function logComment(entry: Record<string, unknown>) {
+  try {
+    const db = getServerSupabase();
+    const { data } = await db.from("settings").select("value").eq("key", "chatbot_comment_log").maybeSingle();
+    const list = Array.isArray((data as any)?.value) ? ((data as any).value as unknown[]) : [];
+    const next = [{ at: new Date().toISOString(), ...entry }, ...list].slice(0, 30);
+    await db.from("settings").upsert({ key: "chatbot_comment_log", value: next, updated_at: new Date().toISOString() });
+  } catch { /* ignore */ }
+}
+
 /** One "feed" webhook change. Never throws. */
 export async function handleCommentChange(s: ChatbotSettings, change: any) {
+  const v = change?.value;
+  if (change?.field !== "feed" || v?.item !== "comment" || v?.verb !== "add") return;
+  const commentId = String(v?.comment_id ?? "");
+  const text = String(v?.message ?? "").trim();
+  const fromId = String(v?.from?.id ?? "");
+  // Our own replies come back on the same webhook — never answer them.
+  if (fromId && fromId === String(s.pageId)) return;
+  const log = (step: string, extra: Record<string, unknown> = {}) =>
+    logComment({ step, commentId, text: text.slice(0, 120), from: v?.from?.name ?? null, ...extra });
   try {
-    const v = change?.value;
-    if (change?.field !== "feed" || v?.item !== "comment" || v?.verb !== "add") return;
-    if (!s.autoReply || !s.commentReply?.enabled || !s.pageAccessToken) return;
-    const fromId = String(v?.from?.id ?? "");
-    if (!fromId || fromId === String(s.pageId)) return; // our own replies
-    const commentId = String(v?.comment_id ?? "");
-    const text = String(v?.message ?? "").trim();
-    if (!commentId || !text) return;                      // photo-only / sticker comments wait for you
+    if (!s.autoReply) return void (await log("skipped: bot is off"));
+    if (!s.commentReply?.enabled) return void (await log("skipped: comment replies are off"));
+    if (!s.pageAccessToken) return void (await log("skipped: Page not connected"));
+    if (!commentId || !text) return void (await log("skipped: no text (photo / sticker)"));
     const name = String(v?.from?.name ?? "").trim() || null;
 
     const ai = await aiReply([{ role: "customer", text: `(Facebook কমেন্ট) ${text}` }], s, name);
-    if (!ai.ok || !ai.reply) return;
+    if (!ai.ok || !ai.reply) return void (await log("AI failed", { error: (ai as any).error ?? null }));
     const priv = privateTextFor(ai.reply, s, ai.gender);
-    if (!priv) return;
+    if (!priv) return void (await log("skipped: greeting or needs you", { ai: ai.reply.slice(0, 160) }));
 
     // 1) Private reply → their Messenger. Facebook allows one per comment, so a retried
     //    webhook fails here and nothing is sent twice.
     const pr = await graphPost("/me/messages", s.pageAccessToken, { recipient: { comment_id: commentId }, message: { text: priv.slice(0, 1990) } });
-    if (!pr.ok) { console.error("[comments] private reply failed:", pr.error); return; }
+    if (!pr.ok) { console.error("[comments] private reply failed:", pr.error); return void (await log("private reply failed", { error: pr.error })); }
 
     // 2) Short public reply under the comment.
     const pub = messengerText(personalize(s.commentReply.text || "", ai.gender)).trim();
+    let publicError: string | null = null;
     if (pub) {
       const cr = await graphPost(`/${encodeURIComponent(commentId)}/comments`, s.pageAccessToken, { message: pub });
-      if (!cr.ok) console.error("[comments] public reply failed:", cr.error);
+      if (!cr.ok) { publicError = cr.error || "failed"; console.error("[comments] public reply failed:", cr.error); }
     }
+    await log(publicError ? "sent privately, public reply failed" : "sent", { publicError, reply: priv.slice(0, 120) });
 
     // 3) Inbox: the commenter becomes a chat, so their reply continues normally.
     const psid = String(pr.j?.recipient_id ?? "");
@@ -102,7 +121,8 @@ export async function handleCommentChange(s: ChatbotSettings, change: any) {
       unread: (conv.unread ?? 0) + 1,
     }).eq("id", conv.id);
     if (ai.gender) await db.from("chat_conversations").update({ gender: ai.gender }).eq("id", conv.id);
-  } catch (e) {
+  } catch (e: any) {
     console.error("[comments] failed", e);
+    await log("error", { error: String(e?.message ?? e) });
   }
 }

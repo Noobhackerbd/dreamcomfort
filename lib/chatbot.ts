@@ -61,7 +61,21 @@ export interface ItemsReply {
  *  after the customer's last message, only while Facebook / WhatsApp still allow it
  *  (24 hours after the customer's last message). */
 export interface FollowUpStep { enabled: boolean; afterHours: number; text: string }
-export interface FollowUp { enabled: boolean; steps: FollowUpStep[] }
+/** "Don't send at night": hours in Bangladesh time. from 23, to 8 = nothing 11 pm – 8 am;
+ *  a reminder that falls due then waits until the morning (if still inside 24 hours). */
+export interface QuietHours { enabled: boolean; from: number; to: number }
+export interface FollowUp { enabled: boolean; steps: FollowUpStep[]; quiet: QuietHours }
+export const FOLLOWUP_MAX_STEPS = 6;
+export const DEFAULT_QUIET: QuietHours = { enabled: true, from: 23, to: 8 };
+
+/** Is it inside the quiet hours right now (Bangladesh time, UTC+6)? Pure — unit-tested. */
+export function inQuietHours(q: QuietHours | undefined, nowMs: number): boolean {
+  if (!q?.enabled) return false;
+  const from = Math.round(Number(q.from)) % 24, to = Math.round(Number(q.to)) % 24;
+  if (from === to) return false;
+  const h = new Date(nowMs + 6 * 3600000).getUTCHours();
+  return from < to ? h >= from && h < to : h >= from || h < to;
+}
 /** Messenger / WhatsApp only allow messages within 24h of the customer's last one. */
 export const FOLLOWUP_WINDOW_H = 23.5;
 
@@ -206,6 +220,7 @@ export const DEFAULT_CHATBOT: ChatbotSettings = {
   },
   followUp: {
     enabled: true,
+    quiet: DEFAULT_QUIET,
     steps: [
       { enabled: true, afterHours: 5 / 60, text: "🌸 আপু, আমাদের প্রেগন্যান্সি পিলো সেটটি কি আপনার পছন্দ হয়েছে?\n\nগর্ভাবস্থায় ঘুমের সময় আরাম ও সাপোর্ট পাওয়া খুবই গুরুত্বপূর্ণ। তাই আপনার আরামের কথা ভেবেই আমাদের এই ৬ পিসের কমফোর্ট সেট। 💗\n\nআপু, কোনো কিছু জানার থাকলে নির্দ্বিধায় জানাবেন। আমরা আছি আপনার পাশে। ❤️" },
       { enabled: true, afterHours: 6, text: "🤰 আপু, প্রেগন্যান্সির সময় ঘুমাতে কষ্ট হয় বা আরামদায়ক পজিশন খুঁজে পেতে সমস্যা হয়?\n\nDream Comfort Pregnancy Pillow Set আপনাকে ঘুমের সময় আরও আরামদায়ক সাপোর্ট দিতে সাহায্য করবে। ☁️\n\n🎁 ৬ পিসের সম্পূর্ণ সেট\n💰 মাত্র ৯৫০ টাকা\n🚚 সারা বাংলাদেশে ফ্রি হোম ডেলিভারি।\n\nআপু, আপনার জন্য কোন কালারটি পছন্দ হবে? 💕" },
@@ -280,6 +295,7 @@ export async function getChatbotSettings(): Promise<ChatbotSettings> {
       followUp: {
         enabled: v.followUp?.enabled ?? DEFAULT_CHATBOT.followUp.enabled,
         steps: Array.isArray(v.followUp?.steps) && v.followUp.steps.length ? v.followUp.steps : DEFAULT_CHATBOT.followUp.steps,
+        quiet: { ...DEFAULT_QUIET, ...(v.followUp?.quiet ?? {}) },
       },
     };
   } catch {
@@ -522,7 +538,7 @@ export function buildSystemPrompt(s: ChatbotSettings): { rules: string; knowledg
     "- ADDRESSING: call the customer \"আপু\" if the CUSTOMER NAME looks female and \"ভাইয়া\" if it looks male (judge from the Bangladeshi name; use what they say about themselves if they mention it). If you can't tell, use neither. Start EVERY reply with [[G:F]], [[G:M]] or [[G:U]] (female / male / can't tell) — it is removed before sending, and it also goes in front of [[PRICE]], [[ORDER]] and [[NOMATCH…]].",
     "- Sound like a real person from the shop, not a bot: warm, natural Bangla, polite (আপনি), 1–2 fitting emoji (🥰 😊 👇 ✅ 🎁). Never use robotic phrases like \"আমি একজন সহকারী\" or \"আপনাকে সাহায্য করতে পেরে আনন্দিত\". Vary your wording; don't start every reply the same way.",
     ...(useGreetReply(s) ? [
-      "- GREETING: when the customer's message is ONLY a greeting (e.g. \"hello\", \"hi\", \"হ্যালো\", \"আসসালামু আলাইকুম\", \"salam\", \"assalamu alaikum\") with no question, reply with exactly [[GREET]] (after the [[G:…]] tag) and nothing else — the shop's saved greeting is sent automatically. If the greeting comes with a question, answer the question instead.",
+      "- GREETING: when the customer's message is ONLY a greeting (e.g. \"hello\", \"hi\", \"হ্যালো\", \"আসসালামু আলাইকুম\", \"salam\", \"assalamu alaikum\") with no question — or when the FIRST message of the chat is only emoji (e.g. \"😍\", \"👍\", \"❤️\") — reply with exactly [[GREET]] (after the [[G:…]] tag) and nothing else — the shop's saved greeting is sent automatically. If the greeting comes with a question, answer the question instead.",
     ] : []),
     ...(useOrderReply(s) ? [
       "- ORDER: when the customer wants to order or buy (e.g. \"অর্ডার করব\", \"order korbo\", \"নিবো\", \"kivabe order korbo\", \"confirm\") and has NOT yet given their name, full address and mobile number, reply with exactly [[ORDER]] and nothing else — the shop's saved order form is sent automatically. " + (useConfirmReply(s)

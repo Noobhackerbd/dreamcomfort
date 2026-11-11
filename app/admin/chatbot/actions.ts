@@ -117,16 +117,7 @@ export async function saveTraining(input: {
       commentReply: input.commentReply
         ? { enabled: !!input.commentReply.enabled, text: clean(input.commentReply.text, 600) }
         : s.commentReply,
-      followUp: input.followUp
-        ? {
-            enabled: !!input.followUp.enabled,
-            steps: (input.followUp.steps ?? []).slice(0, 6).map((st) => ({
-              enabled: !!st.enabled,
-              afterHours: Math.max(3 / 60, Math.min(23, Number(st.afterHours) || 1)),
-              text: clean(st.text, 1900),
-            })),
-          }
-        : s.followUp,
+      followUp: s.followUp, // edited on its own page: Admin → Reminder (app/admin/reminders)
     });
     return { ok: true };
   } catch (e: any) {
@@ -482,4 +473,33 @@ export async function suggestReply(id: string) {
   const g = r.gender;
   const draft = gr.greet ? messengerText(personalize(s.greetReply.text, g)) : mt.match ? messengerText(personalize(s.matchReply.text, g)) : cf.confirm ? messengerText(personalize(s.confirmReply.text, g)) : it.items ? messengerText(personalize(s.itemsReply.text, g)) : ma.material ? messengerText(personalize(s.materialReply.text, g)) : fb.fabric ? messengerText(personalize(s.fabricReply.text, g)) : nm.noMatch ? messengerText(personalize(s.noMatchReply.text, g)) : pt.price ? messengerText(personalize(s.priceReply.text, g)) : ot.order ? messengerText(personalize(s.orderReply.text, g)) : extractProductCards(ot.text, s).text;
   return { ok: true, draft, costUsd: r.costUsd };
+}
+
+/** Facebook comment replies: is everything in place, and what happened to the latest comments. */
+export async function getCommentStatus() {
+  await requireAdmin();
+  const s = await getChatbotSettings();
+  const G = "https://graph.facebook.com/v23.0";
+  let scopes: string[] = [];
+  let feed = false;
+  if (s.pageAccessToken && s.pageId) {
+    const t = encodeURIComponent(s.pageAccessToken);
+    const [dbg, subs] = await Promise.all([
+      fetch(`${G}/debug_token?input_token=${t}&access_token=${t}`, { cache: "no-store", signal: AbortSignal.timeout(8000) }).then((r) => r.json()).catch(() => null),
+      fetch(`${G}/${encodeURIComponent(s.pageId)}/subscribed_apps?access_token=${t}`, { cache: "no-store", signal: AbortSignal.timeout(8000) }).then((r) => r.json()).catch(() => null),
+    ]);
+    scopes = dbg?.data?.scopes ?? [];
+    feed = (subs?.data ?? []).some((a: any) => String(a?.id) === fbApp(s).appId && (a?.subscribed_fields ?? []).includes("feed"));
+  }
+  const { data } = await getServerSupabase().from("settings").select("value").eq("key", "chatbot_comment_log").maybeSingle();
+  const log = (Array.isArray((data as any)?.value) ? (data as any).value : []).slice(0, 10) as {
+    at: string; step: string; text?: string; from?: string | null; error?: string | null; publicError?: string | null; reply?: string;
+  }[];
+  return {
+    connected: !!s.pageAccessToken,
+    feed,
+    canPublicReply: scopes.includes("pages_manage_engagement"),
+    canReadComments: scopes.includes("pages_read_user_content") || scopes.includes("pages_read_engagement"),
+    log,
+  };
 }
