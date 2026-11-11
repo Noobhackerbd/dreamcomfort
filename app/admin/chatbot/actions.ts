@@ -3,8 +3,8 @@
 import { requireAdmin } from "@/lib/admin-auth";
 import { getServerSupabase } from "@/lib/supabase/server";
 import {
-  getChatbotSettings, saveChatbotSettings, fbApp, aiReply, extractProductCards, extractPriceTag, extractOrderTag, extractNoMatchTag, extractGreetTag, extractMatchTag, extractConfirmTag, extractItemsTag, extractMaterialTag, extractFabricTag, extractHumanTag, pricePhotos, usePriceReply, messengerText, personalize,
-  type PriceReply, type OrderReply, type NoMatchReply, type GreetReply, type MatchReply, type ConfirmReply, type ItemsReply, type MaterialReply, type FabricReply, type CommentReply, type FollowUp, getStoreProductsForTraining,
+  getChatbotSettings, saveChatbotSettings, fbApp, aiReply, extractProductCards, extractPriceTag, extractOrderTag, extractNoMatchTag, extractGreetTag, extractMatchTag, extractConfirmTag, extractItemsTag, extractMaterialTag, extractFabricTag, extractBargainTag, useBargainReply, isPriceOffer, lowestProductPrice, extractHumanTag, pricePhotos, usePriceReply, messengerText, personalize,
+  type PriceReply, type OrderReply, type NoMatchReply, type GreetReply, type MatchReply, type ConfirmReply, type ItemsReply, type MaterialReply, type FabricReply, type BargainReply, type CommentReply, type FollowUp, getStoreProductsForTraining,
   CHATBOT_MODEL_DEFAULT, type ChatbotProduct, type ChatbotReplyExample, type ChatTurn, type ChatImage,
 } from "@/lib/chatbot";
 import { sendText, checkPageToken, fetchPhoto } from "@/lib/messenger";
@@ -47,12 +47,12 @@ export async function loadChatbotAdmin() {
         display: s.waDisplay,
       },
     },
-    training: { botName: s.botName, storeInfo: s.storeInfo, products: s.products, examples: s.examples, priceReply: s.priceReply, orderReply: s.orderReply, noMatchReply: s.noMatchReply, greetReply: s.greetReply, matchReply: s.matchReply, confirmReply: s.confirmReply, itemsReply: s.itemsReply, materialReply: s.materialReply, fabricReply: s.fabricReply, commentReply: s.commentReply, followUp: s.followUp },
+    training: { botName: s.botName, storeInfo: s.storeInfo, products: s.products, examples: s.examples, priceReply: s.priceReply, orderReply: s.orderReply, noMatchReply: s.noMatchReply, greetReply: s.greetReply, matchReply: s.matchReply, confirmReply: s.confirmReply, itemsReply: s.itemsReply, materialReply: s.materialReply, fabricReply: s.fabricReply, bargainReply: s.bargainReply, commentReply: s.commentReply, followUp: s.followUp },
   };
 }
 
 export async function saveTraining(input: {
-  botName: string; storeInfo: string; products: ChatbotProduct[]; examples: ChatbotReplyExample[]; priceReply?: PriceReply; orderReply?: OrderReply; noMatchReply?: NoMatchReply; greetReply?: GreetReply; matchReply?: MatchReply; confirmReply?: ConfirmReply; itemsReply?: ItemsReply; materialReply?: MaterialReply; fabricReply?: FabricReply; commentReply?: CommentReply; followUp?: FollowUp;
+  botName: string; storeInfo: string; products: ChatbotProduct[]; examples: ChatbotReplyExample[]; priceReply?: PriceReply; orderReply?: OrderReply; noMatchReply?: NoMatchReply; greetReply?: GreetReply; matchReply?: MatchReply; confirmReply?: ConfirmReply; itemsReply?: ItemsReply; materialReply?: MaterialReply; fabricReply?: FabricReply; bargainReply?: BargainReply; commentReply?: CommentReply; followUp?: FollowUp;
 }) {
   await requireAdmin();
   const s = await getChatbotSettings();
@@ -114,6 +114,9 @@ export async function saveTraining(input: {
       fabricReply: input.fabricReply
         ? { enabled: !!input.fabricReply.enabled, text: clean(input.fabricReply.text, 1900) }
         : s.fabricReply,
+      bargainReply: input.bargainReply
+        ? { enabled: !!input.bargainReply.enabled, text: clean(input.bargainReply.text, 1900) }
+        : s.bargainReply,
       commentReply: input.commentReply
         ? { enabled: !!input.commentReply.enabled, text: clean(input.commentReply.text, 600) }
         : s.commentReply,
@@ -288,7 +291,7 @@ export async function importStoreProducts() {
 
 /** Try the bot without Facebook. Uses the training on screen, saved or not. */
 export async function testChat(history: ChatTurn[], training?: {
-  botName: string; storeInfo: string; products: ChatbotProduct[]; examples: ChatbotReplyExample[]; priceReply?: PriceReply; orderReply?: OrderReply; noMatchReply?: NoMatchReply; greetReply?: GreetReply; matchReply?: MatchReply; confirmReply?: ConfirmReply; itemsReply?: ItemsReply; materialReply?: MaterialReply; fabricReply?: FabricReply; commentReply?: CommentReply; followUp?: FollowUp;
+  botName: string; storeInfo: string; products: ChatbotProduct[]; examples: ChatbotReplyExample[]; priceReply?: PriceReply; orderReply?: OrderReply; noMatchReply?: NoMatchReply; greetReply?: GreetReply; matchReply?: MatchReply; confirmReply?: ConfirmReply; itemsReply?: ItemsReply; materialReply?: MaterialReply; fabricReply?: FabricReply; bargainReply?: BargainReply; commentReply?: CommentReply; followUp?: FollowUp;
 }, customerName?: string) {
   await requireAdmin();
   const s = await getChatbotSettings();
@@ -306,6 +309,8 @@ export async function testChat(history: ChatTurn[], training?: {
   const customerTurns = clean.filter((t) => t.role === "customer");
   if (customerTurns.length === 1 && usePriceReply(merged) && isAdOpener(customerTurns[0].text)) {
     r = { ...r, ok: true, reply: "[[PRICE]]" };
+  } else if (customerTurns.length && useBargainReply(merged as typeof s) && isPriceOffer(customerTurns[customerTurns.length - 1].text, lowestProductPrice(merged as typeof s))) {
+    r = { ...r, ok: true, reply: "[[BARGAIN]]" };
   }
   if (!r.ok || !r.reply) return { ...r, cards: [] as ReturnType<typeof extractProductCards>["cards"], priceImage: "", usdToBdt: s.usdToBdt };
   const hu = extractHumanTag(r.reply, merged);
@@ -321,8 +326,9 @@ export async function testChat(history: ChatTurn[], training?: {
   const it = extractItemsTag(cf.text, merged);
   const ma = extractMaterialTag(it.text, merged);
   const fb = extractFabricTag(ma.text, merged);
-  if (gr.greet || mt.match || cf.confirm || it.items || ma.material || fb.fabric) {
-    const saved = gr.greet ? merged.greetReply.text : mt.match ? merged.matchReply.text : cf.confirm ? merged.confirmReply.text : it.items ? merged.itemsReply.text : ma.material ? merged.materialReply.text : merged.fabricReply.text;
+  const bg = extractBargainTag(fb.text, merged);
+  if (gr.greet || mt.match || cf.confirm || it.items || ma.material || fb.fabric || bg.bargain) {
+    const saved = gr.greet ? merged.greetReply.text : mt.match ? merged.matchReply.text : cf.confirm ? merged.confirmReply.text : it.items ? merged.itemsReply.text : ma.material ? merged.materialReply.text : fb.fabric ? merged.fabricReply.text : merged.bargainReply.text;
     // Test only: show the order that WOULD be created — nothing is saved.
     let orderPreview = "";
     if (cf.confirm && merged.confirmReply.createOrder !== false) {
@@ -339,7 +345,7 @@ export async function testChat(history: ChatTurn[], training?: {
     }
     return { ...r, reply: messengerText(personalize(saved, r.gender)), orderPreview, cards: [] as ReturnType<typeof extractProductCards>["cards"], priceImage: "", usdToBdt: s.usdToBdt };
   }
-  const nm = extractNoMatchTag(extractFabricTag(ma.text, merged).text, merged);
+  const nm = extractNoMatchTag(bg.text, merged);
   if (nm.noMatch) {
     return {
       ...r, reply: messengerText(personalize(merged.noMatchReply.text, r.gender)), cards: [] as ReturnType<typeof extractProductCards>["cards"],
@@ -355,7 +361,7 @@ export async function testChat(history: ChatTurn[], training?: {
     return { ...r, reply: messengerText(personalize(merged.orderReply.text, r.gender)), cards: [] as ReturnType<typeof extractProductCards>["cards"], priceImage: "", usdToBdt: s.usdToBdt };
   }
   const { text, cards } = extractProductCards(ot.text, merged);
-  return { ...r, reply: text || (cards.length ? "আমাদের পণ্যগুলোর ছবি আর দাম নিচে দিলাম 👇" : r.reply), cards, priceImage: "", usdToBdt: s.usdToBdt };
+  return { ...r, reply: personalize(text, r.gender) || (cards.length ? "আমাদের পণ্যগুলোর ছবি আর দাম নিচে দিলাম 👇" : r.reply), cards, priceImage: "", usdToBdt: s.usdToBdt };
 }
 
 // ------------------------------------------------------------------ inbox --
@@ -467,11 +473,12 @@ export async function suggestReply(id: string) {
   const it = extractItemsTag(cf.text, s);
   const ma = extractMaterialTag(it.text, s);
   const fb = extractFabricTag(ma.text, s);
-  const nm = extractNoMatchTag(fb.text, s);
+  const bg = extractBargainTag(fb.text, s);
+  const nm = extractNoMatchTag(bg.text, s);
   const pt = extractPriceTag(nm.text, s);
   const ot = extractOrderTag(pt.text, s);
   const g = r.gender;
-  const draft = gr.greet ? messengerText(personalize(s.greetReply.text, g)) : mt.match ? messengerText(personalize(s.matchReply.text, g)) : cf.confirm ? messengerText(personalize(s.confirmReply.text, g)) : it.items ? messengerText(personalize(s.itemsReply.text, g)) : ma.material ? messengerText(personalize(s.materialReply.text, g)) : fb.fabric ? messengerText(personalize(s.fabricReply.text, g)) : nm.noMatch ? messengerText(personalize(s.noMatchReply.text, g)) : pt.price ? messengerText(personalize(s.priceReply.text, g)) : ot.order ? messengerText(personalize(s.orderReply.text, g)) : extractProductCards(ot.text, s).text;
+  const draft = gr.greet ? messengerText(personalize(s.greetReply.text, g)) : mt.match ? messengerText(personalize(s.matchReply.text, g)) : cf.confirm ? messengerText(personalize(s.confirmReply.text, g)) : it.items ? messengerText(personalize(s.itemsReply.text, g)) : ma.material ? messengerText(personalize(s.materialReply.text, g)) : fb.fabric ? messengerText(personalize(s.fabricReply.text, g)) : bg.bargain ? messengerText(personalize(s.bargainReply.text, g)) : nm.noMatch ? messengerText(personalize(s.noMatchReply.text, g)) : pt.price ? messengerText(personalize(s.priceReply.text, g)) : ot.order ? messengerText(personalize(s.orderReply.text, g)) : extractProductCards(ot.text, s).text;
   return { ok: true, draft, costUsd: r.costUsd };
 }
 

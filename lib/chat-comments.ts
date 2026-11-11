@@ -5,14 +5,14 @@
 //   • otherwise the matching saved reply (price, what's included, filling, fabric, order
 //     form…) or the AI's own short answer goes to the commenter's Messenger as a
 //     "private reply" (Facebook allows ONE per comment, within 7 days), and
-//   • a short public reply goes under the comment ("আপু, ইনবক্সে বিস্তারিত পাঠিয়েছি 💗").
+//   • a short public reply goes under the comment ("ম্যাম, ইনবক্সে বিস্তারিত পাঠিয়েছি 💗").
 // The commenter then appears in Admin → AI Chat Bot → Inbox; when they write back, the
 // normal chat (AI replies, follow-ups) takes over.
 import "server-only";
 import { getServerSupabase } from "@/lib/supabase/server";
 import {
   aiReply, extractHumanTag, extractGreetTag, extractMatchTag, extractConfirmTag, extractItemsTag, extractMaterialTag,
-  extractFabricTag, extractNoMatchTag, extractPriceTag, extractOrderTag, extractProductCards, messengerText, personalize,
+  extractFabricTag, extractBargainTag, extractNoMatchTag, extractPriceTag, extractOrderTag, extractProductCards, messengerText, personalize,
   type ChatbotSettings,
 } from "@/lib/chatbot";
 import { getOrCreateConversation } from "@/lib/chat-engine";
@@ -30,18 +30,22 @@ export function privateTextFor(reply: string, s: ChatbotSettings, gender?: "F" |
   const it = extractItemsTag(cf.text, s);
   const ma = extractMaterialTag(it.text, s);
   const fb = extractFabricTag(ma.text, s);
-  const nm = extractNoMatchTag(fb.text, s);
+  const bg = extractBargainTag(fb.text, s);
+  const nm = extractNoMatchTag(bg.text, s);
   const pt = extractPriceTag(nm.text, s);
   const ot = extractOrderTag(pt.text, s);
   const saved =
     it.items ? s.itemsReply.text :
     ma.material ? s.materialReply.text :
     fb.fabric ? s.fabricReply.text :
+    bg.bargain ? s.bargainReply.text :
     pt.price ? s.priceReply.text :
     ot.order ? s.orderReply.text :
     cf.confirm ? s.orderReply.text : // details typed in a comment → ask again privately
     null;
-  const text = saved ?? extractProductCards(ot.text, s).text;
+  // Safety net: a comment is always about our product — never DM "which product do you mean?".
+  const asksWhich = /কোন\s*(পণ্য|প্রোডাক্ট|প্রডাক্ট|product)/i.test(ot.text) || /which product/i.test(ot.text);
+  const text = saved ?? (asksWhich && s.priceReply?.text?.trim() ? s.priceReply.text : extractProductCards(ot.text, s).text);
   const out = messengerText(personalize(text, gender)).trim();
   return out || null;
 }

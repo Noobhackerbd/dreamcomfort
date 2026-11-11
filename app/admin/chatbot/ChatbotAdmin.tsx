@@ -21,11 +21,12 @@ type ConfirmReply = { enabled: boolean; text: string; createOrder: boolean; prod
 type ItemsReply = { enabled: boolean; text: string };
 type MaterialReply = { enabled: boolean; text: string };
 type FabricReply = { enabled: boolean; text: string };
+type BargainReply = { enabled: boolean; text: string };
 type CommentReply = { enabled: boolean; text: string };
 type FollowUp = { enabled: boolean; steps: { enabled: boolean; afterHours: number; text: string }[]; quiet: { enabled: boolean; from: number; to: number } };
 type Training = {
   botName: string; storeInfo: string; products: Product[]; examples: Example[];
-  priceReply: PriceReply; orderReply: OrderReply; noMatchReply: NoMatchReply; greetReply: GreetReply; matchReply: MatchReply; confirmReply: ConfirmReply; itemsReply: ItemsReply; materialReply: MaterialReply; fabricReply: FabricReply; commentReply: CommentReply; followUp: FollowUp;
+  priceReply: PriceReply; orderReply: OrderReply; noMatchReply: NoMatchReply; greetReply: GreetReply; matchReply: MatchReply; confirmReply: ConfirmReply; itemsReply: ItemsReply; materialReply: MaterialReply; fabricReply: FabricReply; bargainReply: BargainReply; commentReply: CommentReply; followUp: FollowUp;
 };
 type Connection = {
   pageAccessToken: string; appSecret: string; anthropicKey: string; verifyToken: string;
@@ -647,6 +648,14 @@ function SavedReplies({ training, setTraining }: { training: Training; setTraini
         value={t.fabricReply}
         onChange={(fabricReply) => set({ fabricReply })}
         rows={7}
+      />
+
+      <SavedReplyCard
+        title="দাম কমানোর অনুরোধ (Bargain)"
+        hint="কেউ কম দাম বললে (“900”, “৮৫০ দিবো”) বা “কম হবে?”, “last koto”, “discount” জিজ্ঞেস করলে প্রতিবার এটা যায় — AI নিজে থেকে দাম নিয়ে কিছু বলে না, আর এই চ্যাট আপনার কাছেও পাঠায় না। শুধু একটা কম সংখ্যা লিখলে (প্রোডাক্টের সবচেয়ে কম দামের চেয়ে কম) AI ছাড়াই এটা যায়।"
+        value={t.bargainReply}
+        onChange={(bargainReply) => set({ bargainReply })}
+        rows={6}
       />
 
       <SavedReplyCard
@@ -1349,7 +1358,7 @@ function TestChat({ training }: { training: Training }) {
         <span className="dc-muted">Uses the training on the Train tab, even before you save it. Nothing goes to Facebook.</span>
         <label className="flex items-center gap-2">
           <span className="dc-muted">Customer name</span>
-          <input value={custName} onChange={(e) => setCustName(e.target.value)} className="dc-input w-44" placeholder="e.g. Rumana Akter" title="The bot says আপু or ভাইয়া from the name" />
+          <input value={custName} onChange={(e) => setCustName(e.target.value)} className="dc-input w-44" placeholder="e.g. Rumana Akter" title="The bot says ম্যাম or স্যার from the name" />
         </label>
         <span className="ml-auto">This test: <b>{total.n}</b> replies · <b>{taka(total.usd, total.rate)}</b></span>
         <button type="button" className="dc-btn" onClick={() => { setMsgs([]); setTotal({ usd: 0, rate: total.rate, n: 0 }); }}>Clear</button>

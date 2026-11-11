@@ -5,7 +5,7 @@ import "server-only";
 import { getServerSupabase } from "@/lib/supabase/server";
 import {
   aiReply, extractProductCards, extractPriceTag, extractOrderTag, extractNoMatchTag, extractGreetTag,
-  extractMatchTag, extractConfirmTag, extractItemsTag, extractMaterialTag, extractFabricTag, extractHumanTag, pricePhotos, messengerText, personalize, usePriceReply, useGreetReply,
+  extractMatchTag, extractConfirmTag, extractItemsTag, extractMaterialTag, extractFabricTag, extractBargainTag, extractHumanTag, pricePhotos, messengerText, personalize, usePriceReply, useGreetReply, useBargainReply, isPriceOffer, lowestProductPrice,
   type ChatTurn, type ChatImage, type ChatbotSettings, type ProductCard,
 } from "@/lib/chatbot";
 import { withPhotos, splitPhotos } from "@/lib/chat-media";
@@ -159,6 +159,10 @@ export async function handleCustomerMessage(s: ChatbotSettings, ch: ChatChannel,
   const firstMessage = history.filter((t) => t.role === "customer").length <= 1;
   if (firstMessage && usePriceReply(s) && (fromAd || isAdOpener(baseText))) {
     ai = { ...ai, ok: true, reply: "[[PRICE]]" };
+  } else if (!photoUrls.length && useBargainReply(s) && isPriceOffer(baseText, lowestProductPrice(s))) {
+    // "900", "৮৫০ দিবো" — a lower price offer gets the saved "price is fixed" reply, every time
+    // (never handed to you, never the AI's own wording).
+    ai = { ...ai, ok: true, reply: "[[BARGAIN]]" };
   } else if (!photoUrls.length && isEmojiOnly(baseText) && useGreetReply(s)) {
     // A chat that opens with only an emoji ("😍", "👍", "❤️") is a hello: send the saved
     // greeting. Checked against the whole chat, not just the last 12 messages.
@@ -196,8 +200,9 @@ export async function handleCustomerMessage(s: ChatbotSettings, ch: ChatChannel,
   const it = extractItemsTag(cf.text, s);
   const ma = extractMaterialTag(it.text, s);
   const fb = extractFabricTag(ma.text, s);
-  if (gr.greet || mt.match || cf.confirm || it.items || ma.material || fb.fabric) {
-    const saved = gr.greet ? s.greetReply.text : mt.match ? s.matchReply.text : cf.confirm ? s.confirmReply.text : it.items ? s.itemsReply.text : ma.material ? s.materialReply.text : s.fabricReply.text;
+  const bg = extractBargainTag(fb.text, s);
+  if (gr.greet || mt.match || cf.confirm || it.items || ma.material || fb.fabric || bg.bargain) {
+    const saved = gr.greet ? s.greetReply.text : mt.match ? s.matchReply.text : cf.confirm ? s.confirmReply.text : it.items ? s.itemsReply.text : ma.material ? s.materialReply.text : fb.fabric ? s.fabricReply.text : s.bargainReply.text;
     const hello = messengerText(personalize(saved, ai.gender));
     const sentHello = await ch.sendText(to, hello);
     if (!sentHello.ok) {
@@ -227,7 +232,7 @@ export async function handleCustomerMessage(s: ChatbotSettings, ch: ChatChannel,
 
   // [[NOMATCH:n]] → saved "we don't have that one" message, then the similar product's photo
   // (or the price picture when nothing is similar).
-  const nm = extractNoMatchTag(fb.text, s);
+  const nm = extractNoMatchTag(bg.text, s);
   if (nm.noMatch) {
     const body = messengerText(personalize(s.noMatchReply.text, ai.gender));
     const sentNm = await ch.sendText(to, body);
@@ -314,7 +319,7 @@ export async function handleCustomerMessage(s: ChatbotSettings, ch: ChatChannel,
 
   // [[SHOW:…]] in the reply → product photos with prices after the text.
   const { text: replyText, cards } = extractProductCards(orderTag.text, s);
-  const say = replyText || (cards.length ? "আমাদের পণ্যগুলোর ছবি আর দাম নিচে দিলাম 👇" : "");
+  const say = personalize(replyText, ai.gender) || (cards.length ? "আমাদের পণ্যগুলোর ছবি আর দাম নিচে দিলাম 👇" : "");
   if (!say) return;
 
   const sent = await ch.sendText(to, say);

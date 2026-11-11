@@ -183,7 +183,7 @@ export function ReminderSettings() {
         </div>
         <p className="mb-3 text-xs dc-muted">
           Facebook / WhatsApp-এর নিয়মে কাস্টমারের শেষ মেসেজের ২৪ ঘণ্টা পর আর পাঠানো যায় না, তাই সময় সর্বোচ্চ ২৩ ঘণ্টা।
-          লেখায় “আপু” লিখুন — ছেলে কাস্টমার হলে নিজে থেকে “ভাইয়া” হয়ে যায়। সেভ করলে সময় অনুযায়ী সাজিয়ে নেয়।
+          লেখায় “ম্যাম” লিখুন — ছেলে কাস্টমার হলে নিজে থেকে “স্যার” হয়ে যায় (পুরনো লেখার “আপু / ভাইয়া”-ও নিজে থেকে ম্যাম / স্যার হয়ে যায়)। সেভ করলে সময় অনুযায়ী সাজিয়ে নেয়।
         </p>
         <Timeline steps={f.steps} />
         <div className="mt-4 grid gap-3">
@@ -198,7 +198,7 @@ export function ReminderSettings() {
                   <button type="button" onClick={() => { if (confirm(`${i + 1} নম্বর রিমাইন্ডার মুছে ফেলবেন?`)) removeStep(i); }} className="dc-btn text-xs">মুছুন</button>
                 </span>
               </div>
-              <textarea value={st.text} onChange={(e) => setStep(i, { text: e.target.value })} rows={6} className="dc-input" placeholder="আপু, আমাদের পিলো সেটটি কি পছন্দ হয়েছে? …" />
+              <textarea value={st.text} onChange={(e) => setStep(i, { text: e.target.value })} rows={6} className="dc-input" placeholder="ম্যাম, আমাদের পিলো সেটটি কি পছন্দ হয়েছে? …" />
             </div>
           ))}
         </div>
