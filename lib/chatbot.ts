@@ -98,6 +98,17 @@ export interface FabricReply {
   text: string;
 }
 
+/** Negative comments on the Page's posts / ads (insults, "fraud", bad reviews, complaints,
+ *  spam): removed at once. `action` "delete" removes it for everyone; "hide" keeps it visible
+ *  only to the commenter and their friends (they don't notice). `dmText` (optional) goes to
+ *  their Messenger first, so a real complaint can still be sorted out in private. */
+export interface NegativeComments {
+  enabled: boolean;
+  action: "delete" | "hide";
+  dmText: string;
+  notify: boolean;
+}
+
 /** Sent when a customer asks for a discount or offers a lower price ("900", "kom hobe?"). */
 export interface BargainReply {
   enabled: boolean;
@@ -180,6 +191,7 @@ export interface ChatbotSettings {
   materialReply: MaterialReply;
   fabricReply: FabricReply;
   bargainReply: BargainReply;
+  negativeComments: NegativeComments;
   commentReply: CommentReply;
   followUp: FollowUp;
 }
@@ -238,6 +250,12 @@ export const DEFAULT_CHATBOT: ChatbotSettings = {
   commentReply: {
     enabled: true,
     text: "ম্যাম, ইনবক্সে বিস্তারিত পাঠিয়েছি 💗 মেসেজটা একটু দেখে নিন।",
+  },
+  negativeComments: {
+    enabled: true,
+    action: "delete",
+    dmText: "ম্যাম, আপনার অসুবিধার জন্য আমরা আন্তরিকভাবে দুঃখিত 🙏 সমস্যাটা একটু বিস্তারিত জানাবেন? আমরা দ্রুত সমাধান করে দেব।",
+    notify: true,
   },
   bargainReply: {
     enabled: true,
@@ -303,6 +321,7 @@ export async function getChatbotSettings(): Promise<ChatbotSettings> {
       materialReply: { ...DEFAULT_CHATBOT.materialReply, ...(v.materialReply ?? {}) },
       fabricReply: { ...DEFAULT_CHATBOT.fabricReply, ...(v.fabricReply ?? {}) },
       bargainReply: { ...DEFAULT_CHATBOT.bargainReply, ...(v.bargainReply ?? {}) },
+      negativeComments: { ...DEFAULT_CHATBOT.negativeComments, ...(v.negativeComments ?? {}) },
       commentReply: { ...DEFAULT_CHATBOT.commentReply, ...(v.commentReply ?? {}) },
       followUp: {
         enabled: v.followUp?.enabled ?? DEFAULT_CHATBOT.followUp.enabled,
@@ -417,6 +436,13 @@ export function extractMaterialTag(reply: string, s: ChatbotSettings): { text: s
 export const useFabricReply = (s: ChatbotSettings) => !!(s.fabricReply?.enabled && s.fabricReply.text.trim());
 export const useBargainReply = (s: ChatbotSettings) => !!(s.bargainReply?.enabled && s.bargainReply.text.trim());
 
+/** Did the AI flag a negative Facebook comment ([[NEGATIVE]])? */
+export function extractNegativeTag(reply: string): { text: string; negative: boolean } {
+  let negative = false;
+  const text = reply.replace(/\[\[\s*NEGATIVE\s*\]\]/gi, () => { negative = true; return ""; }).trim();
+  return { text, negative };
+}
+
 /** Did the AI signal "wants a discount / offers a lower price" ([[BARGAIN]])? */
 export function extractBargainTag(reply: string, s: ChatbotSettings): { text: string; bargain: boolean } {
   let bargain = false;
@@ -480,7 +506,7 @@ export const useGreetReply = (s: ChatbotSettings) => !!(s.greetReply?.enabled &&
 /** Did the AI say "I don't know — a person should answer" ([[HUMAN]])? */
 export function extractHumanTag(reply: string, s: ChatbotSettings): { text: string; human: boolean } {
   let human = false;
-  const text = reply.replace(/\[\[\s*HUMAN\s*\]\]/gi, () => { human = true; return ""; }).trim();
+  const text = reply.replace(/\[\[\s*(?:HUMAN|NEGATIVE)\s*\]\]/gi, () => { human = true; return ""; }).trim();
   return { text, human: human && s.handoffUnknown !== false };
 }
 
@@ -598,6 +624,9 @@ export function buildSystemPrompt(s: ChatbotSettings): { rules: string; knowledg
     ] : []),
     ...(useMaterialReply(s) ? [
       "- WHAT'S INSIDE / FILLING (not the cover cloth): when the customer asks what is inside the pillow, what it is filled with, what kind of cotton/fibre/foam (e.g. \"vitore ki ase\", \"ভেতরে কি আছে\", \"kiser tula\", \"কিসের তুলা\", \"foam kiser\", \"ফোম না তুলা\", \"fiber naki tula\", \"what is the filling\"), reply with exactly [[MATERIAL]] (after the [[G:…]] tag) and nothing else — the shop's saved message is sent automatically.",
+    ] : []),
+    ...(s.negativeComments?.enabled ? [
+      "- NEGATIVE COMMENTS (only for a message starting \"(Facebook কমেন্ট)\"): when the comment is clearly negative about our shop or product — an insult or abusive/slang words, calling us fake / fraud / scam / বাটপার / ধান্দাবাজ / চিটার, a bad review (\"faltu\", \"baje product\", \"worst\", \"টাকা নষ্ট\", \"কেউ কিনবেন না\"), a complaint about an order or delivery, only angry emoji (😡 🤬 👎 💩), or spam / ads / links from someone else — reply with exactly [[NEGATIVE]] (after the [[G:…]] tag) and nothing else. A QUESTION is never negative, even with words like fake / fraud / original in it — it is a doubt from a possible buyer (\"original to?\", \"fake na to?\", \"fraud naki?\", \"dam beshi na?\", \"valo hobe ki?\", \"keu kinsen?\"): answer it warmly and confidently. If you are not sure, it is not negative.",
     ] : []),
     ...(useBargainReply(s) ? [
       "- DISCOUNT / BARGAINING: when the customer asks for a lower price or discount, or offers less money (e.g. \"900\", \"৯০০ দিবো\", \"kom hobe?\", \"কম হবে না?\", \"last koto\", \"discount den\", \"ektu komiye den\"), reply with exactly [[BARGAIN]] (after the [[G:…]] tag) and nothing else — the shop's saved message is sent automatically. Do this EVERY time they bargain, even if they repeat the same number; never reply [[HUMAN]] for bargaining.",

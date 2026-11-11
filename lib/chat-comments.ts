@@ -1,6 +1,8 @@
 // lib/chat-comments.ts — the AI Chat Bot answers comments on the Page's posts and ads.
 //
 // A new comment arrives on the Page "feed" webhook. The AI reads it like a chat message:
+//   • it's negative ([[NEGATIVE]]: insult, "fraud", bad review, complaint, spam) → an apology
+//     goes to their Messenger, the comment is deleted (or hidden) and you get a notification;
 //   • it needs a human ([[HUMAN]]) or it's just a greeting / compliment → we do nothing;
 //   • otherwise the matching saved reply (price, what's included, filling, fabric, order
 //     form…) or the AI's own short answer goes to the commenter's Messenger as a
@@ -12,10 +14,11 @@ import "server-only";
 import { getServerSupabase } from "@/lib/supabase/server";
 import {
   aiReply, extractHumanTag, extractGreetTag, extractMatchTag, extractConfirmTag, extractItemsTag, extractMaterialTag,
-  extractFabricTag, extractBargainTag, extractNoMatchTag, extractPriceTag, extractOrderTag, extractProductCards, messengerText, personalize,
+  extractFabricTag, extractBargainTag, extractNegativeTag, extractNoMatchTag, extractPriceTag, extractOrderTag, extractProductCards, messengerText, personalize,
   type ChatbotSettings,
 } from "@/lib/chatbot";
 import { getOrCreateConversation } from "@/lib/chat-engine";
+import { sendAdminPush } from "@/lib/push";
 
 const GRAPH = "https://graph.facebook.com/v23.0";
 
@@ -61,6 +64,12 @@ async function graphPost(path: string, token: string, body: Record<string, unkno
   return { ok: r.ok && !j?.error, j, error: j?.error?.message as string | undefined };
 }
 
+async function graphDelete(path: string, token: string) {
+  const r = await fetch(`${GRAPH}${path}?access_token=${encodeURIComponent(token)}`, { method: "DELETE", signal: AbortSignal.timeout(12_000) });
+  const j: any = await r.json().catch(() => ({}));
+  return { ok: r.ok && !j?.error, j, error: j?.error?.message as string | undefined };
+}
+
 /** The last 30 comment events, kept in settings ("chatbot_comment_log") so problems can be
  *  seen without the hosting logs. Best-effort, never throws. */
 async function logComment(entry: Record<string, unknown>) {
@@ -71,6 +80,60 @@ async function logComment(entry: Record<string, unknown>) {
     const next = [{ at: new Date().toISOString(), ...entry }, ...list].slice(0, 30);
     await db.from("settings").upsert({ key: "chatbot_comment_log", value: next, updated_at: new Date().toISOString() });
   } catch { /* ignore */ }
+}
+
+/** "fake na to?", "fraud naki", "original কি" — a question, which is never deleted. Pure. */
+export function isQuestionComment(text: string): boolean {
+  const t = String(text || "").trim().toLowerCase();
+  return /[?？]/.test(t) || /(?:^|\s)(ki|kina|naki|na ki|to|tho|kemon|keno|কি|কিনা|নাকি|তো|কেমন|কেন)\s*[.!।]*$/u.test(t);
+}
+
+/** Remove a negative comment. The apology DM goes first — Facebook needs the comment to
+ *  still exist for a private reply. Never throws. */
+async function removeNegative(
+  s: ChatbotSettings,
+  c: { commentId: string; text: string; name: string | null; gender?: "F" | "M" | "U"; log: (step: string, extra?: Record<string, unknown>) => Promise<void> },
+) {
+  const mod = s.negativeComments;
+  const token = s.pageAccessToken;
+  let psid = "", dm = "", dmMid: string | null = null, dmError: string | null = null;
+  const dmText = messengerText(personalize(mod.dmText || "", c.gender)).trim();
+  if (dmText) {
+    const pr = await graphPost("/me/messages", token, { recipient: { comment_id: c.commentId }, message: { text: dmText.slice(0, 1990) } });
+    if (pr.ok) { psid = String(pr.j?.recipient_id ?? ""); dm = dmText; dmMid = pr.j?.message_id ?? null; }
+    else dmError = pr.error || "failed";
+  }
+  const hide = mod.action === "hide";
+  const res = hide
+    ? await graphPost(`/${encodeURIComponent(c.commentId)}`, token, { is_hidden: true })
+    : await graphDelete(`/${encodeURIComponent(c.commentId)}`, token);
+  // Keep the whole comment in the log — once deleted, this is the only copy.
+  await c.log(res.ok ? (hide ? "hidden: negative" : "deleted: negative") : (hide ? "hide failed" : "delete failed"), {
+    text: c.text.slice(0, 500), error: res.ok ? null : res.error || "failed", dmSent: !!dm, dmError,
+  });
+  if (mod.notify !== false) {
+    await sendAdminPush({
+      title: res.ok ? (hide ? "🙈 নেগেটিভ কমেন্ট লুকানো হয়েছে" : "🗑️ নেগেটিভ কমেন্ট ডিলিট হয়েছে") : "⚠️ নেগেটিভ কমেন্ট — সরানো যায়নি",
+      body: `${c.name || "কেউ"}: ${c.text}`.slice(0, 180),
+      url: "/admin/chatbot",
+      tag: `neg-${c.commentId}`,
+    }).catch(() => 0);
+  }
+  // Their Messenger chat: a note for you, and the AI stays out of it.
+  if (!psid) return;
+  const db = getServerSupabase();
+  const conv = await getOrCreateConversation(psid, async () => ({ name: c.name, avatar: null }));
+  if (!conv) return;
+  const nowIso = new Date().toISOString();
+  await db.from("chat_messages").insert({ conversation_id: conv.id, direction: "in", sender: "customer", text: `💬 নেগেটিভ কমেন্ট (${res.ok ? (hide ? "লুকানো হয়েছে" : "ডিলিট হয়েছে") : "সরানো যায়নি"}): ${c.text}`, mid: `comment:${c.commentId}` });
+  await db.from("chat_messages").insert({ conversation_id: conv.id, direction: "out", sender: "ai", text: dm, mid: dmMid });
+  await db.from("chat_messages").insert({ conversation_id: conv.id, direction: "out", sender: "admin", mid: null, text: "🙋 নেগেটিভ কমেন্ট — এই চ্যাটে AI বন্ধ করা হলো, আপনি কথা বলুন। (কাস্টমারকে পাঠানো হয়নি)" });
+  await db.from("chat_conversations").update({
+    ai_enabled: false,
+    last_message: `💬 ${c.text}`.slice(0, 200),
+    last_message_at: nowIso,
+    unread: (conv.unread ?? 0) + 1,
+  }).eq("id", conv.id);
 }
 
 /** One "feed" webhook change. Never throws. */
@@ -84,17 +147,35 @@ export async function handleCommentChange(s: ChatbotSettings, change: any) {
   if (fromId && fromId === String(s.pageId)) return;
   const log = (step: string, extra: Record<string, unknown> = {}) =>
     logComment({ step, commentId, text: text.slice(0, 120), from: v?.from?.name ?? null, ...extra });
+  const replyOn = !!(s.autoReply && s.commentReply?.enabled);
+  const moderateOn = !!s.negativeComments?.enabled;
   try {
-    if (!s.autoReply) return void (await log("skipped: bot is off"));
-    if (!s.commentReply?.enabled) return void (await log("skipped: comment replies are off"));
+    if (!replyOn && !moderateOn) return void (await log(s.autoReply ? "skipped: comment replies are off" : "skipped: bot is off"));
     if (!s.pageAccessToken) return void (await log("skipped: Page not connected"));
     if (!commentId || !text) return void (await log("skipped: no text (photo / sticker)"));
     const name = String(v?.from?.name ?? "").trim() || null;
 
-    const ai = await aiReply([{ role: "customer", text: `(Facebook কমেন্ট) ${text}` }], s, name);
+    let ai = await aiReply([{ role: "customer", text: `(Facebook কমেন্ট) ${text}` }], s, name);
     if (!ai.ok || !ai.reply) return void (await log("AI failed", { error: (ai as any).error ?? null }));
-    const priv = privateTextFor(ai.reply, s, ai.gender);
-    if (!priv) return void (await log("skipped: greeting or needs you", { ai: ai.reply.slice(0, 160) }));
+    let reply: string = ai.reply;
+
+    // A question is never deleted ("fake na to?", "fraud naki?" is a buyer's doubt): ask again
+    // for a proper answer instead.
+    if (extractNegativeTag(reply).negative && isQuestionComment(text)) {
+      ai = await aiReply([{ role: "customer", text: `(Facebook কমেন্ট — এটা একজন ক্রেতার প্রশ্ন, নেগেটিভ না; নিশ্চিন্ত করে উত্তর দাও) ${text}` }], s, name);
+      if (!ai.ok || !ai.reply) return void (await log("AI failed", { error: (ai as any).error ?? null }));
+      reply = ai.reply.replace(/\[\[\s*NEGATIVE\s*\]\]/gi, "[[HUMAN]]");
+    }
+
+    // Negative comment → (apology to their Messenger) → delete / hide → tell you.
+    if (extractNegativeTag(reply).negative) {
+      if (!moderateOn) return void (await log("skipped: negative (auto-delete is off)"));
+      await removeNegative(s, { commentId, text, name, gender: ai.gender, log });
+      return;
+    }
+    if (!replyOn) return void (await log(s.autoReply ? "skipped: comment replies are off" : "skipped: bot is off"));
+    const priv = privateTextFor(reply, s, ai.gender);
+    if (!priv) return void (await log("skipped: greeting or needs you", { ai: reply.slice(0, 160) }));
 
     // 1) Private reply → their Messenger. Facebook allows one per comment, so a retried
     //    webhook fails here and nothing is sent twice.

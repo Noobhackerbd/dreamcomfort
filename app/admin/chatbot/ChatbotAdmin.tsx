@@ -22,11 +22,12 @@ type ItemsReply = { enabled: boolean; text: string };
 type MaterialReply = { enabled: boolean; text: string };
 type FabricReply = { enabled: boolean; text: string };
 type BargainReply = { enabled: boolean; text: string };
+type NegativeComments = { enabled: boolean; action: "delete" | "hide"; dmText: string; notify: boolean };
 type CommentReply = { enabled: boolean; text: string };
 type FollowUp = { enabled: boolean; steps: { enabled: boolean; afterHours: number; text: string }[]; quiet: { enabled: boolean; from: number; to: number } };
 type Training = {
   botName: string; storeInfo: string; products: Product[]; examples: Example[];
-  priceReply: PriceReply; orderReply: OrderReply; noMatchReply: NoMatchReply; greetReply: GreetReply; matchReply: MatchReply; confirmReply: ConfirmReply; itemsReply: ItemsReply; materialReply: MaterialReply; fabricReply: FabricReply; bargainReply: BargainReply; commentReply: CommentReply; followUp: FollowUp;
+  priceReply: PriceReply; orderReply: OrderReply; noMatchReply: NoMatchReply; greetReply: GreetReply; matchReply: MatchReply; confirmReply: ConfirmReply; itemsReply: ItemsReply; materialReply: MaterialReply; fabricReply: FabricReply; bargainReply: BargainReply; negativeComments: NegativeComments; commentReply: CommentReply; followUp: FollowUp;
 };
 type Connection = {
   pageAccessToken: string; appSecret: string; anthropicKey: string; verifyToken: string;
@@ -537,6 +538,48 @@ function SavedReplyCard({ title, hint, value, onChange, rows = 7, children }: {
   );
 }
 
+/** Negative comments: delete or hide at once, optional apology DM, notification. */
+function NegativeCommentsCard({ value, onChange }: { value: NegativeComments; onChange: (v: NegativeComments) => void }) {
+  const v = value ?? { enabled: true, action: "delete" as const, dmText: "", notify: true };
+  return (
+    <div className="dc-card p-4">
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="font-bold">নেগেটিভ কমেন্ট সরিয়ে দিন</h2>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={v.enabled} onChange={(e) => onChange({ ...v, enabled: e.target.checked })} />
+          চালু
+        </label>
+      </div>
+      <p className="text-xs dc-muted mb-3">
+        পোস্ট বা অ্যাডে কেউ গালি, “ফ্রড / বাটপার / ফেক”, খারাপ রিভিউ (“faltu”, “টাকা নষ্ট”), অর্ডার নিয়ে অভিযোগ, শুধু 😡👎, বা অন্যের বিজ্ঞাপন/লিংক দিলে AI সাথে সাথে সেটা সরিয়ে দেয়।
+        প্রশ্ন বা সন্দেহ (“original to?”, “fake na to?”, “dam beshi na?”) নেগেটিভ ধরা হয় না — সেগুলোর উত্তর যায়। AI নিশ্চিত না হলে কিছু সরায় না।
+        যা সরানো হয়, তার পুরো লেখা নিচের “অবস্থা” তালিকায় থাকে।
+      </p>
+      <div className="grid gap-3 text-sm">
+        <div className="flex flex-wrap gap-2">
+          {([["delete", "🗑️ ডিলিট করুন", "সবার জন্য মুছে যাবে, ফেরত আনা যায় না"], ["hide", "🙈 লুকিয়ে রাখুন", "শুধু কমেন্টকারী আর তার বন্ধুরা দেখবে — সে বুঝতেই পারবে না"]] as const).map(([k, label, hint]) => (
+            <button key={k} type="button" onClick={() => onChange({ ...v, action: k })}
+              className="rounded-xl border px-3 py-2 text-left"
+              style={{ borderColor: v.action === k ? "var(--a-coral)" : "var(--a-border)", background: v.action === k ? "var(--a-coral-soft)" : "var(--a-surface)" }}>
+              <div className="font-semibold">{label}</div>
+              <div className="text-xs dc-muted">{hint}</div>
+            </button>
+          ))}
+        </div>
+        <label className="grid gap-1">
+          <span className="text-xs font-semibold">সরানোর আগে কমেন্টকারীর Messenger-এ যাবে (খালি রাখলে কিছু যাবে না)</span>
+          <textarea value={v.dmText} onChange={(e) => onChange({ ...v, dmText: e.target.value })} rows={3} className="dc-input" />
+          <span className="text-xs dc-muted">আসল সমস্যা থাকলে ইনবক্সে মিটিয়ে নেওয়া যায়। এই চ্যাটে AI বন্ধ থাকে, আপনি কথা বলবেন।</span>
+        </label>
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={v.notify !== false} onChange={(e) => onChange({ ...v, notify: e.target.checked })} />
+          সরানোর পর আমাকে নোটিফিকেশন দিন
+        </label>
+      </div>
+    </div>
+  );
+}
+
 type CommentStatusData = Awaited<ReturnType<typeof getCommentStatus>>;
 
 const COMMENT_STEP_BN: Record<string, string> = {
@@ -550,6 +593,11 @@ const COMMENT_STEP_BN: Record<string, string> = {
   "skipped: Page not connected": "— পেজ কানেক্ট নেই",
   "AI failed": "❌ AI উত্তর দিতে পারেনি",
   "error": "❌ সমস্যা হয়েছে",
+  "deleted: negative": "🗑️ নেগেটিভ — ডিলিট করা হয়েছে",
+  "hidden: negative": "🙈 নেগেটিভ — লুকানো হয়েছে",
+  "delete failed": "❌ নেগেটিভ, কিন্তু ডিলিট করা যায়নি",
+  "hide failed": "❌ নেগেটিভ, কিন্তু লুকানো যায়নি",
+  "skipped: negative (auto-delete is off)": "— নেগেটিভ, অটো-ডিলিট বন্ধ",
 };
 
 /** Live check: webhook + permissions, and the last few comments the bot saw. */
@@ -667,6 +715,8 @@ function SavedReplies({ training, setTraining }: { training: Training; setTraini
       >
         <CommentStatus />
       </SavedReplyCard>
+
+      <NegativeCommentsCard value={t.negativeComments} onChange={(negativeComments) => set({ negativeComments })} />
 
       <a href="/admin/reminders" className="dc-card flex items-center justify-between gap-3 p-4 transition hover:shadow-sm">
         <div>
