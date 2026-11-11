@@ -5,7 +5,7 @@ import "server-only";
 import { getServerSupabase } from "@/lib/supabase/server";
 import {
   aiReply, extractProductCards, extractPriceTag, extractOrderTag, extractNoMatchTag, extractGreetTag,
-  extractMatchTag, extractConfirmTag, extractItemsTag, extractHumanTag, pricePhotos, messengerText, personalize, usePriceReply,
+  extractMatchTag, extractConfirmTag, extractItemsTag, extractMaterialTag, extractFabricTag, extractHumanTag, pricePhotos, messengerText, personalize, usePriceReply,
   type ChatTurn, type ChatImage, type ChatbotSettings, type ProductCard,
 } from "@/lib/chatbot";
 import { withPhotos, splitPhotos } from "@/lib/chat-media";
@@ -26,7 +26,17 @@ export interface ChatChannel {
 export async function getOrCreateConversation(key: string, loadProfile: () => Promise<{ name: string | null; avatar: string | null }>) {
   const db = getServerSupabase();
   const { data: found } = await db.from("chat_conversations").select("*").eq("psid", key).maybeSingle();
-  if (found) return found as any;
+  if (found) {
+    // No name yet (Facebook refused before)? Try again — the name decides আপু / ভাইয়া.
+    if (!(found as any).name) {
+      const p = await loadProfile().catch(() => ({ name: null, avatar: null }));
+      if (p.name) {
+        await db.from("chat_conversations").update({ name: p.name, ...(p.avatar ? { avatar: p.avatar } : {}) }).eq("id", (found as any).id);
+        return { ...(found as any), name: p.name, avatar: p.avatar ?? (found as any).avatar };
+      }
+    }
+    return found as any;
+  }
   const profile = await loadProfile();
   const { data: created, error } = await db
     .from("chat_conversations")
@@ -94,6 +104,9 @@ export async function handleCustomerMessage(s: ChatbotSettings, ch: ChatChannel,
     last_customer_at: now,
     unread: (conv.unread ?? 0) + 1,
   }).eq("id", conv.id);
+  // The customer wrote back: follow-ups start again from the first one. (Separate update —
+  // harmless if supabase-migration-chat-followup.sql hasn't been run yet.)
+  await db.from("chat_conversations").update({ followup_step: 0 }).eq("id", conv.id);
 
   // Stickers, videos, voice and files wait for a human. Photos go to the AI (if on).
   const aiCanRead = isPlainText || (photoUrls.length > 0 && s.photoMatch !== false);
@@ -126,6 +139,8 @@ export async function handleCustomerMessage(s: ChatbotSettings, ch: ChatChannel,
 
   let ai = await aiReply(history, s, conv.name);
   if (ai.seen) console.log(`[${ch.name}] photo check:`, ai.seen);
+  // Remember আপু / ভাইয়া for this chat (follow-ups are sent without asking the AI again).
+  if (ai.gender && ai.gender !== conv.gender) await db.from("chat_conversations").update({ gender: ai.gender }).eq("id", conv.id);
 
   // A customer who tapped one of your ads opens the chat with the ad's ready-made message
   // ("Can I get more info on this?"). As the FIRST message of a chat, that is a price
@@ -162,8 +177,10 @@ export async function handleCustomerMessage(s: ChatbotSettings, ch: ChatChannel,
   const mt = extractMatchTag(gr.text, s);
   const cf = extractConfirmTag(mt.text, s);
   const it = extractItemsTag(cf.text, s);
-  if (gr.greet || mt.match || cf.confirm || it.items) {
-    const saved = gr.greet ? s.greetReply.text : mt.match ? s.matchReply.text : cf.confirm ? s.confirmReply.text : s.itemsReply.text;
+  const ma = extractMaterialTag(it.text, s);
+  const fb = extractFabricTag(ma.text, s);
+  if (gr.greet || mt.match || cf.confirm || it.items || ma.material || fb.fabric) {
+    const saved = gr.greet ? s.greetReply.text : mt.match ? s.matchReply.text : cf.confirm ? s.confirmReply.text : it.items ? s.itemsReply.text : ma.material ? s.materialReply.text : s.fabricReply.text;
     const hello = messengerText(personalize(saved, ai.gender));
     const sentHello = await ch.sendText(to, hello);
     if (!sentHello.ok) {
@@ -193,7 +210,7 @@ export async function handleCustomerMessage(s: ChatbotSettings, ch: ChatChannel,
 
   // [[NOMATCH:n]] → saved "we don't have that one" message, then the similar product's photo
   // (or the price picture when nothing is similar).
-  const nm = extractNoMatchTag(it.text, s);
+  const nm = extractNoMatchTag(fb.text, s);
   if (nm.noMatch) {
     const body = messengerText(personalize(s.noMatchReply.text, ai.gender));
     const sentNm = await ch.sendText(to, body);

@@ -76,21 +76,38 @@ export async function sendTyping(token: string, psid: string): Promise<void> {
   } catch { /* cosmetic */ }
 }
 
-/** Customer's name + photo for the inbox. Facebook may refuse; then we show "Customer". */
+/** Customer's name + photo for the inbox (and for আপু / ভাইয়া).
+ *  The User Profile API needs Facebook's "Business Asset User Profile Access" review, so it
+ *  usually refuses; the Page's own conversation list still has the customer's name. */
 export async function getProfile(token: string, psid: string): Promise<{ name: string | null; avatar: string | null }> {
   if (!token) return { name: null, avatar: null };
+  let avatar: string | null = null;
   try {
     const r = await fetch(
       `${GRAPH}/${encodeURIComponent(psid)}?fields=first_name,last_name,profile_pic&access_token=${encodeURIComponent(token)}`,
       { signal: AbortSignal.timeout(5_000) }
     );
-    if (!r.ok) return { name: null, avatar: null };
-    const j: any = await r.json();
-    const name = [j.first_name, j.last_name].filter(Boolean).join(" ").trim() || null;
-    return { name, avatar: j.profile_pic || null };
-  } catch {
-    return { name: null, avatar: null };
-  }
+    if (r.ok) {
+      const j: any = await r.json();
+      const name = [j.first_name, j.last_name].filter(Boolean).join(" ").trim() || null;
+      avatar = j.profile_pic || null;
+      if (name) return { name, avatar };
+    }
+  } catch { /* try the conversation list */ }
+  try {
+    const r = await fetch(
+      `${GRAPH}/me/conversations?platform=messenger&user_id=${encodeURIComponent(psid)}&fields=participants&access_token=${encodeURIComponent(token)}`,
+      { signal: AbortSignal.timeout(6_000) }
+    );
+    if (r.ok) {
+      const j: any = await r.json();
+      for (const c of j?.data ?? []) {
+        const p = (c?.participants?.data ?? []).find((x: any) => String(x?.id) === String(psid));
+        if (p?.name) return { name: String(p.name).trim(), avatar };
+      }
+    }
+  } catch { /* give up quietly */ }
+  return { name: null, avatar };
 }
 
 /** Is a check of the token itself OK? Used by the Connect tab's "Test connection". */

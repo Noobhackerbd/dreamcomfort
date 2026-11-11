@@ -57,6 +57,26 @@ export interface ItemsReply {
   text: string;
 }
 
+/** Automatic follow-ups when a customer goes quiet. Each step is sent once, `afterHours`
+ *  after the customer's last message, only while Facebook / WhatsApp still allow it
+ *  (24 hours after the customer's last message). */
+export interface FollowUpStep { enabled: boolean; afterHours: number; text: string }
+export interface FollowUp { enabled: boolean; steps: FollowUpStep[] }
+/** Messenger / WhatsApp only allow messages within 24h of the customer's last one. */
+export const FOLLOWUP_WINDOW_H = 23.5;
+
+/** Sent when a customer asks what is inside the pillow (filling, cotton, foam). */
+export interface MaterialReply {
+  enabled: boolean;
+  text: string;
+}
+
+/** Sent when a customer asks what fabric / cloth the cover is made of. */
+export interface FabricReply {
+  enabled: boolean;
+  text: string;
+}
+
 /** Sent when a customer has given everything needed for an order. */
 export interface ConfirmReply {
   enabled: boolean;
@@ -130,6 +150,9 @@ export interface ChatbotSettings {
   matchReply: MatchReply;
   confirmReply: ConfirmReply;
   itemsReply: ItemsReply;
+  materialReply: MaterialReply;
+  fabricReply: FabricReply;
+  followUp: FollowUp;
 }
 
 export const DEFAULT_CHATBOT: ChatbotSettings = {
@@ -172,6 +195,23 @@ export const DEFAULT_CHATBOT: ChatbotSettings = {
   itemsReply: {
     enabled: true,
     text: "🌸 প্রিমিয়াম ডাবল লেয়ার প্রেগনেন্সি পিলো সেটে মোট ৬ পিস আইটেম থাকছে: ❤️\n1️⃣ ২টি অ্যাটাচড প্রেগনেন্সি পিলো\n2️⃣ ১টি মুন শেপ সাপোর্ট পিলো\n3️⃣ ১টি D-শেপ সাপোর্ট পিলো\n4️⃣ ১টি নেক পিলো\n5️⃣ ১টি আই মাস্ক\n✨ সব মিলিয়ে সম্পূর্ণ ৬ পিসের প্রিমিয়াম সেট।\n🏷️ অফার প্রাইস মাত্র ৯৫০ টাকা!\n🚚 সারা বাংলাদেশে ফ্রি হোম ডেলিভারি।",
+  },
+  followUp: {
+    enabled: true,
+    steps: [
+      { enabled: true, afterHours: 2, text: "🌸 আপু, আমাদের প্রেগন্যান্সি পিলো সেটটি কি আপনার পছন্দ হয়েছে?\n\nগর্ভাবস্থায় ঘুমের সময় আরাম ও সাপোর্ট পাওয়া খুবই গুরুত্বপূর্ণ। তাই আপনার আরামের কথা ভেবেই আমাদের এই ৬ পিসের কমফোর্ট সেট। 💗\n\nআপু, কোনো কিছু জানার থাকলে নির্দ্বিধায় জানাবেন। আমরা আছি আপনার পাশে। ❤️" },
+      { enabled: true, afterHours: 6, text: "🤰 আপু, প্রেগন্যান্সির সময় ঘুমাতে কষ্ট হয় বা আরামদায়ক পজিশন খুঁজে পেতে সমস্যা হয়?\n\nDream Comfort Pregnancy Pillow Set আপনাকে ঘুমের সময় আরও আরামদায়ক সাপোর্ট দিতে সাহায্য করবে। ☁️\n\n🎁 ৬ পিসের সম্পূর্ণ সেট\n💰 মাত্র ৯৫০ টাকা\n🚚 সারা বাংলাদেশে ফ্রি হোম ডেলিভারি।\n\nআপু, আপনার জন্য কোন কালারটি পছন্দ হবে? 💕" },
+      { enabled: true, afterHours: 12, text: "🌷 আপু, কিছুক্ষণ আগে আপনি আমাদের Pregnancy Pillow Set সম্পর্কে জানতে চেয়েছিলেন।\n\nআপনার যদি এখনো প্রয়োজন থাকে, আমরা আনন্দের সঙ্গে আপনার অর্ডারটি কনফার্ম করে দিতে পারি। 😊\n\nআপনার ও আপনার ছোট্ট সোনামণির জন্য রইল অনেক ভালোবাসা। ❤️" },
+      { enabled: true, afterHours: 22, text: "💗 আপু, আপনি কি Pregnancy Pillow Set টি নিতে আগ্রহী?\n\nআপনার যদি দাম, কোয়ালিটি বা ব্যবহার সম্পর্কে কোনো প্রশ্ন থাকে, আমাদের জানাতে পারেন।\n\nআমরা আপনাকে বিস্তারিত বুঝিয়ে দিতে প্রস্তুত। 🌸\n\nDream Comfort-এর পক্ষ থেকে আপনার জন্য রইল ভালোবাসা। ❤️" },
+    ],
+  },
+  fabricReply: {
+    enabled: true,
+    text: "আমাদের প্রেগন্যান্সি পিলোর কভার তৈরি করা হয়েছে ১০০% সুতি কাপড় দিয়ে। পাশাপাশি ব্যবহার করা হয়েছে ডাবল লেয়ার ফ্যাব্রিক, যা পিলোর কভারকে করে আরও নরম, মসৃণ ও আরামদায়ক। ☁️\n✨ ১০০% সুতি কাপড়\n🧵 ডাবল লেয়ার ফেব্রিক\n💗 ত্বকের সংস্পর্শে কোমল অনুভূতি\n🌬️ আরামদায়ক ও বাতাস চলাচলে সহায়ক, তাই সহজে অতিরিক্ত গরম অনুভূত হয় না।",
+  },
+  materialReply: {
+    enabled: true,
+    text: "আমাদের প্রেগন্যান্সি পিলোর ভেতরে ব্যবহার করা হয়েছে উন্নতমানের চায়না ফাইবার, যা অত্যন্ত নরম, ফ্লাফি ও আরামদায়ক। 💗\n✨ কেন ব্যবহার করা হয় চায়না ফাইবার?\n🧸 সাধারণ তুলার মতো সহজে দলা পাকিয়ে যায় না।\n☁️ দীর্ঘদিন ব্যবহারের পরও ফোলাভাব ও তুলতুলে ভাব ধরে রাখতে সাহায্য করে।\n💖 নরম ও আরামদায়ক অনুভূতির পাশাপাশি দেয় প্রয়োজনীয় সাপোর্ট।\n🌸 দীর্ঘদিনের আরাম, প্রতিটি মুহূর্তে কোমল অনুভূতি!",
   },
   confirmReply: {
     enabled: true,
@@ -222,6 +262,12 @@ export async function getChatbotSettings(): Promise<ChatbotSettings> {
       matchReply: { ...DEFAULT_CHATBOT.matchReply, ...(v.matchReply ?? {}) },
       confirmReply: { ...DEFAULT_CHATBOT.confirmReply, ...(v.confirmReply ?? {}) },
       itemsReply: { ...DEFAULT_CHATBOT.itemsReply, ...(v.itemsReply ?? {}) },
+      materialReply: { ...DEFAULT_CHATBOT.materialReply, ...(v.materialReply ?? {}) },
+      fabricReply: { ...DEFAULT_CHATBOT.fabricReply, ...(v.fabricReply ?? {}) },
+      followUp: {
+        enabled: v.followUp?.enabled ?? DEFAULT_CHATBOT.followUp.enabled,
+        steps: Array.isArray(v.followUp?.steps) && v.followUp.steps.length ? v.followUp.steps : DEFAULT_CHATBOT.followUp.steps,
+      },
     };
   } catch {
     return DEFAULT_CHATBOT;
@@ -316,6 +362,24 @@ export function extractItemsTag(reply: string, s: ChatbotSettings): { text: stri
   let items = false;
   const text = reply.replace(/\[\[\s*ITEMS\s*\]\]/gi, () => { items = true; return ""; }).trim();
   return { text, items: items && useItemsReply(s) };
+}
+
+export const useMaterialReply = (s: ChatbotSettings) => !!(s.materialReply?.enabled && s.materialReply.text.trim());
+
+/** Did the AI signal "what's inside / what filling" ([[MATERIAL]])? */
+export function extractMaterialTag(reply: string, s: ChatbotSettings): { text: string; material: boolean } {
+  let material = false;
+  const text = reply.replace(/\[\[\s*MATERIAL\s*\]\]/gi, () => { material = true; return ""; }).trim();
+  return { text, material: material && useMaterialReply(s) };
+}
+
+export const useFabricReply = (s: ChatbotSettings) => !!(s.fabricReply?.enabled && s.fabricReply.text.trim());
+
+/** Did the AI signal "what fabric is the cover" ([[FABRIC]])? */
+export function extractFabricTag(reply: string, s: ChatbotSettings): { text: string; fabric: boolean } {
+  let fabric = false;
+  const text = reply.replace(/\[\[\s*FABRIC\s*\]\]/gi, () => { fabric = true; return ""; }).trim();
+  return { text, fabric: fabric && useFabricReply(s) };
 }
 
 export const useConfirmReply = (s: ChatbotSettings) => !!(s.confirmReply?.enabled && s.confirmReply.text.trim());
@@ -459,6 +523,12 @@ export function buildSystemPrompt(s: ChatbotSettings): { rules: string; knowledg
     ] : []),
     ...(useItemsReply(s) ? [
       "- WHAT'S INCLUDED: when the customer asks what comes in the set / how many pieces / what items (e.g. \"ki ki thakbe\", \"কি কি থাকবে\", \"set e ki ache\", \"koy piece\"), reply with exactly [[ITEMS]] (after the [[G:…]] tag) and nothing else — the shop's saved list is sent automatically.",
+    ] : []),
+    ...(useMaterialReply(s) ? [
+      "- WHAT'S INSIDE / FILLING (not the cover cloth): when the customer asks what is inside the pillow, what it is filled with, what kind of cotton/fibre/foam (e.g. \"vitore ki ase\", \"ভেতরে কি আছে\", \"kiser tula\", \"কিসের তুলা\", \"foam kiser\", \"ফোম না তুলা\", \"fiber naki tula\", \"what is the filling\"), reply with exactly [[MATERIAL]] (after the [[G:…]] tag) and nothing else — the shop's saved message is sent automatically.",
+    ] : []),
+    ...(useFabricReply(s) ? [
+      "- COVER FABRIC: when the customer asks what cloth / fabric the pillow or its cover is made of (e.g. \"kiser kapor\", \"কিসের কাপড়\", \"kapor ki diye toiri\", \"কাপড় কেমন\", \"cover ki kapor\", \"cotton naki\", \"sutir kapor?\", \"fabric\"), reply with exactly [[FABRIC]] (after the [[G:…]] tag) and nothing else — the shop's saved message is sent automatically. Cloth/cover questions are [[FABRIC]]; filling/cotton-inside/foam questions are [[MATERIAL]].",
     ] : []),
     ...(useMatchReply(s) ? [
       "- PHOTO THAT MATCHES ONE OF OUR PRODUCTS: only when the [[SEEN …]] check says same: yes, reply [[MATCH:n]] (n = that product's #) and nothing else — the shop's saved \"yes, in stock\" message is sent automatically.",

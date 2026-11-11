@@ -19,9 +19,12 @@ type GreetReply = { enabled: boolean; text: string };
 type MatchReply = { enabled: boolean; text: string };
 type ConfirmReply = { enabled: boolean; text: string; createOrder: boolean; productName: string; productPrice: number; shippingInside: number; shippingOutside: number };
 type ItemsReply = { enabled: boolean; text: string };
+type MaterialReply = { enabled: boolean; text: string };
+type FabricReply = { enabled: boolean; text: string };
+type FollowUp = { enabled: boolean; steps: { enabled: boolean; afterHours: number; text: string }[] };
 type Training = {
   botName: string; storeInfo: string; products: Product[]; examples: Example[];
-  priceReply: PriceReply; orderReply: OrderReply; noMatchReply: NoMatchReply; greetReply: GreetReply; matchReply: MatchReply; confirmReply: ConfirmReply; itemsReply: ItemsReply;
+  priceReply: PriceReply; orderReply: OrderReply; noMatchReply: NoMatchReply; greetReply: GreetReply; matchReply: MatchReply; confirmReply: ConfirmReply; itemsReply: ItemsReply; materialReply: MaterialReply; fabricReply: FabricReply; followUp: FollowUp;
 };
 type Connection = {
   pageAccessToken: string; appSecret: string; anthropicKey: string; verifyToken: string;
@@ -532,6 +535,47 @@ function SavedReplyCard({ title, hint, value, onChange, rows = 7, children }: {
   );
 }
 
+/** Saved follow-ups for customers who stop replying (sent by the 30-minute cron). */
+function FollowUpCard({ value, onChange }: { value: FollowUp; onChange: (v: FollowUp) => void }) {
+  const steps = value?.steps ?? [];
+  const setStep = (i: number, patch: Partial<FollowUp["steps"][number]>) =>
+    onChange({ ...value, steps: steps.map((st, j) => (j === i ? { ...st, ...patch } : st)) });
+  return (
+    <div className="dc-card p-4">
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="font-bold">ফলো-আপ (কাস্টমার উত্তর না দিলে)</h2>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={!!value?.enabled} onChange={(e) => onChange({ ...value, enabled: e.target.checked })} />
+          চালু
+        </label>
+      </div>
+      <p className="text-xs dc-muted mb-3">
+        কাস্টমারের শেষ মেসেজের পর নিচের সময়ে একটা একটা করে যায়। কাস্টমার উত্তর দিলে আবার প্রথম থেকে শুরু হয়। অর্ডার হয়ে গেলে, বা চ্যাটে AI বন্ধ থাকলে যায় না।
+        Facebook / WhatsApp-এর নিয়মে শেষ মেসেজের ২৪ ঘণ্টার পর পাঠানো যায় না, তাই সময় সর্বোচ্চ ২৩ ঘণ্টা। আপু/ভাইয়া নাম দেখে ঠিক হয়।
+      </p>
+      <div className="grid gap-3">
+        {steps.map((st, i) => (
+          <div key={i} className="rounded-xl p-3" style={{ background: "var(--a-surface-2)" }}>
+            <div className="mb-2 flex flex-wrap items-center gap-3 text-sm">
+              <b>{i + 1} নম্বর</b>
+              <label className="flex items-center gap-1.5">
+                শেষ মেসেজের
+                <input type="number" min={0.5} max={23} step={0.5} value={st.afterHours}
+                  onChange={(e) => setStep(i, { afterHours: Number(e.target.value) })} className="dc-input" style={{ width: 72, padding: "4px 8px" }} />
+                ঘণ্টা পর
+              </label>
+              <label className="ml-auto flex items-center gap-1.5">
+                <input type="checkbox" checked={st.enabled} onChange={(e) => setStep(i, { enabled: e.target.checked })} /> চালু
+              </label>
+            </div>
+            <textarea value={st.text} onChange={(e) => setStep(i, { text: e.target.value })} rows={6} className="dc-input" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /** Messages the bot sends word for word when the AI gives a signal. Edit any time. */
 function SavedReplies({ training, setTraining }: { training: Training; setTraining: (t: Training) => void }) {
   const [busy, setBusy] = useState(false);
@@ -580,6 +624,24 @@ function SavedReplies({ training, setTraining }: { training: Training; setTraini
         onChange={(itemsReply) => set({ itemsReply })}
         rows={10}
       />
+
+      <SavedReplyCard
+        title="ভেতরে কী আছে (Filling / material)"
+        hint="কেউ “ভেতরে কি আছে”, “কিসের তুলা”, “ফোম কিসের”, “fiber naki tula” জিজ্ঞেস করলে এটা যায়।"
+        value={t.materialReply}
+        onChange={(materialReply) => set({ materialReply })}
+        rows={8}
+      />
+
+      <SavedReplyCard
+        title="কভারের কাপড় (Fabric)"
+        hint="কেউ “কিসের কাপড়”, “kapor ki diye toiri”, “cotton naki” জিজ্ঞেস করলে এটা যায়।"
+        value={t.fabricReply}
+        onChange={(fabricReply) => set({ fabricReply })}
+        rows={7}
+      />
+
+      <FollowUpCard value={t.followUp} onChange={(followUp) => set({ followUp })} />
 
       <SavedReplyCard
         title="অর্ডার কনফার্মেশন (Order confirmed)"
