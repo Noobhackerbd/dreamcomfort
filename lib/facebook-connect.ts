@@ -27,8 +27,10 @@ export const FB_SCOPES = [
   "pages_manage_metadata",
   "pages_read_engagement",
   "business_management", // Pages owned through a Business portfolio don't show up without it
+  "pages_read_user_content", // read comments on the Page's posts and ads
+  "pages_manage_engagement", // reply to those comments
 ];
-const WEBHOOK_FIELDS = "messages,messaging_postbacks,message_echoes";
+export const WEBHOOK_FIELDS = "messages,messaging_postbacks,message_echoes,feed";
 
 export const callbackPath = "/admin/chatbot/facebook/callback";
 

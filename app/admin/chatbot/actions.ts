@@ -4,7 +4,7 @@ import { requireAdmin } from "@/lib/admin-auth";
 import { getServerSupabase } from "@/lib/supabase/server";
 import {
   getChatbotSettings, saveChatbotSettings, fbApp, aiReply, extractProductCards, extractPriceTag, extractOrderTag, extractNoMatchTag, extractGreetTag, extractMatchTag, extractConfirmTag, extractItemsTag, extractMaterialTag, extractFabricTag, extractHumanTag, pricePhotos, usePriceReply, messengerText, personalize,
-  type PriceReply, type OrderReply, type NoMatchReply, type GreetReply, type MatchReply, type ConfirmReply, type ItemsReply, type MaterialReply, type FabricReply, type FollowUp, getStoreProductsForTraining,
+  type PriceReply, type OrderReply, type NoMatchReply, type GreetReply, type MatchReply, type ConfirmReply, type ItemsReply, type MaterialReply, type FabricReply, type CommentReply, type FollowUp, getStoreProductsForTraining,
   CHATBOT_MODEL_DEFAULT, type ChatbotProduct, type ChatbotReplyExample, type ChatTurn, type ChatImage,
 } from "@/lib/chatbot";
 import { sendText, checkPageToken, fetchPhoto } from "@/lib/messenger";
@@ -47,12 +47,12 @@ export async function loadChatbotAdmin() {
         display: s.waDisplay,
       },
     },
-    training: { botName: s.botName, storeInfo: s.storeInfo, products: s.products, examples: s.examples, priceReply: s.priceReply, orderReply: s.orderReply, noMatchReply: s.noMatchReply, greetReply: s.greetReply, matchReply: s.matchReply, confirmReply: s.confirmReply, itemsReply: s.itemsReply, materialReply: s.materialReply, fabricReply: s.fabricReply, followUp: s.followUp },
+    training: { botName: s.botName, storeInfo: s.storeInfo, products: s.products, examples: s.examples, priceReply: s.priceReply, orderReply: s.orderReply, noMatchReply: s.noMatchReply, greetReply: s.greetReply, matchReply: s.matchReply, confirmReply: s.confirmReply, itemsReply: s.itemsReply, materialReply: s.materialReply, fabricReply: s.fabricReply, commentReply: s.commentReply, followUp: s.followUp },
   };
 }
 
 export async function saveTraining(input: {
-  botName: string; storeInfo: string; products: ChatbotProduct[]; examples: ChatbotReplyExample[]; priceReply?: PriceReply; orderReply?: OrderReply; noMatchReply?: NoMatchReply; greetReply?: GreetReply; matchReply?: MatchReply; confirmReply?: ConfirmReply; itemsReply?: ItemsReply; materialReply?: MaterialReply; fabricReply?: FabricReply; followUp?: FollowUp;
+  botName: string; storeInfo: string; products: ChatbotProduct[]; examples: ChatbotReplyExample[]; priceReply?: PriceReply; orderReply?: OrderReply; noMatchReply?: NoMatchReply; greetReply?: GreetReply; matchReply?: MatchReply; confirmReply?: ConfirmReply; itemsReply?: ItemsReply; materialReply?: MaterialReply; fabricReply?: FabricReply; commentReply?: CommentReply; followUp?: FollowUp;
 }) {
   await requireAdmin();
   const s = await getChatbotSettings();
@@ -114,12 +114,15 @@ export async function saveTraining(input: {
       fabricReply: input.fabricReply
         ? { enabled: !!input.fabricReply.enabled, text: clean(input.fabricReply.text, 1900) }
         : s.fabricReply,
+      commentReply: input.commentReply
+        ? { enabled: !!input.commentReply.enabled, text: clean(input.commentReply.text, 600) }
+        : s.commentReply,
       followUp: input.followUp
         ? {
             enabled: !!input.followUp.enabled,
             steps: (input.followUp.steps ?? []).slice(0, 6).map((st) => ({
               enabled: !!st.enabled,
-              afterHours: Math.max(0.5, Math.min(23, Number(st.afterHours) || 1)),
+              afterHours: Math.max(3 / 60, Math.min(23, Number(st.afterHours) || 1)),
               text: clean(st.text, 1900),
             })),
           }
@@ -294,7 +297,7 @@ export async function importStoreProducts() {
 
 /** Try the bot without Facebook. Uses the training on screen, saved or not. */
 export async function testChat(history: ChatTurn[], training?: {
-  botName: string; storeInfo: string; products: ChatbotProduct[]; examples: ChatbotReplyExample[]; priceReply?: PriceReply; orderReply?: OrderReply; noMatchReply?: NoMatchReply; greetReply?: GreetReply; matchReply?: MatchReply; confirmReply?: ConfirmReply; itemsReply?: ItemsReply; materialReply?: MaterialReply; fabricReply?: FabricReply; followUp?: FollowUp;
+  botName: string; storeInfo: string; products: ChatbotProduct[]; examples: ChatbotReplyExample[]; priceReply?: PriceReply; orderReply?: OrderReply; noMatchReply?: NoMatchReply; greetReply?: GreetReply; matchReply?: MatchReply; confirmReply?: ConfirmReply; itemsReply?: ItemsReply; materialReply?: MaterialReply; fabricReply?: FabricReply; commentReply?: CommentReply; followUp?: FollowUp;
 }, customerName?: string) {
   await requireAdmin();
   const s = await getChatbotSettings();

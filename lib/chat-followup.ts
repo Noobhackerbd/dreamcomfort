@@ -1,6 +1,6 @@
 // lib/chat-followup.ts — automatic follow-ups for customers who stop replying.
 //
-// Every 30 minutes (cron) we look at chats where the customer's last message is between the
+// Every 5 minutes (cron) we look at chats where the customer's last message is between the
 // first follow-up time and 23.5 hours old. For each one, the next follow-up step is sent when
 //   • the bot is on, follow-ups are on, and the AI is on in that chat (not handed to you),
 //   • we answered last (the newest message in the chat is ours, not an unanswered question),

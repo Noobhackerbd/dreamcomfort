@@ -1,4 +1,4 @@
-// app/api/cron/chatbot-followup/route.ts — every 30 minutes: send the AI Chat Bot's saved
+// app/api/cron/chatbot-followup/route.ts — every 5 minutes: send the AI Chat Bot's saved
 // follow-ups to customers who went quiet (see lib/chat-followup.ts for the rules).
 // Auth: `Authorization: Bearer <CRON_SECRET>` (sent by Vercel Cron) or `?secret=`.
 import { NextRequest, NextResponse } from "next/server";

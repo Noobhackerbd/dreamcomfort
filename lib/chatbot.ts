@@ -71,6 +71,13 @@ export interface MaterialReply {
   text: string;
 }
 
+/** Facebook comments: the short public reply under the comment (the details go privately
+ *  to the commenter's Messenger — see lib/chat-comments.ts). */
+export interface CommentReply {
+  enabled: boolean;
+  text: string;
+}
+
 /** Sent when a customer asks what fabric / cloth the cover is made of. */
 export interface FabricReply {
   enabled: boolean;
@@ -152,6 +159,7 @@ export interface ChatbotSettings {
   itemsReply: ItemsReply;
   materialReply: MaterialReply;
   fabricReply: FabricReply;
+  commentReply: CommentReply;
   followUp: FollowUp;
 }
 
@@ -199,11 +207,15 @@ export const DEFAULT_CHATBOT: ChatbotSettings = {
   followUp: {
     enabled: true,
     steps: [
-      { enabled: true, afterHours: 2, text: "🌸 আপু, আমাদের প্রেগন্যান্সি পিলো সেটটি কি আপনার পছন্দ হয়েছে?\n\nগর্ভাবস্থায় ঘুমের সময় আরাম ও সাপোর্ট পাওয়া খুবই গুরুত্বপূর্ণ। তাই আপনার আরামের কথা ভেবেই আমাদের এই ৬ পিসের কমফোর্ট সেট। 💗\n\nআপু, কোনো কিছু জানার থাকলে নির্দ্বিধায় জানাবেন। আমরা আছি আপনার পাশে। ❤️" },
+      { enabled: true, afterHours: 5 / 60, text: "🌸 আপু, আমাদের প্রেগন্যান্সি পিলো সেটটি কি আপনার পছন্দ হয়েছে?\n\nগর্ভাবস্থায় ঘুমের সময় আরাম ও সাপোর্ট পাওয়া খুবই গুরুত্বপূর্ণ। তাই আপনার আরামের কথা ভেবেই আমাদের এই ৬ পিসের কমফোর্ট সেট। 💗\n\nআপু, কোনো কিছু জানার থাকলে নির্দ্বিধায় জানাবেন। আমরা আছি আপনার পাশে। ❤️" },
       { enabled: true, afterHours: 6, text: "🤰 আপু, প্রেগন্যান্সির সময় ঘুমাতে কষ্ট হয় বা আরামদায়ক পজিশন খুঁজে পেতে সমস্যা হয়?\n\nDream Comfort Pregnancy Pillow Set আপনাকে ঘুমের সময় আরও আরামদায়ক সাপোর্ট দিতে সাহায্য করবে। ☁️\n\n🎁 ৬ পিসের সম্পূর্ণ সেট\n💰 মাত্র ৯৫০ টাকা\n🚚 সারা বাংলাদেশে ফ্রি হোম ডেলিভারি।\n\nআপু, আপনার জন্য কোন কালারটি পছন্দ হবে? 💕" },
       { enabled: true, afterHours: 12, text: "🌷 আপু, কিছুক্ষণ আগে আপনি আমাদের Pregnancy Pillow Set সম্পর্কে জানতে চেয়েছিলেন।\n\nআপনার যদি এখনো প্রয়োজন থাকে, আমরা আনন্দের সঙ্গে আপনার অর্ডারটি কনফার্ম করে দিতে পারি। 😊\n\nআপনার ও আপনার ছোট্ট সোনামণির জন্য রইল অনেক ভালোবাসা। ❤️" },
       { enabled: true, afterHours: 22, text: "💗 আপু, আপনি কি Pregnancy Pillow Set টি নিতে আগ্রহী?\n\nআপনার যদি দাম, কোয়ালিটি বা ব্যবহার সম্পর্কে কোনো প্রশ্ন থাকে, আমাদের জানাতে পারেন।\n\nআমরা আপনাকে বিস্তারিত বুঝিয়ে দিতে প্রস্তুত। 🌸\n\nDream Comfort-এর পক্ষ থেকে আপনার জন্য রইল ভালোবাসা। ❤️" },
     ],
+  },
+  commentReply: {
+    enabled: true,
+    text: "আপু, ইনবক্সে বিস্তারিত পাঠিয়েছি 💗 মেসেজটা একটু দেখে নিন।",
   },
   fabricReply: {
     enabled: true,
@@ -264,6 +276,7 @@ export async function getChatbotSettings(): Promise<ChatbotSettings> {
       itemsReply: { ...DEFAULT_CHATBOT.itemsReply, ...(v.itemsReply ?? {}) },
       materialReply: { ...DEFAULT_CHATBOT.materialReply, ...(v.materialReply ?? {}) },
       fabricReply: { ...DEFAULT_CHATBOT.fabricReply, ...(v.fabricReply ?? {}) },
+      commentReply: { ...DEFAULT_CHATBOT.commentReply, ...(v.commentReply ?? {}) },
       followUp: {
         enabled: v.followUp?.enabled ?? DEFAULT_CHATBOT.followUp.enabled,
         steps: Array.isArray(v.followUp?.steps) && v.followUp.steps.length ? v.followUp.steps : DEFAULT_CHATBOT.followUp.steps,

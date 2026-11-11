@@ -14,6 +14,7 @@ import { getChatbotSettings, fbApp, type ChatImage } from "@/lib/chatbot";
 import { verifySignature, sendText, sendTyping, getProfile, fetchPhoto, sendProductCards, sendImages } from "@/lib/messenger";
 import { PHOTO_LABEL, withPhotos } from "@/lib/chat-media";
 import { getOrCreateConversation, handleCustomerMessage, type ChatChannel } from "@/lib/chat-engine";
+import { handleCommentChange } from "@/lib/chat-comments";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -45,7 +46,12 @@ export async function POST(req: NextRequest) {
   if (body?.object !== "page") return new NextResponse("ok");
 
   const events: any[] = [];
-  for (const entry of body.entry ?? []) for (const ev of entry.messaging ?? []) events.push(ev);
+  const changes: any[] = [];
+  for (const entry of body.entry ?? []) {
+    for (const ev of entry.messaging ?? []) events.push(ev);
+    for (const ch of entry.changes ?? []) changes.push(ch); // Page feed: comments on posts / ads
+  }
+  for (const ch of changes) await handleCommentChange(s, ch);
 
   for (const ev of events) {
     try {

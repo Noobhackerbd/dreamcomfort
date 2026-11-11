@@ -8,6 +8,7 @@
 // Auth: `Authorization: Bearer <CRON_SECRET>` (sent by Vercel Cron) or `?secret=`.
 import { NextRequest, NextResponse } from "next/server";
 import { getChatbotSettings, fbApp } from "@/lib/chatbot";
+import { WEBHOOK_FIELDS } from "@/lib/facebook-connect";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -57,7 +58,7 @@ export async function GET(req: NextRequest) {
     if (ok) out.messenger = "subscribed";
     else {
       const r = await graph("POST", `/${s.pageId}/subscribed_apps`, {
-        query: { subscribed_fields: "messages,messaging_postbacks,message_echoes", access_token: s.pageAccessToken },
+        query: { subscribed_fields: WEBHOOK_FIELDS, access_token: s.pageAccessToken },
       });
       out.messenger = r?.success ? "was missing — re-subscribed" : `re-subscribe failed: ${r?.error?.message || "unknown"}`;
       console.warn("[chatbot-health] Messenger:", out.messenger);

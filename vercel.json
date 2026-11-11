@@ -17,7 +17,7 @@
     },
     {
       "path": "/api/cron/chatbot-followup",
-      "schedule": "7,37 * * * *"
+      "schedule": "*/5 * * * *"
     }
   ]
 }

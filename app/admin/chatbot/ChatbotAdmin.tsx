@@ -21,10 +21,11 @@ type ConfirmReply = { enabled: boolean; text: string; createOrder: boolean; prod
 type ItemsReply = { enabled: boolean; text: string };
 type MaterialReply = { enabled: boolean; text: string };
 type FabricReply = { enabled: boolean; text: string };
+type CommentReply = { enabled: boolean; text: string };
 type FollowUp = { enabled: boolean; steps: { enabled: boolean; afterHours: number; text: string }[] };
 type Training = {
   botName: string; storeInfo: string; products: Product[]; examples: Example[];
-  priceReply: PriceReply; orderReply: OrderReply; noMatchReply: NoMatchReply; greetReply: GreetReply; matchReply: MatchReply; confirmReply: ConfirmReply; itemsReply: ItemsReply; materialReply: MaterialReply; fabricReply: FabricReply; followUp: FollowUp;
+  priceReply: PriceReply; orderReply: OrderReply; noMatchReply: NoMatchReply; greetReply: GreetReply; matchReply: MatchReply; confirmReply: ConfirmReply; itemsReply: ItemsReply; materialReply: MaterialReply; fabricReply: FabricReply; commentReply: CommentReply; followUp: FollowUp;
 };
 type Connection = {
   pageAccessToken: string; appSecret: string; anthropicKey: string; verifyToken: string;
@@ -535,7 +536,26 @@ function SavedReplyCard({ title, hint, value, onChange, rows = 7, children }: {
   );
 }
 
-/** Saved follow-ups for customers who stop replying (sent by the 30-minute cron). */
+/** "after N minutes / hours" — stored as hours, typed in either unit. */
+function AfterInput({ hours, onChange }: { hours: number; onChange: (h: number) => void }) {
+  const [unit, setUnit] = useState<"min" | "h">(hours < 1 ? "min" : "h");
+  const shown = unit === "min" ? Math.round(hours * 60) : Math.round(hours * 10) / 10;
+  return (
+    <label className="flex items-center gap-1.5">
+      শেষ মেসেজের
+      <input type="number" min={unit === "min" ? 3 : 1} max={unit === "min" ? 1380 : 23} step={unit === "min" ? 1 : 0.5} value={shown}
+        onChange={(e) => { const n = Number(e.target.value) || 0; onChange(unit === "min" ? n / 60 : n); }}
+        className="dc-input" style={{ width: 72, padding: "4px 8px" }} />
+      <select value={unit} onChange={(e) => setUnit(e.target.value as "min" | "h")} className="dc-input" style={{ width: "auto", padding: "4px 6px" }}>
+        <option value="min">মিনিট</option>
+        <option value="h">ঘণ্টা</option>
+      </select>
+      পর
+    </label>
+  );
+}
+
+/** Saved follow-ups for customers who stop replying (sent by the 5-minute cron). */
 function FollowUpCard({ value, onChange }: { value: FollowUp; onChange: (v: FollowUp) => void }) {
   const steps = value?.steps ?? [];
   const setStep = (i: number, patch: Partial<FollowUp["steps"][number]>) =>
@@ -558,12 +578,7 @@ function FollowUpCard({ value, onChange }: { value: FollowUp; onChange: (v: Foll
           <div key={i} className="rounded-xl p-3" style={{ background: "var(--a-surface-2)" }}>
             <div className="mb-2 flex flex-wrap items-center gap-3 text-sm">
               <b>{i + 1} নম্বর</b>
-              <label className="flex items-center gap-1.5">
-                শেষ মেসেজের
-                <input type="number" min={0.5} max={23} step={0.5} value={st.afterHours}
-                  onChange={(e) => setStep(i, { afterHours: Number(e.target.value) })} className="dc-input" style={{ width: 72, padding: "4px 8px" }} />
-                ঘণ্টা পর
-              </label>
+              <AfterInput hours={st.afterHours} onChange={(afterHours) => setStep(i, { afterHours })} />
               <label className="ml-auto flex items-center gap-1.5">
                 <input type="checkbox" checked={st.enabled} onChange={(e) => setStep(i, { enabled: e.target.checked })} /> চালু
               </label>
@@ -639,6 +654,14 @@ function SavedReplies({ training, setTraining }: { training: Training; setTraini
         value={t.fabricReply}
         onChange={(fabricReply) => set({ fabricReply })}
         rows={7}
+      />
+
+      <SavedReplyCard
+        title="ফেসবুক কমেন্টের উত্তর (Comments)"
+        hint="পোস্ট বা অ্যাডে কেউ কমেন্ট করলে (যেমন “price?”, “দাম কত”) AI বুঝে উত্তর বা ওপরের মিলে যাওয়া Saved reply কাস্টমারের Messenger-এ পাঠায়, আর কমেন্টের নিচে এই ছোট লেখাটা দেয়। শুধু “nice”, “😍” বা AI না জানলে কিছু করে না। Facebook-এর নিয়মে প্রতি কমেন্টে ইনবক্সে একবারই পাঠানো যায়।"
+        value={t.commentReply}
+        onChange={(commentReply) => set({ commentReply })}
+        rows={2}
       />
 
       <FollowUpCard value={t.followUp} onChange={(followUp) => set({ followUp })} />
